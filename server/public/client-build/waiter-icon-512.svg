@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#c1440e"/>
+  <!-- Plate -->
+  <circle cx="256" cy="290" r="138" fill="none" stroke="white" stroke-width="12" opacity="0.9"/>
+  <circle cx="256" cy="290" r="100" fill="rgba(255,255,255,0.12)"/>
+  <!-- Fork (left) -->
+  <rect x="166" y="110" width="16" height="152" rx="8" fill="white"/>
+  <rect x="148" y="110" width="10" height="74" rx="5" fill="white"/>
+  <rect x="190" y="110" width="10" height="74" rx="5" fill="white"/>
+  <!-- Knife (right) -->
+  <rect x="330" y="110" width="16" height="152" rx="8" fill="white"/>
+  <path d="M330 110 L346 110 L354 182 L330 182 Z" fill="white"/>
+</svg>

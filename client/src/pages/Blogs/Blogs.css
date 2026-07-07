@@ -1,0 +1,24 @@
+.blog-form { max-width: 900px; margin: 0 auto; padding: 20px; }
+.blog-form h2 { margin-bottom: 20px; font-size: 16px; }
+
+.ql-container, .rich-editor {
+  border: 1px solid var(--t-border);
+  border-radius: 4px;
+  min-height: 300px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.img-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.img-preview img {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+}

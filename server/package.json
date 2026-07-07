@@ -1,0 +1,37 @@
+{
+  "name": "mtcstudio-server",
+  "version": "1.0.0",
+  "description": "MTC Studio – POS, CRM, CMS & Kitchen Management Server",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
+    "csv-stringify": "^6.4.6",
+    "dotenv": "^17.4.2",
+    "ejs": "^3.1.10",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
+    "express": "^5.2.1",
+    "image-size": "^1.1.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.22.5",
+    "node-tesseract-ocr": "^2.2.1",
+    "serialport": "^13.0.0",
+    "sharp": "^0.35.2",
+    "socket.io": "^4.8.3",
+    "usb": "^2.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "allowScripts": {
+    "@serialport/bindings-cpp@13.0.0": true,
+    "usb@2.18.0": true
+  }
+}

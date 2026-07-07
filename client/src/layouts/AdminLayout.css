@@ -1,0 +1,228 @@
+/* ── Desktop OS Shell ───────────────────────────────────────── */
+
+/* Root — full viewport, no scroll */
+.desktop-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--t-surface-3);
+  background-image:
+    radial-gradient(ellipse at 8% 92%, color-mix(in srgb, var(--t-accent) 7%, transparent) 0%, transparent 45%),
+    radial-gradient(ellipse at 92% 8%, rgba(45, 122, 45, 0.05) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 50%, rgba(180, 160, 120, 0.06) 0%, transparent 70%);
+  user-select: none;
+}
+
+/* ── OS Menu Bar ────────────────────────────────────────────── */
+.os-menubar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  background: #1c1208;
+  border-bottom: 1px solid #0a0804;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 12px rgba(0, 0, 0, 0.5);
+  z-index: 9000;
+}
+
+.os-menubar__brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8d8c0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.os-menubar__brand:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* App Launcher Dropdown */
+.os-launcher {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 260px;
+  background: var(--t-surface);
+  border: 1px solid var(--t-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--t-shadow-md), 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  z-index: 9999;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.os-launcher__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.os-launcher__item:hover {
+  background: var(--t-accent-soft);
+}
+
+/* Nav items */
+.os-menubar__nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.os-menubar__nav-item {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.os-menubar__nav-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.os-menubar__nav-item--active {
+  color: #f8d8a0;
+}
+
+.os-menubar__shortcut {
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  margin-left: 4px;
+  transition: all 0.1s;
+}
+
+.os-menubar__shortcut:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.os-menubar__clock {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ── Desktop Area ───────────────────────────────────────────── */
+.desktop-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Desktop icon column */
+.desktop-icons {
+  position: absolute;
+  left: 12px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+  padding-bottom: 20px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.desktop-icons::-webkit-scrollbar {
+  display: none;
+}
+
+/* Desktop empty-state hint */
+.desktop-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+  padding: 40px;
+}
+
+/* ── Taskbar (minimized chips) ──────────────────────────────── */
+.os-taskbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  background: color-mix(in srgb, var(--t-surface-3) 75%, transparent);
+  border-top: 1px solid var(--t-border-strong);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.os-taskbar__label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-text-muted);
+  margin-right: 4px;
+}
+
+/* ── Mobile: icon grid + single full-screen panel ───────────── */
+@media (max-width: 768px) {
+  .desktop-icons {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .desktop-area {
+    overflow-y: auto;
+  }
+
+  .os-menubar__nav {
+    display: none;
+  }
+}

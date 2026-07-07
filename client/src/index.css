@@ -1,0 +1,358 @@
+@import "tailwindcss";
+@import "./styles/theme.css";
+
+/* ── Shadcn CSS variable bridge for Tailwind v4 ─────────────── */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root,
+:root[data-theme="dark-modern"] {
+  color-scheme: dark;
+
+  /* Shadcn defaults */
+  --background: 222 47% 9%;
+  --foreground: 210 40% 96%;
+  --card: 224 40% 13%;
+  --card-foreground: 210 40% 96%;
+  --popover: 224 40% 15%;
+  --popover-foreground: 210 40% 96%;
+  --primary: 18 88% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 214 32% 91%;
+  --muted: 217 19% 20%;
+  --muted-foreground: 215 20% 72%;
+  --accent: 267 78% 63%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 217 19% 24%;
+  --input: 220 26% 16%;
+  --ring: 18 88% 58%;
+  --radius: 0.55rem;
+
+  /* Legacy CMS vars (keep for old pages) */
+  --brand: #ff7a2f;
+  --brand-dark: #bf5516;
+  --text: #f8fafc;
+  --muted-c: #94a3b8;
+  --bg: #060b14;
+  --white: #f8fafc;
+  --shadow: 0 18px 45px rgba(2, 8, 23, 0.45);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+
+  color: hsl(var(--foreground));
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+button,
+input,
+select,
+textarea {
+  transition: background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+
+/* ::selection {
+  background: hsla(var(--accent), 0.25);
+  color: hsl(var(--accent-foreground));
+} */
+
+
+::selection {
+  background: #042a64;
+  /* match your orange border color */
+  color: #ffffff;
+  /* text color when selected */
+}
+
+::-moz-selection {
+  /* Firefox needs the prefix */
+  background: #FF6B35;
+  color: #000000;
+}
+
+
+/* ── AG Grid theme overrides ─────────────────────────────────── */
+.ag-theme-quartz {
+  --ag-border-color: hsl(var(--border));
+  --ag-header-background-color: hsl(var(--secondary));
+  --ag-header-foreground-color: hsl(var(--secondary-foreground));
+  --ag-row-hover-color: hsl(220 14% 98%);
+  --ag-selected-row-background-color: hsl(18 74% 96%);
+  --ag-font-size: 13px;
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Legacy CMS styles (unchanged, still used by old pages) ──── */
+a {
+  text-decoration: none;
+  color: var(--brand);
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.btn {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+  text-decoration: none;
+  background: linear-gradient(135deg, hsl(var(--card)), hsl(var(--input)));
+  color: hsl(var(--foreground));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.btn:hover {
+  border-color: hsl(var(--primary));
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  color: hsl(var(--primary-foreground));
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-save {
+  background: hsl(146 73% 36%);
+  color: #fff;
+}
+
+.btn-delete {
+  background: hsl(356 84% 60%);
+  color: #fff;
+}
+
+.btn-add {
+  background: hsl(211 100% 46%);
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.toolbar {
+  background: hsla(var(--card), .82);
+  padding: 10px 16px;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  backdrop-filter: blur(10px);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  padding: 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: hsl(var(--card));
+  box-shadow: var(--shadow);
+  border: 1px solid hsl(var(--border));
+}
+
+th {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+td {
+  padding: 8px 10px;
+  border-bottom: 1px solid hsl(var(--border));
+  vertical-align: middle;
+  color: hsl(var(--foreground));
+}
+
+tr:hover td {
+  background: hsla(var(--secondary), .08);
+}
+
+.cell {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  font-size: 12px;
+  background: hsl(var(--input));
+  color: hsl(var(--foreground));
+}
+
+.cell:focus {
+  border-color: hsl(var(--primary));
+  outline: none;
+}
+
+.msg {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: inline-block;
+}
+
+.msg-ok {
+  background: hsla(146, 73%, 36%, 0.18);
+  color: hsl(146 73% 36%);
+}
+
+.msg-err {
+  background: hsla(356, 84%, 60%, 0.18);
+  color: hsl(356 84% 60%);
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: hsl(var(--foreground));
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  font-size: 13px;
+  background: hsl(var(--input));
+  color: hsl(var(--foreground));
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.badge-active {
+  background: hsla(146, 73%, 36%, 0.16);
+  color: hsl(146 73% 36%);
+}
+
+.badge-inactive {
+  background: hsla(34, 100%, 59%, 0.16);
+  color: hsl(34 100% 59%);
+}
+
+.card {
+  background: linear-gradient(145deg, hsla(var(--card), .96), hsla(var(--secondary), .9));
+  border: 1px solid hsl(var(--border));
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+  backdrop-filter: blur(16px);
+}
+
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.alert-error {
+  background: hsla(356, 84%, 60%, 0.16);
+  color: hsl(356 84% 60%);
+}
+
+.alert-success {
+  background: hsla(146, 73%, 36%, 0.16);
+  color: hsl(146 73% 36%);
+}

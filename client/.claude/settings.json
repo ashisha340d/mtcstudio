@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\web\\\\v2\\\\mtcstudio\\\\server\" -File | Where-Object { $_.Name -in @\\(\"server.js\", \"index.js\", \"app.js\", \"main.js\"\\) } | Select-Object Name)",
+      "Bash(order)",
+      "Bash(kds\")",
+      "Bash(dir /s /b \"d:\\\\web\\\\v2\\\\mtcstudio\")",
+      "Bash(curl -s -X POST \"https://munchtimecafe.com.np/api/syncproducts.php\" -H \"Content-Type: application/json\" -d '{\"api_key\":\"MTC_LIVE_SHELF_2026_X7K9P2Q8\",\"data\":[]}')",
+      "Bash(curl -s -X POST \"https://munchtimecafe.com.np/api/syncproducts.php\" -H \"Content-Type: application/json\" -H \"X-API-Key: MTC_LIVE_SHELF_2026_X7K9P2Q8\" -d '{\"data\":[]}')",
+      "Bash(curl -s -X POST \"https://munchtimecafe.com.np/api/syncproducts.php\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer MTC_LIVE_SHELF_2026_X7K9P2Q8\" -d '{\"data\":[]}')"
+    ]
+  }
+}

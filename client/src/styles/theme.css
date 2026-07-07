@@ -1,0 +1,430 @@
+/* ══════════════════════════════════════════════════════════════
+   MTC Studio — shared design system for the admin dashboard.
+   Scoped entirely to .desktop-root (the AdminLayout shell) so it
+   can never affect POS, KDS, Cake Orders, or the PIN screen —
+   those render on separate route trees and never carry this class.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Tokens: warm (default, matches the pre-existing look) ───── */
+.desktop-root,
+.desktop-root[data-theme="warm"] {
+  --t-bg: #fdf9f4;
+  --t-surface: #ffffff;
+  --t-surface-2: #fafafa;
+  --t-surface-3: #f5f5f5;
+  --t-border: #e5ddd0;
+  --t-border-strong: #a89880;
+  --t-text: #1a1a1a;
+  --t-text-muted: #888888;
+  --t-text-soft: #9c8870;
+  --t-accent: #c1440e;
+  --t-accent-hover: #a83809;
+  --t-accent-soft: rgba(193, 68, 14, 0.08);
+  --t-success: #16a34a;
+  --t-success-bg: #dcfce7;
+  --t-success-text: #166534;
+  --t-danger: #dc2626;
+  --t-danger-bg: #fee2e2;
+  --t-danger-text: #991b1b;
+  --t-warning: #f59e0b;
+  --t-radius-sm: 6px;
+  --t-radius-md: 10px;
+  --t-radius-lg: 14px;
+  --t-shadow-sm: 0 1px 6px rgba(0, 0, 0, .08);
+  --t-shadow-md: 0 2px 8px rgba(0, 0, 0, .08);
+  --t-chrome-1: #d2c6b2;
+  --t-chrome-2: #b8a890;
+}
+
+/* ── Tokens: light (clean minimal white/gray) ─────────────────── */
+.desktop-root[data-theme="light"] {
+  --t-bg: #f7f7f8;
+  --t-surface: #ffffff;
+  --t-surface-2: #f2f2f4;
+  --t-surface-3: #ececee;
+  --t-border: #e2e2e6;
+  --t-border-strong: #cfcfd4;
+  --t-text: #16161a;
+  --t-text-muted: #7a7a82;
+  --t-text-soft: #8c8c94;
+  --t-accent: #c1440e;
+  --t-accent-hover: #a83809;
+  --t-accent-soft: rgba(193, 68, 14, 0.08);
+  --t-success: #16a34a;
+  --t-success-bg: #dcfce7;
+  --t-success-text: #166534;
+  --t-danger: #dc2626;
+  --t-danger-bg: #fee2e2;
+  --t-danger-text: #991b1b;
+  --t-warning: #f59e0b;
+  --t-radius-sm: 6px;
+  --t-radius-md: 10px;
+  --t-radius-lg: 14px;
+  --t-shadow-sm: 0 1px 4px rgba(0, 0, 0, .06);
+  --t-shadow-md: 0 2px 10px rgba(0, 0, 0, .07);
+  --t-chrome-1: #eef0f2;
+  --t-chrome-2: #dfe3e7;
+}
+
+/* ── Tokens: dark ──────────────────────────────────────────────── */
+.desktop-root[data-theme="dark"] {
+  --t-bg: #14120f;
+  --t-surface: #1c1a17;
+  --t-surface-2: #242019;
+  --t-surface-3: #2c271e;
+  --t-border: #34302a;
+  --t-border-strong: #46403a;
+  --t-text: #f1ede6;
+  --t-text-muted: #a39a8c;
+  --t-text-soft: #8a8074;
+  --t-accent: #ff7a3d;
+  --t-accent-hover: #ff9260;
+  --t-accent-soft: rgba(255, 122, 61, 0.14);
+  --t-success: #4ade80;
+  --t-success-bg: rgba(74, 222, 128, 0.16);
+  --t-success-text: #4ade80;
+  --t-danger: #f87171;
+  --t-danger-bg: rgba(248, 113, 113, 0.16);
+  --t-danger-text: #f87171;
+  --t-warning: #fbbf24;
+  --t-radius-sm: 6px;
+  --t-radius-md: 10px;
+  --t-radius-lg: 14px;
+  --t-shadow-sm: 0 1px 6px rgba(0, 0, 0, .35);
+  --t-shadow-md: 0 4px 14px rgba(0, 0, 0, .4);
+  --t-chrome-1: #2c2822;
+  --t-chrome-2: #201d18;
+}
+
+/* ── Tokens: slate (cool neutral minimalist) ──────────────────── */
+.desktop-root[data-theme="slate"] {
+  --t-bg: #f4f6f8;
+  --t-surface: #ffffff;
+  --t-surface-2: #edf1f4;
+  --t-surface-3: #e4e9ed;
+  --t-border: #dde3e8;
+  --t-border-strong: #c2cad2;
+  --t-text: #1e2530;
+  --t-text-muted: #74808c;
+  --t-text-soft: #8792a0;
+  --t-accent: #2563eb;
+  --t-accent-hover: #1d4ed8;
+  --t-accent-soft: rgba(37, 99, 235, 0.08);
+  --t-success: #16a34a;
+  --t-success-bg: #dcfce7;
+  --t-success-text: #166534;
+  --t-danger: #dc2626;
+  --t-danger-bg: #fee2e2;
+  --t-danger-text: #991b1b;
+  --t-warning: #f59e0b;
+  --t-radius-sm: 6px;
+  --t-radius-md: 10px;
+  --t-radius-lg: 14px;
+  --t-shadow-sm: 0 1px 4px rgba(30, 41, 59, .06);
+  --t-shadow-md: 0 2px 10px rgba(30, 41, 59, .08);
+  --t-chrome-1: #e3e8ee;
+  --t-chrome-2: #ccd4dc;
+}
+
+/* ── Base: the admin shell is a LIGHT UI by default (overrides the
+   dark shadcn :root in index.css, which must keep applying to pages
+   outside the shell). color-scheme fixes UA-default white-on-white
+   text in inputs/selects/modals. ─────────────────────────────── */
+.desktop-root {
+  color: var(--t-text);
+  color-scheme: light;
+}
+.desktop-root[data-theme="dark"] { color-scheme: dark; }
+
+.desktop-root :where(input, select, textarea) {
+  color: var(--t-text);
+}
+
+/* ── Legacy-class overrides (Categories, Food Menu & older CRUD
+   pages use .btn/.toolbar/table styles from index.css that are
+   dark-themed; re-skin them with tokens inside the shell) ─────── */
+.desktop-root .toolbar {
+  background: var(--t-surface);
+  border-bottom: 1px solid var(--t-border);
+  backdrop-filter: none;
+}
+.desktop-root .table-wrap table,
+.desktop-root table {
+  background: var(--t-surface);
+  border: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-sm);
+}
+.desktop-root th {
+  background: var(--t-surface-2);
+  color: var(--t-text-muted);
+  border-bottom: 1px solid var(--t-border);
+}
+.desktop-root td {
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-text);
+}
+.desktop-root tr:hover td { background: var(--t-surface-2); }
+.desktop-root .cell {
+  background: var(--t-surface);
+  color: var(--t-text);
+  border: 1px solid var(--t-border);
+}
+.desktop-root .cell:focus { border-color: var(--t-accent); }
+.desktop-root .btn {
+  background: var(--t-surface);
+  color: var(--t-text);
+  border: 1px solid var(--t-border);
+  box-shadow: none;
+}
+.desktop-root .btn:hover { border-color: var(--t-accent); }
+.desktop-root .btn-primary,
+.desktop-root .btn-add {
+  background: var(--t-accent);
+  color: #fff;
+  border: none;
+}
+.desktop-root .btn-primary:hover,
+.desktop-root .btn-add:hover { background: var(--t-accent-hover); }
+.desktop-root .btn-save { background: var(--t-success); color: #fff; border: none; }
+.desktop-root .btn-delete { background: var(--t-danger); color: #fff; border: none; }
+.desktop-root .card {
+  background: var(--t-surface);
+  border: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-md);
+  backdrop-filter: none;
+}
+.desktop-root .form-group label { color: var(--t-text); }
+.desktop-root .form-group input,
+.desktop-root .form-group select,
+.desktop-root .form-group textarea {
+  background: var(--t-surface);
+  color: var(--t-text);
+  border: 1px solid var(--t-border);
+}
+.desktop-root .msg-ok { background: var(--t-success-bg); color: var(--t-success-text); }
+.desktop-root .msg-err { background: var(--t-danger-bg); color: var(--t-danger-text); }
+.desktop-root .alert-error { background: var(--t-danger-bg); color: var(--t-danger-text); }
+.desktop-root .alert-success { background: var(--t-success-bg); color: var(--t-success-text); }
+.desktop-root a { color: var(--t-accent); }
+
+/* Window content area: every app window gets the theme background,
+   so pages without their own bg no longer show the dark body. */
+.desktop-root .desktop-window-body {
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+/* ── Global focus / hover behavior, uniform everywhere ────────── */
+.desktop-root :focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+}
+.desktop-root button,
+.desktop-root input,
+.desktop-root select,
+.desktop-root textarea {
+  transition: background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease, transform .1s ease;
+}
+
+/* ── Shared component classes ──────────────────────────────────
+   Grouped with the existing per-module class names so pages keep
+   their markup/class names but inherit one definition. */
+
+.ui-card,
+.crm-card,
+.fm-card {
+  background: var(--t-surface);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-md);
+  overflow: hidden;
+}
+
+.ui-stat,
+.crm-stat {
+  background: var(--t-surface);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-sm);
+  padding: 14px 20px;
+}
+.ui-stat__val, .crm-stat__val { font-size: 28px; font-weight: 800; color: var(--t-accent); line-height: 1; }
+.ui-stat__label, .crm-stat__label { font-size: 11px; color: var(--t-text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
+
+.ui-btn,
+.btn-secondary {
+  padding: 7px 16px;
+  border-radius: var(--t-radius-sm);
+  border: 1px solid var(--t-border);
+  background: var(--t-surface);
+  color: var(--t-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ui-btn:hover, .btn-secondary:hover { background: var(--t-surface-2); }
+
+.ui-btn--primary,
+.btn-primary {
+  padding: 7px 16px;
+  border-radius: var(--t-radius-sm);
+  border: none;
+  background: var(--t-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-btn--primary:hover, .btn-primary:hover { background: var(--t-accent-hover); }
+.ui-btn--primary:disabled, .btn-primary:disabled { opacity: .5; cursor: default; }
+
+.ui-btn--icon,
+.btn-icon,
+.crm-btn-icon {
+  width: 30px; height: 30px;
+  border-radius: var(--t-radius-sm);
+  border: 1px solid var(--t-border);
+  background: var(--t-surface);
+  color: var(--t-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-btn--icon:hover, .btn-icon:hover, .crm-btn-icon:hover { background: var(--t-surface-2); color: var(--t-text); }
+.btn-icon--danger:hover { background: var(--t-danger-bg); color: var(--t-danger); border-color: var(--t-danger-bg); }
+.crm-btn-icon--save { color: var(--t-success); }
+.crm-btn-icon--del { color: var(--t-danger); }
+.crm-btn-icon--save:hover { background: var(--t-success-bg); }
+.crm-btn-icon--del:hover { background: var(--t-danger-bg); }
+
+.ui-table,
+.crm-table,
+.fm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ui-table th, .crm-table thead th, .fm-table th {
+  background: var(--t-surface-2);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--t-text-muted);
+  border-bottom: 1px solid var(--t-border);
+  white-space: nowrap;
+}
+.ui-table td, .crm-table td, .fm-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: middle;
+  color: var(--t-text);
+}
+.ui-table tbody tr:hover td, .crm-table tbody tr:hover td, .fm-table tr:hover td {
+  background: var(--t-surface-2);
+}
+
+.ui-badge,
+.badge-active, .badge-inactive, .badge-role,
+.crm-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.badge-active { background: var(--t-success-bg); color: var(--t-success-text); }
+.badge-inactive { background: var(--t-danger-bg); color: var(--t-danger-text); }
+.badge-role { background: var(--t-accent-soft); color: var(--t-accent); }
+
+.ui-tabs,
+.crm-tabs,
+.fm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 2px solid var(--t-border);
+  margin-bottom: 20px;
+}
+.ui-tab,
+.crm-tab,
+.fm-tab {
+  padding: 9px 18px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.ui-tab:hover:not(.ui-tab--active), .crm-tab:hover:not(.crm-tab--active), .fm-tab:hover:not(.fm-tab--active) { color: var(--t-text); }
+.ui-tab--active, .crm-tab--active, .fm-tab--active { color: var(--t-accent); border-bottom-color: var(--t-accent); }
+
+.ui-input, .ui-search,
+.crm-search, .crm-filter-select, .crm-inline,
+.fm-search, .fm-add-input {
+  padding: 7px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  font-size: 13px;
+  background: var(--t-surface);
+  color: var(--t-text);
+  outline: none;
+}
+.ui-input:focus, .ui-search:focus,
+.crm-search:focus, .crm-inline:focus,
+.fm-search:focus, .fm-add-input:focus { border-color: var(--t-accent); }
+
+.ui-toggle, .toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.ui-toggle input, .toggle input { display: none; }
+.ui-toggle-slider, .toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  background: var(--t-border-strong);
+  cursor: pointer;
+  transition: .2s;
+}
+.ui-toggle input:checked + .ui-toggle-slider,
+.toggle input:checked + .toggle-slider { background: var(--t-success); }
+.ui-toggle-slider::before, .toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: .2s;
+}
+.ui-toggle input:checked + .ui-toggle-slider::before,
+.toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+.ui-empty, .crm-empty, .fm-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--t-text-muted);
+  font-size: 13px;
+}
+
+.ui-toast, .crm-toast {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  background: var(--t-text);
+  color: var(--t-bg);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 9999;
+}
+.ui-toast.err, .crm-toast.err { background: var(--t-danger); color: #fff; }

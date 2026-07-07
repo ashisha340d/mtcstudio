@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Munch Time Cafe Blog</title>
+    <link>https://munchtimecafe.com.np/blog.html</link>
+    <description>Recipes, food guides, and stories from Munch Time Cafe, Chitwan.</description>
+    <language>en-us</language>
+    <atom:link href="https://munchtimecafe.com.np/rss.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>Spagettie Bolognese : Home &amp; Camping Cooking</title>
+    <link>https://munchtimecafe.com.np/blog/spagettie-bolognese-home-cooking.html</link>
+    <guid isPermaLink="true">https://munchtimecafe.com.np/blog/spagettie-bolognese-home-cooking.html</guid>
+    <description>MT Munch Time Home &amp;gt; Blog &amp;gt; Spaghetti Bolognese Homemade Spaghetti Bolognese: A Chef’s Guide Published: Nov 12, 2022 | By Sudip Piya View Culinary Recipe Box The Soul of a Great Bolognese A true...</description>
+    <pubDate>Tue, 23 Jun 2026 11:52:21 GMT</pubDate>
+  </item>
+  <item>
+    <title>Smoking But Smashing Chicken in Chitwan</title>
+    <link>https://munchtimecafe.com.np/blog/smoking-but-smashing-chicken-in-chitwan.html</link>
+    <guid isPermaLink="true">https://munchtimecafe.com.np/blog/smoking-but-smashing-chicken-in-chitwan.html</guid>
+    <description>Chef's Corner The Power of the Maillard Reaction A standard restaurant burger is thick, juicy, and often lacking that magnificent, deeply caramelized crust. Our smash revolution focuses strictly on hi...</description>
+    <pubDate>Tue, 23 Jun 2026 11:52:21 GMT</pubDate>
+  </item>
+  <item>
+    <title>Quality with Gourmet Ingredient </title>
+    <link>https://munchtimecafe.com.np/blog/quality-with-courmet-ingredient.html</link>
+    <guid isPermaLink="true">https://munchtimecafe.com.np/blog/quality-with-courmet-ingredient.html</guid>
+    <description>Great food begins long before it reaches the table. At Munch Time Cafe, every signature pizza, burger, momo, pasta and noodle dish starts with carefully prepared ingredients made in-house. Instead of...</description>
+    <pubDate>Tue, 23 Jun 2026 11:52:21 GMT</pubDate>
+  </item>
+  </channel>
+</rss>

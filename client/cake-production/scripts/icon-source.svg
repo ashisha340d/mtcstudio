@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#c1440e"/>
+  <g>
+    <!-- plate -->
+    <ellipse cx="256" cy="392" rx="150" ry="18" fill="#8a3009"/>
+    <!-- cake base -->
+    <rect x="146" y="300" width="220" height="92" rx="14" fill="#fff7ef"/>
+    <!-- cake middle layer -->
+    <rect x="164" y="240" width="184" height="72" rx="12" fill="#ffe8d1"/>
+    <!-- icing drips -->
+    <path d="M146 300 q18 26 36 0 q18 26 36 0 q18 26 36 0 q18 26 36 0 q18 26 36 0 q18 26 36 0 v-14 h-220 z" fill="#ffffff"/>
+    <!-- candle -->
+    <rect x="246" y="160" width="20" height="64" rx="6" fill="#ffd166"/>
+    <!-- flame -->
+    <path d="M256 118c14 16 20 28 20 40a20 20 0 0 1-40 0c0-12 6-24 20-40z" fill="#fff2c2"/>
+  </g>
+</svg>

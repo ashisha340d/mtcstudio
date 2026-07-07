@@ -1,0 +1,199 @@
+<%
+  var siteUrl = baseUrl || 'https://munchtimecafe.com.np';
+  var allTopics = [
+    'Food Recipe','Product Spotlight','Food Guide','Local Food Guide',
+    'Festival & Seasonal','Birthday & Celebration','Behind The Kitchen',
+    'Ingredient Story','Customer FAQ','Top Picks'
+  ];
+  function stripTags(html) {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function cardExcerpt(html) {
+    var t = stripTags(html);
+    return t.length > 140 ? t.slice(0, 140).trim() + '...' : t;
+  }
+  function cardDate(dt) {
+    if (!dt) return '';
+    return new Date(dt).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+  }
+%><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Blog | Munch Time Cafe — Chitwan</title>
+  <meta name="description" content="Recipes, food guides, stories and tips from Munch Time Cafe in Chitwan, Nepal.">
+  <link rel="canonical" href="<%= siteUrl %>/blog.html">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Blog | Munch Time Cafe">
+  <meta property="og:description" content="Recipes, food guides, stories and tips from Munch Time Cafe in Chitwan, Nepal.">
+  <meta property="og:url" content="<%= siteUrl %>/blog.html">
+  <meta property="og:site_name" content="Munch Time Cafe">
+  <link rel="alternate" type="application/rss+xml" title="Munch Time Cafe Blog" href="<%= siteUrl %>/rss.xml">
+  <style>
+    :root{--brand:#c1440e;--brand-dark:#a03a0c;--text:#2c2c2c;--muted:#777;--bg:#f7f5f3;--white:#fff;--radius:8px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6}
+    a{color:var(--brand);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .site-header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:16px}
+    .site-header .logo{font-size:20px;font-weight:bold;color:#fff;text-decoration:none}
+    .site-header .logo span{font-size:13px;opacity:.8;margin-left:4px}
+    .site-header nav{margin-left:auto;display:flex;gap:16px}
+    .site-header nav a{color:#fff;opacity:.85;font-size:13px}
+    .site-header nav a:hover,.site-header nav a.on{opacity:1;font-weight:bold;text-decoration:none}
+    .blog-hero{background:linear-gradient(135deg,var(--brand) 0%,var(--brand-dark) 100%);color:#fff;text-align:center;padding:48px 20px 52px}
+    .blog-hero h1{font-size:34px;font-weight:bold;margin-bottom:10px}
+    .blog-hero p{font-size:15px;opacity:.9;max-width:520px;margin:0 auto 24px}
+    .search-box{display:flex;max-width:460px;margin:0 auto;background:#fff;border-radius:30px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+    .search-box input{flex:1;border:none;outline:none;padding:12px 18px;font-size:14px;color:var(--text)}
+    .search-box button{background:var(--brand-dark);color:#fff;border:none;padding:0 22px;cursor:pointer;font-size:14px;font-weight:bold}
+    .search-box button:hover{background:#8a3209}
+    .filters{background:#fff;border-bottom:1px solid #ece9e5;padding:14px 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
+    .filter-btn{padding:6px 14px;border-radius:20px;border:1px solid #d0d0d0;background:#fff;font-size:12px;cursor:pointer;color:#555;transition:.15s}
+    .filter-btn:hover,.filter-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .container{max-width:1100px;margin:0 auto;padding:32px 20px}
+    .results-info{font-size:13px;color:var(--muted);margin-bottom:18px}
+    .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px}
+    .blog-card{background:var(--white);border-radius:var(--radius);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);transition:.2s;display:flex;flex-direction:column}
+    .blog-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.13);transform:translateY(-2px)}
+    .card-img-wrap{position:relative;overflow:hidden;height:190px;background:#f0f0f0}
+    .card-img-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:.3s}
+    .blog-card:hover .card-img-wrap img{transform:scale(1.04)}
+    .card-img-placeholder{width:100%;height:190px;background:linear-gradient(135deg,#f0ebe6,#e8e0d8);display:flex;align-items:center;justify-content:center;color:#bbb;font-size:40px}
+    .card-topic{position:absolute;top:10px;left:10px;background:var(--brand);color:#fff;font-size:10px;font-weight:bold;padding:3px 9px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
+    .card-body{padding:16px;flex:1;display:flex;flex-direction:column}
+    .card-title{font-size:16px;font-weight:bold;color:#1a1a1a;margin-bottom:8px;line-height:1.4}
+    .card-title a{color:#1a1a1a}
+    .card-title a:hover{color:var(--brand);text-decoration:none}
+    .card-excerpt{font-size:13px;color:var(--muted);line-height:1.6;flex:1;margin-bottom:14px}
+    .card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
+    .card-date{font-size:11px;color:#aaa}
+    .card-read{font-size:12px;font-weight:bold;color:var(--brand)}
+    .card-read:hover{text-decoration:underline}
+    .no-results{text-align:center;padding:60px 20px;color:#aaa}
+    .no-results p{font-size:15px;margin-bottom:8px}
+    .no-results small{font-size:13px}
+    .site-footer{background:#1a1a1a;color:#aaa;text-align:center;padding:20px;font-size:12px;margin-top:40px}
+    .site-footer a{color:var(--brand)}
+    @media(max-width:600px){.blog-hero h1{font-size:24px}.card-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Munch Time<span>Cafe</span></a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="menu.html">Menu</a>
+    <a href="blog.html" class="on">Blog</a>
+  </nav>
+</header>
+
+<div class="blog-hero">
+  <h1>Our Blog</h1>
+  <p>Recipes, food guides, stories and tips straight from our kitchen in Chitwan.</p>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search posts…" oninput="filterCards()" aria-label="Search blog posts">
+    <button onclick="filterCards()">Search</button>
+  </div>
+</div>
+
+<div class="filters">
+  <button class="filter-btn active" data-topic="all" onclick="setTopic(this,'all')">All</button>
+  <% allTopics.forEach(function(t){ %>
+    <button class="filter-btn" data-topic="<%= t %>" onclick="setTopic(this,'<%= t %>')"><%= t %></button>
+  <% }) %>
+</div>
+
+<div class="container">
+  <p class="results-info" id="resultsInfo"><%= blogs.length %> post<%= blogs.length===1?'':'s' %> published</p>
+
+  <div class="card-grid" id="cardGrid">
+    <% blogs.forEach(function(b){ %>
+      <%
+        var bImg = '';
+        if (b.blog_img_filename) bImg = 'blog-img/' + b.blog_img_filename;
+        else if (b.feat_filename) bImg = '';
+        var bExcerpt = cardExcerpt(b.content_html);
+        var bDate = cardDate(b.published_at);
+      %>
+      <div class="blog-card"
+        data-title="<%= b.title.toLowerCase() %>"
+        data-topic="<%= (b.topic||'').toLowerCase() %>"
+        data-excerpt="<%= bExcerpt.toLowerCase() %>"
+      >
+        <div class="card-img-wrap">
+          <% if(bImg){ %>
+            <img src="<%= bImg %>" alt="<%= b.title %>" loading="lazy">
+          <% } else { %>
+            <div class="card-img-placeholder">🍰</div>
+          <% } %>
+          <% if(b.topic){ %>
+            <span class="card-topic"><%= b.topic %></span>
+          <% } %>
+        </div>
+        <div class="card-body">
+          <div class="card-title">
+            <a href="blog/<%= b.slug %>.html"><%= b.title %></a>
+          </div>
+          <% if(bExcerpt){ %>
+            <div class="card-excerpt"><%= bExcerpt %></div>
+          <% } %>
+          <div class="card-footer">
+            <span class="card-date"><%= bDate %></span>
+            <a href="blog/<%= b.slug %>.html" class="card-read">Read More →</a>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+
+  <% if(!blogs.length){ %>
+    <div class="no-results">
+      <p>No published blog posts yet.</p>
+      <small>Check back soon for recipes, guides, and stories from our kitchen.</small>
+    </div>
+  <% } %>
+</div>
+
+<footer class="site-footer">
+  <p>&copy; <%= new Date().getFullYear() %> <a href="index.html">Munch Time Cafe</a> · Chitwan, Nepal ·
+    <a href="rss.xml">RSS Feed</a>
+  </p>
+</footer>
+
+<script>
+  var activeTopic = 'all';
+
+  function setTopic(btn, topic) {
+    activeTopic = topic;
+    document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    filterCards();
+  }
+
+  function filterCards() {
+    var q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    var cards = document.querySelectorAll('.blog-card');
+    var visible = 0;
+
+    cards.forEach(function(card) {
+      var title = card.dataset.title || '';
+      var topic = card.dataset.topic || '';
+      var excerpt = card.dataset.excerpt || '';
+      var matchSearch = !q || title.includes(q) || excerpt.includes(q) || topic.includes(q);
+      var matchTopic = activeTopic === 'all' || topic === activeTopic.toLowerCase();
+      var show = matchSearch && matchTopic;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    var info = document.getElementById('resultsInfo');
+    if (info) info.textContent = visible + ' post' + (visible === 1 ? '' : 's') + ' found';
+  }
+</script>
+
+</body>
+</html>

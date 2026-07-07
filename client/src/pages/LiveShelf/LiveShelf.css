@@ -1,0 +1,516 @@
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+.ls-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ls-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.ls-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--t-surface);
+  border-bottom: 1px solid var(--t-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.ls-search-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.ls-search-input {
+  padding: 7px 11px;
+  border: 1.5px solid var(--t-border);
+  border-radius: 7px;
+  font-size: 13px;
+  outline: none;
+  min-width: 160px;
+}
+
+.ls-search-input:focus { border-color: var(--t-accent); }
+
+.ls-cat-select {
+  padding: 7px 10px;
+  border: 1.5px solid var(--t-border);
+  border-radius: 7px;
+  font-size: 13px;
+  outline: none;
+  background: var(--t-surface);
+  cursor: pointer;
+}
+
+.btn-toolbar {
+  padding: 7px 14px;
+  background: var(--t-text);
+  color: var(--t-surface);
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-toolbar.btn-clear {
+  background: transparent;
+  color: var(--t-text-muted);
+  border: 1.5px solid var(--t-border);
+}
+
+.ls-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.ls-pending-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t-warning);
+  background: color-mix(in srgb, var(--t-warning) 12%, var(--t-surface));
+  border: 1px solid var(--t-warning);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.btn-sync {
+  padding: 8px 16px;
+  background: var(--t-success);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-sync.btn-sync-disabled {
+  background: var(--t-border-strong);
+  color: var(--t-text-muted);
+  cursor: not-allowed;
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+.ls-toast {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ls-toast-ok  { background: var(--t-success-bg); color: var(--t-success-text); border: 1px solid var(--t-success); }
+.ls-toast-err { background: var(--t-danger-bg); color: var(--t-danger-text); border: 1px solid var(--t-danger); }
+
+/* ── Info banner ──────────────────────────────────────────────────────────── */
+.ls-info-banner {
+  padding: 9px 14px;
+  background: var(--t-accent-soft);
+  border: 1px solid var(--t-accent-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--t-accent-hover);
+  margin-bottom: 14px;
+}
+
+/* ── Loading / Empty ──────────────────────────────────────────────────────── */
+.ls-loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--t-text-muted);
+  font-size: 14px;
+}
+
+.ls-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--t-text-muted);
+}
+
+.ls-empty-icon  { font-size: 36px; margin-bottom: 12px; }
+.ls-empty-title { font-size: 15px; font-weight: 700; color: var(--t-text-muted); margin-bottom: 6px; }
+.ls-empty-sub   { font-size: 13px; }
+
+/* ── Category section ─────────────────────────────────────────────────────── */
+.ls-cat-section { margin-bottom: 28px; }
+
+.ls-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--t-accent);
+}
+
+.ls-cat-name  { font-size: 14px; font-weight: 700; color: var(--t-text); }
+.ls-cat-count { font-size: 12px; color: var(--t-text-muted); }
+
+/* ── Grid ─────────────────────────────────────────────────────────────────── */
+.ls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+.ls-card {
+  background: var(--t-surface);
+  border-radius: 12px;
+  box-shadow: var(--t-shadow-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s, opacity 0.15s, transform 0.1s;
+  cursor: grab;
+}
+
+.ls-card:hover { box-shadow: var(--t-shadow-md), 0 4px 16px rgba(0,0,0,.05); }
+.ls-card:active { cursor: grabbing; }
+
+.ls-card-dirty   { background: color-mix(in srgb, var(--t-warning) 10%, var(--t-surface)); box-shadow: 0 0 0 2px var(--t-warning); }
+.ls-card-dragging { opacity: 0.35; transform: scale(0.97); }
+.ls-card-dragover { box-shadow: 0 0 0 2.5px var(--t-accent); transform: scale(1.02); }
+
+/* ── Card image ───────────────────────────────────────────────────────────── */
+.ls-card-img-wrap {
+  position: relative;
+  width: 100%;
+  height: 130px;
+  flex-shrink: 0;
+}
+
+.ls-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ls-card-img-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--t-surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--t-text-muted);
+  font-size: 32px;
+}
+
+/* Image change overlay — shows on hover */
+.ls-img-change-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.42);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ls-card-img-wrap:hover .ls-img-change-overlay { opacity: 1; }
+
+/* Remove ✕ button — top-right overlay */
+.ls-remove-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--t-danger) 85%, transparent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.ls-remove-btn:hover { background: var(--t-danger); }
+
+/* Sync badge */
+.ls-sync-badge {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+}
+
+.ls-synced  { color: var(--t-success-text); background: color-mix(in srgb, var(--t-success-bg) 90%, transparent); border-color: var(--t-success); }
+.ls-pending { color: var(--t-warning); background: color-mix(in srgb, var(--t-warning) 12%, var(--t-surface)); border-color: var(--t-warning); }
+
+/* Drag hint */
+.ls-drag-hint {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  font-size: 16px;
+  color: rgba(255,255,255,0.75);
+  user-select: none;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+
+/* ── Card body ────────────────────────────────────────────────────────────── */
+.ls-card-body {
+  padding: 5px;
+  display: flex;
+  min-width: 150px;
+  flex-direction: column;
+
+  gap: 7px;
+  flex: 1;
+}
+
+.ls-card-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--t-text);
+  line-height: 1.3;
+}
+
+.ls-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ls-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--t-accent);
+}
+
+.ls-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── Qty stepper ──────────────────────────────────────────────────────────── */
+.ls-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ls-qty-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.ls-qty-stepper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  border: 1.5px solid var(--t-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ls-qty-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--t-surface-2);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--t-text);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.ls-qty-btn:hover  { background: var(--t-surface-3); }
+.ls-qty-btn:active { background: var(--t-border); }
+
+.ls-qty-input {
+  flex: 1;
+  border: none;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--t-text);
+  background: transparent;
+  outline: none;
+  min-width: 0;
+  padding: 4px 0;
+  /* hide number spinners */
+  -moz-appearance: textfield;
+}
+
+.ls-qty-input::-webkit-outer-spin-button,
+.ls-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ── Inventory breakdown block ───────────────────────────────────────────── */
+/* Constrain the stepper width inside the inventory block */
+.ls-inventory-block .ls-qty-stepper {
+  display: flex;
+  align-items: center;
+  width: 120px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--t-border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--t-surface);
+}
+
+.ls-inventory-block .ls-qty-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 32px;
+  background: var(--t-surface-2);
+  border: none;
+  border-radius: 0;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ls-inventory-block .ls-qty-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--t-text);
+  background: var(--t-surface);
+  border: none;
+  border-left: 1.5px solid var(--t-border-strong);
+  border-right: 1.5px solid var(--t-border-strong);
+  padding: 0;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.ls-inventory-block .ls-qty-input::-webkit-outer-spin-button,
+.ls-inventory-block .ls-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+
+.ls-inventory-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--t-surface-2);
+  border-radius: 8px;
+  border: 1.5px solid var(--t-border);
+}
+
+.ls-inv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ls-inv-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ls-inv-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t-text);
+}
+
+.ls-inv-booked .ls-inv-label { color: var(--t-text-muted); }
+.ls-inv-booked .ls-inv-value { color: var(--t-danger); font-size: 12px; font-weight: 600; }
+
+.ls-inv-divider {
+  height: 1px;
+  background: var(--t-border);
+  margin: 2px 0;
+}
+
+.ls-inv-available { margin-top: 2px; }
+.ls-inv-available .ls-inv-label { color: var(--t-text); font-size: 12px; }
+.ls-inv-available-val { font-size: 16px !important; font-weight: 800 !important; }
+
+/* ── Notes ────────────────────────────────────────────────────────────────── */
+.ls-notes {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1.5px solid var(--t-border);
+  font-size: 12px;
+  color: var(--t-text-muted);
+  resize: none;
+  font-family: inherit;
+  outline: none;
+  background: var(--t-surface-2);
+  transition: border-color 0.15s;
+}
+
+.ls-notes:focus { border-color: var(--t-accent); background: var(--t-surface); }
+
+/* ── Save & Sync button ───────────────────────────────────────────────────── */
+.ls-save-btn {
+  width: 100%;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  background: var(--t-success);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ls-save-btn:hover:not(:disabled)    { filter: brightness(0.94); }
+.ls-save-btn:disabled { background: var(--t-border-strong); color: var(--t-text-muted); cursor: not-allowed; }
