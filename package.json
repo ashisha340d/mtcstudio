@@ -2,82 +2,13 @@
   "name": "mtcstudio",
   "version": "1.0.0",
   "description": "MTC Studio — POS, CRM, CMS & Kitchen Management",
-  "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
-    "electron": "electron .",
-    "electron:dev": "cross-env NODE_ENV=development electron .",
-    "build:client": "npm --prefix client run build",
-    "build": "npm run build:client && electron-builder --win",
-    "build:portable": "npm run build:client && electron-builder --win portable",
-    "build:full": "npm --prefix server install --omit=dev && npm run build:client && electron-builder --win",
-    "icons": "node electron/assets/generateIcons.js"
+    "build:client": "npm --prefix client run build"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8"
-  },
-  "build": {
-    "appId": "com.mtcstudio.app",
-    "productName": "MTC Studio",
-    "copyright": "Copyright © 2025 MTC Studio",
-    "directories": {
-      "output": "dist",
-      "buildResources": "electron/assets"
-    },
-    "files": [
-      "electron/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "server",
-        "to": "server",
-        "filter": [
-          "**/*",
-          "!electron/**",
-          "!**/*.db-shm",
-          "!**/*.db-wal",
-          "!**/node_modules/.cache/**",
-          "!**/node_modules/.bin/**"
-        ]
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "electron/assets/app.png",
-      "requestedExecutionLevel": "asInvoker"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "MTC Studio",
-      "runAfterFinish": true,
-      "installerIcon": "electron/assets/app.png",
-      "uninstallerIcon": "electron/assets/app.png"
-    },
-    "portable": {
-      "artifactName": "MTC-Studio-Portable.exe"
-    },
-    "publish": null
+    "cross-env": "^7.0.3"
   }
 }
