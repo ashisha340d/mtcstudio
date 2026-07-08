@@ -161,7 +161,7 @@ mtcstudio/
 | **Waiter App** | `pages/Waiter/WaiterApp.jsx` | Standalone mobile PWA — see §9. |
 | **Customer Menu** | `pages/CustomerMenu` | Public, no-auth QR-code table ordering page. |
 | **System Monitor** | `pages/SystemMonitor` | Backend/socket/DB health, connected devices, log viewer — added in the architecture restructure. |
-| **Sales Report** | `pages/SalesReport` | Reporting. |
+| **Sales Report** | `pages/SalesReport` | Day's cash/card/credit + per-order breakdown, plus cake-payments collections. Opens as a modal (`pages/POS/components/SalesReportModal.jsx`) via **F8** from `POSDashboard.jsx`/`POS.jsx`, closes on **Esc** — see §20. |
 | **Revert Transaction** | `pages/POS/components/RevertTransactionModal.jsx`, opened from a Manager/Admin-only button in `POSDashboard.jsx`'s topbar | "Undo a mistaken checkout" tool — see §8/§11 for the full mechanism. |
 
 ---
@@ -388,3 +388,17 @@ All three verified via headless Edge/Playwright: filter tabs absent + all 4 seed
 **Known residual quirk, not fixed (pre-existing pattern, not migration-introduced)**: `audit()` writes now go through the shared pool independently of whatever `transaction(...)` a caller is inside — on MySQL this means an audit-log row is no longer atomic with the business transaction it describes (both used to share one connection/transaction under better-sqlite3). Every call site already treats `audit()` as fire-and-forget (never awaited), so this only matters in the rare case of a transaction rolling back after the audit insert already committed — acceptable for a log table, flagged here in case it ever needs tightening.
 
 **`sqlite3`/`better-sqlite3` remain in `server/package.json`** solely so the migration script can still read the old file if ever re-run; nothing at runtime requires either package anymore.
+
+## 20. Sales Report — cash-mismatch fix + table/discount/search + F8 modal (2026-07-08)
+
+**Root cause of a real "cash collection doesn't match" report**: `GET /pos/reports/sales` (`server/routes/pos/reports.js`) summed `pos_payments.amount` for `method='CASH'` raw — but that column stores the *tendered* amount (what the customer physically handed over), not what stayed in the drawer. Example live-DB case (2026-07-08): 3 cash orders tendered ₹1350 total but ₹105 was given back as change, so actual net cash was ₹1245 — the report showed ₹1350. Fixed by subtracting `SUM(pos_orders.change_amount)` (for the day's closed orders) from `sumCash`. This mirrors the `/day-end` Z-report's `expectedCash` formula, which already netted change correctly — **if `/sales` cash ever looks wrong again, diff it against `/day-end`'s `expectedCash` calc first**, since that's the fuller reconciliation (it also accounts for till opening float and `pos_cash_movements`, which `/sales` still does not — `/sales` is a same-day snapshot, not a full drawer reconciliation).
+
+**Cake payments were entirely absent from `/sales`'s cash/card/credit totals** (they only appeared in the separate `/cake-payments` section of the page). Fixed by summing `pos_payments` rows where `cake_order_id IS NOT NULL` and `created_at` falls in the Nepal day bounds (`getNepalDayBoundsUTC`, independent of the linked cake order's own status/delivery date — cash can be collected on a different day than delivery) and merging those method-sums into the same `sumCash/sumCard/sumQR/sumLedger` totals used for POS orders. The separate `/cake-payments` section (advance/follow-up breakdown) is untouched and still renders on its own.
+
+**`/sales` now also joins `pos_restaurant_tables`** (`o.table_id → t.name AS table_name`) and selects `o.discount_amount`, exposed per order as `tableName`/`discount`. Reminder on the schema: `pos_orders.total_amount` is maintained by a DB trigger as `SUM(item qty×price − item discount)` over non-cancelled KOT items (post item-discount, pre bill-discount); `discount_amount` is a separate manual bill-level discount; net payable = `total_amount − discount_amount`.
+
+**Frontend** (`SalesReport.jsx`/`.css`): header heading+date merged into one line; added a client-side search box (order id/customer/phone/table) filtering the order list, its count, and the "Total Collected" footer (top summary tiles stay whole-day); order rows show a "Table N" tag when `tableName` is present; expanded-row detail gained a Total/Discount/per-method-Payment-lines summary above the items table.
+
+**F8-opens/Esc-closes modal**: new `pages/POS/components/SalesReportModal.jsx` wraps `SalesReport` in the project's existing plain-component modal convention (`.modal-overlay`/`.modal`, `onClose` prop, no internal Esc handling — see §8's "no generic Modal component" note). Wired into both `POSDashboard.jsx` (which had no keydown listener at all before this) and `POS.jsx` (added into its existing single keydown effect, `Escape`-closes-report checked *first*, ahead of the screen's other modal-close/`navigate('/pos')` fallthrough branches, matching the established "most specific modal first" Esc convention).
+
+Verified: `vite build` (client) and `node --check` (reports.js) both clean; re-queried the live DB directly for 2026-07-08 to confirm net cash (₹1245) and the new table-name join (orders 99/100 → "TABLE 06"/"TABLE 03", order 101's `discount_amount`=54 surfaced) before shipping.

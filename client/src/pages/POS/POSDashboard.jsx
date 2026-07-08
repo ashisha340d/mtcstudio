@@ -12,6 +12,7 @@ import ShiftOrderModal from './components/ShiftOrderModal';
 import RevertTransactionModal from './components/RevertTransactionModal';
 import CashDrawerModal from './components/CashDrawerModal';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
+import SalesReportModal from './components/SalesReportModal';
 import FastPane from './components/FastPane';
 import { nepalNow } from '../../utils/dateTime';
 import './pos.css';
@@ -62,11 +63,26 @@ export default function POSDashboard() {
   const [showShift, setShowShift] = useState(false);
   const [showRevert, setShowRevert] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [showSalesReport, setShowSalesReport] = useState(false);
 
   useEffect(() => {
     loadMasterData();
     loadActiveOrders();
   }, []); // eslint-disable-line
+
+  // F8 → open Sales Report; ESC → close it
+  useEffect(() => {
+    const h = (e) => {
+      if (e.key === 'Escape' && showSalesReport) { setShowSalesReport(false); return; }
+      if (e.key === 'F8') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        setShowSalesReport(true);
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [showSalesReport]);
 
   // Table click → go to POS entry; pass existing order data if occupied
   const onTableClick = useCallback((table) => {
@@ -329,6 +345,9 @@ export default function POSDashboard() {
       )}
       {showDrawer && (
         <CashDrawerModal onClose={() => setShowDrawer(false)} />
+      )}
+      {showSalesReport && (
+        <SalesReportModal onClose={() => setShowSalesReport(false)} />
       )}
     </div>
   );

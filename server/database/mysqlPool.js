@@ -2,15 +2,14 @@
 const mysql = require('mysql2/promise');
 
 const MYSQL_CONFIG = {
-  host: 'localhost',
+  host: '192.168.1.5',
   user: 'root',
   password: 'Nepal@Narayan113',
   database: 'munchtim_mtcstudio',
   waitForConnections: true,
   connectionLimit: 10,
   dateStrings: true,
-  ///port: 9900, // or your custom port
-
+  port: 9900,
 };
 
 const pool = mysql.createPool(MYSQL_CONFIG);

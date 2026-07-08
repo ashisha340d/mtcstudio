@@ -4,34 +4,49 @@ const path = require('path');
 const sizeOf = require('image-size');
 const { uploadsDir } = require('../middleware/upload');
 
-async function getAll({ search, unassigned }) {
-    if (search) {
-        return dbAll(
-            `SELECT * FROM media_library WHERE filename LIKE ? OR title LIKE ? OR alt_text LIKE ? ORDER BY created_at DESC`,
-            [`%${search}%`, `%${search}%`, `%${search}%`]
-        );
-    }
-    if (unassigned) {
-        return dbAll(
-            `SELECT m.* FROM media_library m LEFT JOIN product_images pi ON pi.media_id=m.id WHERE pi.id IS NULL ORDER BY m.created_at DESC LIMIT 200`
-        );
-    }
-    return dbAll(`SELECT * FROM media_library ORDER BY created_at DESC`);
+// "sections" reflects real, current usage (not a stored tag) so it can never go
+// stale — removing an image from a product/blog/design drops the badge immediately.
+// product_images keeps one row per image a product has ever used (setImage() only
+// ever demotes old rows to is_primary=0, never deletes them), so is_primary=1 is
+// the only row that reflects what's actually showing anywhere today.
+const SECTIONS_AGG = `TRIM(BOTH ',' FROM CONCAT(
+    IF(EXISTS (SELECT 1 FROM product_images pi2 WHERE pi2.media_id = m.id AND pi2.is_primary = 1), 'menu,', ''),
+    IF(EXISTS (SELECT 1 FROM blogs b WHERE b.featured_image = m.id OR b.author_image = m.id), 'blog,', ''),
+    IF(EXISTS (SELECT 1 FROM cake_design_media cdm WHERE cdm.media_id = m.id)
+       OR EXISTS (SELECT 1 FROM cake_collections cc WHERE cc.hero_media_id = m.id), 'cake,', '')
+)) AS sections`;
+
+const SECTION_FILTER_SQL = {
+    menu: `m.id IN (SELECT media_id FROM product_images WHERE is_primary = 1)`,
+    blog: `m.id IN (SELECT featured_image FROM blogs WHERE featured_image IS NOT NULL
+                     UNION SELECT author_image FROM blogs WHERE author_image IS NOT NULL)`,
+    cake: `m.id IN (SELECT media_id FROM cake_design_media WHERE media_id IS NOT NULL
+                     UNION SELECT hero_media_id FROM cake_collections WHERE hero_media_id IS NOT NULL)`,
+};
+
+function withSections(rows) {
+    return rows.map(r => ({ ...r, sections: r.sections ? r.sections.split(',') : [] }));
 }
 
-async function getList({ search, unassigned }) {
-    if (search) {
-        return dbAll(
-            `SELECT * FROM media_library WHERE filename LIKE ? OR title LIKE ? OR alt_text LIKE ? ORDER BY created_at DESC LIMIT 200`,
-            [`%${search}%`, `%${search}%`, `%${search}%`]
-        );
-    }
-    if (unassigned) {
-        return dbAll(
-            `SELECT m.* FROM media_library m LEFT JOIN product_images pi ON pi.media_id=m.id WHERE pi.id IS NULL ORDER BY m.created_at DESC LIMIT 200`
-        );
-    }
-    return dbAll(`SELECT * FROM media_library ORDER BY created_at DESC LIMIT 10`);
+async function query({ search, unassigned, section, limit }) {
+    const where = [], params = [];
+    if (search) { where.push(`(m.filename LIKE ? OR m.title LIKE ? OR m.alt_text LIKE ?)`); params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    if (section && SECTION_FILTER_SQL[section]) where.push(SECTION_FILTER_SQL[section]);
+    if (unassigned) where.push(`pi.id IS NULL`);
+    let sql = `SELECT m.*, ${SECTIONS_AGG} FROM media_library m`;
+    if (unassigned) sql += ` LEFT JOIN product_images pi ON pi.media_id=m.id AND pi.is_primary=1`;
+    if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
+    sql += ` ORDER BY m.created_at DESC`;
+    if (limit) { sql += ` LIMIT ${Number(limit)}`; }
+    return withSections(await dbAll(sql, params));
+}
+
+async function getAll({ search, unassigned, section }) {
+    return query({ search, unassigned, section, limit: 200 });
+}
+
+async function getList({ search, unassigned, section }) {
+    return query({ search, unassigned, section, limit: (search || unassigned || section) ? 200 : 10 });
 }
 
 async function saveFileEntry(file) {

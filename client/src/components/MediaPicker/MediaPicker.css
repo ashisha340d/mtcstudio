@@ -93,6 +93,23 @@
   white-space: nowrap;
 }
 
+.picker-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0 6px 5px;
+}
+
+.picker-tag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: #eee;
+  color: #555;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
 .media-picker-footer {
   display: flex;
   gap: 10px;

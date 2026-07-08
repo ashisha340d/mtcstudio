@@ -185,7 +185,7 @@ export default function BlogEdit() {
       </form>
 
       {pickerTarget && (
-        <MediaPicker onSelect={handleMediaSelect} onClose={() => setPickerTarget(null)} />
+        <MediaPicker onSelect={handleMediaSelect} onClose={() => setPickerTarget(null)} section="blog" />
       )}
     </div>
   );

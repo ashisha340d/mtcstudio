@@ -28,12 +28,15 @@ router.get('/sales', async (req, res) => {
   const dateStr = req.query.date || getNepalDateStr();
 
   const [year, month, day] = dateStr.split('-').map(Number);
+  const { start, end } = getNepalDayBoundsUTC(dateStr);
 
   // CLOSED orders for the day
   const orders = await dbAll(
     `SELECT o.id, o.order_type, o.customer_name, o.customer_phone,
-            o.total_amount, o.closed_at
+            o.total_amount, o.discount_amount, o.change_amount, o.closed_at,
+            o.table_id, t.name AS table_name
      FROM pos_orders o
+     LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
      WHERE o.status = 'CLOSED'
        AND YEAR(o.closed_at) = ?
        AND MONTH(o.closed_at) = ?
@@ -42,9 +45,32 @@ router.get('/sales', async (req, res) => {
     [year, month, day]
   );
 
+  // Cake order payments collected on this day (checked out, regardless of order status)
+  const cakePayments = await dbAll(
+    `SELECT method, SUM(amount) AS amount
+     FROM   pos_payments
+     WHERE  cake_order_id IS NOT NULL
+       AND  created_at >= ? AND created_at <= ?
+     GROUP  BY method`,
+    [start, end]
+  );
+
+  let sumCash = 0, sumCard = 0, sumQR = 0, sumLedger = 0;
+  for (const p of cakePayments) {
+    if (p.method === 'CASH') sumCash += p.amount;
+    if (p.method === 'CARD') sumCard += p.amount;
+    if (p.method === 'QR') sumQR += p.amount;
+    if (p.method === 'LEDGER') sumLedger += p.amount;
+  }
 
   if (!orders.length) {
-    return res.json({ credit: 0, card: 0, cash: 0, orders: [] });
+    return res.json({
+      date: dateStr,
+      credit: Math.round(sumLedger * 100) / 100,
+      card: Math.round((sumCard + sumQR) * 100) / 100,
+      cash: Math.round(sumCash * 100) / 100,
+      orders: [],
+    });
   }
 
   const orderIds = orders.map(o => o.id);
@@ -85,13 +111,16 @@ router.get('/sales', async (req, res) => {
   }
 
   // Build summary totals by payment method
-  let sumCash = 0, sumCard = 0, sumQR = 0, sumLedger = 0;
   for (const p of payments) {
     if (p.method === 'CASH') sumCash += p.amount;
     if (p.method === 'CARD') sumCard += p.amount;
     if (p.method === 'QR') sumQR += p.amount;
     if (p.method === 'LEDGER') sumLedger += p.amount;
   }
+
+  // Cash payments are tendered amounts (e.g. customer hands over 100 for a 90 bill) —
+  // net out change given so cash reflects what actually stayed in the drawer
+  sumCash -= orders.reduce((s, o) => s + Number(o.change_amount || 0), 0);
 
   // Build order list
   const orderList = orders.map(o => {
@@ -118,9 +147,11 @@ router.get('/sales', async (req, res) => {
       time: nepalTime,
       customerName: o.customer_name || null,
       customerPhone: o.customer_phone || null,
+      tableName: o.table_name || null,
       paymentMethod,
       payments: orderPayments,
       amount: o.total_amount,
+      discount: o.discount_amount || 0,
       items: orderItems.map((it, idx) => ({
         sn: idx + 1,
         name: it.product_name,
@@ -161,7 +192,7 @@ router.get('/cake-payments', async (req, res) => {
   );
 
   const summary = {
-    ADVANCE:  { label: 'Advance',   txns: 0, amount: 0, methods: [] },
+    ADVANCE: { label: 'Advance', txns: 0, amount: 0, methods: [] },
     FOLLOWUP: { label: 'Follow-up', txns: 0, amount: 0, methods: [] },
   };
   for (const r of byMethod) {
@@ -219,7 +250,7 @@ router.get('/cake-payments', async (req, res) => {
       advance: summary.ADVANCE,
       followup: summary.FOLLOWUP,
     },
-    booked:    { orders: Number(booked.orders),    value: round2(booked.value) },
+    booked: { orders: Number(booked.orders), value: round2(booked.value) },
     delivered: { orders: Number(delivered.orders), revenue: round2(delivered.revenue) },
     cancelled: { orders: Number(cancelled.orders), value: round2(cancelled.value) },
     outstanding: {
@@ -453,9 +484,9 @@ async function buildDayEndReport(dateStr) {
 
   // ── Assemble ──
   const cancelMap = Object.fromEntries(cancels.map(r => [r.entity_type, Number(r.n)]));
-  const auditMap  = Object.fromEntries(auditCounts.map(r => [r.action, Number(r.n)]));
-  const kindMap   = Object.fromEntries(cancelKinds.map(r => [r.kind, { items: Number(r.n), value: round2(r.value) }]));
-  const cakeColl  = { ADVANCE: { txns: 0, amount: 0 }, REGULAR: { txns: 0, amount: 0 } };
+  const auditMap = Object.fromEntries(auditCounts.map(r => [r.action, Number(r.n)]));
+  const kindMap = Object.fromEntries(cancelKinds.map(r => [r.kind, { items: Number(r.n), value: round2(r.value) }]));
+  const cakeColl = { ADVANCE: { txns: 0, amount: 0 }, REGULAR: { txns: 0, amount: 0 } };
   for (const r of cakeCollections) {
     const k = r.payment_type === 'ADVANCE' ? 'ADVANCE' : 'REGULAR';
     cakeColl[k].txns += Number(r.txns);
@@ -467,29 +498,29 @@ async function buildDayEndReport(dateStr) {
   const itemDisc = { MANUAL: 0, PROMO: 0, COMPLIMENTARY: 0, EMPLOYEE: 0 };
   for (const r of itemDiscountRows) itemDisc[r.dtype] = round2((itemDisc[r.dtype] || 0) + Number(r.amount));
   const itemDiscTotal = round2(itemDisc.MANUAL + itemDisc.PROMO + itemDisc.COMPLIMENTARY + itemDisc.EMPLOYEE);
-  const returnsValue  = round2(returnsAgg.value);
+  const returnsValue = round2(returnsAgg.value);
 
   const billDiscounts = round2(salesAgg.discounts);
-  const gross         = round2(salesAgg.gross + itemDiscTotal + returnsValue);
-  const netSales      = round2(salesAgg.gross - billDiscounts);
-  const cakeRevenue   = round2(cakeDelivered.revenue);
-  const grandTotal    = round2(netSales + cakeRevenue);
-  const changeGiven   = round2(salesAgg.change_given);
-  const credit        = round2(creditExtended.amount);
-  const paid          = round2(salesAgg.paid);
+  const gross = round2(salesAgg.gross + itemDiscTotal + returnsValue);
+  const netSales = round2(salesAgg.gross - billDiscounts);
+  const cakeRevenue = round2(cakeDelivered.revenue);
+  const grandTotal = round2(netSales + cakeRevenue);
+  const changeGiven = round2(salesAgg.change_given);
+  const credit = round2(creditExtended.amount);
+  const paid = round2(salesAgg.paid);
 
   // Sales check: every closed order's tenders (paid + credit) cover its net total
   const salesDiff = round2(netSales - (paid + credit));
   // Payments check: tender rows captured today (net of change) equal net sales
-  const posPayTotal   = round2(payMethods.reduce((s, m) => s + Number(m.pos_amount), 0));
-  const cakePayTotal  = round2(payMethods.reduce((s, m) => s + Number(m.cake_amount), 0));
-  const paymentsDiff  = round2(posPayTotal - changeGiven - netSales);
+  const posPayTotal = round2(payMethods.reduce((s, m) => s + Number(m.pos_amount), 0));
+  const cakePayTotal = round2(payMethods.reduce((s, m) => s + Number(m.cake_amount), 0));
+  const paymentsDiff = round2(posPayTotal - changeGiven - netSales);
 
   const mv = Object.fromEntries(movementRows.map(r => [r.type, round2(r.amount)]));
-  const cashIn        = mv.CASH_IN || 0;
-  const pettyCash     = mv.PETTY_CASH || 0;
-  const paidOut       = mv.PAID_OUT || 0;
-  const creditRepaid  = mv.CREDIT_RECEIVED || 0;
+  const cashIn = mv.CASH_IN || 0;
+  const pettyCash = mv.PETTY_CASH || 0;
+  const paidOut = mv.PAID_OUT || 0;
+  const creditRepaid = mv.CREDIT_RECEIVED || 0;
 
   const openingFloat = round2(tillSessions.reduce((s, t) => s + Number(t.opening_float || 0), 0));
   const allTillsClosed = tillSessions.length > 0 && tillSessions.every(t => t.status === 'CLOSED');
@@ -507,14 +538,14 @@ async function buildDayEndReport(dateStr) {
   const noActivity = Number(orderCounts.total) === 0 && posPayTotal === 0 && cakePayTotal === 0
     && movementRows.length === 0;
   const flags = {
-    sales_balanced:    Math.abs(salesDiff) <= BALANCE_TOLERANCE,
+    sales_balanced: Math.abs(salesDiff) <= BALANCE_TOLERANCE,
     payments_balanced: Math.abs(paymentsDiff) <= BALANCE_TOLERANCE,
-    cash_balanced:     actualCash !== null ? Math.abs(cashDiff) <= BALANCE_TOLERANCE
-                        : (noActivity && tillSessions.length === 0),
-    orders_balanced:   Number(orderCounts.pending) === 0,
-    cakes_balanced:    Number(cakeDelivered.unsettled) === 0,
-    credits_balanced:  Math.abs(creditsDiff) <= BALANCE_TOLERANCE,
-    till_closed:       allTillsClosed || (noActivity && tillSessions.length === 0),
+    cash_balanced: actualCash !== null ? Math.abs(cashDiff) <= BALANCE_TOLERANCE
+      : (noActivity && tillSessions.length === 0),
+    orders_balanced: Number(orderCounts.pending) === 0,
+    cakes_balanced: Number(cakeDelivered.unsettled) === 0,
+    credits_balanced: Math.abs(creditsDiff) <= BALANCE_TOLERANCE,
+    till_closed: allTillsClosed || (noActivity && tillSessions.length === 0),
   };
   flags.day_closed_ok = Object.values(flags).every(Boolean);
 
@@ -523,10 +554,10 @@ async function buildDayEndReport(dateStr) {
     business: {
       till_sessions: tillSessions,
       orders: {
-        total:     Number(orderCounts.total),
+        total: Number(orderCounts.total),
         completed: Number(orderCounts.completed),
         cancelled: Number(orderCounts.cancelled),
-        pending:   Number(orderCounts.pending),
+        pending: Number(orderCounts.pending),
       },
       refunds: { bills: Number(refunds.bills), amount: round2(refunds.amount) },
       pax: Number(salesAgg.pax),
@@ -570,10 +601,10 @@ async function buildDayEndReport(dateStr) {
       difference: cashDiff,
     },
     cakes: {
-      booked:    { orders: Number(cakeBooked.orders),    value: round2(cakeBooked.value) },
+      booked: { orders: Number(cakeBooked.orders), value: round2(cakeBooked.value) },
       delivered: { orders: Number(cakeDelivered.orders), revenue: cakeRevenue, unsettled: Number(cakeDelivered.unsettled) },
       cancelled: { orders: Number(cakeCancelled.orders), value: round2(cakeCancelled.value) },
-      advance_received:  cakeColl.ADVANCE,
+      advance_received: cakeColl.ADVANCE,
       balance_collected: cakeColl.REGULAR,
       pending: {
         orders: Number(cakePending.orders),
@@ -589,7 +620,7 @@ async function buildDayEndReport(dateStr) {
     top_products: topProducts.map(p => ({ product: p.product, qty: Number(p.qty), revenue: round2(p.revenue) })),
     staff: {
       orders: staffOrders.map(s => ({ name: s.name, employee_id: s.employee_id, orders: Number(s.orders), sales: round2(s.sales) })),
-      kots:   staffKots.map(s => ({ name: s.name, employee_id: s.employee_id, kots: Number(s.kots) })),
+      kots: staffKots.map(s => ({ name: s.name, employee_id: s.employee_id, kots: Number(s.kots) })),
     },
     discounts: {
       bill: billDiscounts,
@@ -600,25 +631,25 @@ async function buildDayEndReport(dateStr) {
       total: round2(billDiscounts + itemDiscTotal),
     },
     operations: {
-      bills_edited:     auditMap.EDIT || 0,
-      bills_reprinted:  auditMap.REPRINT || 0,
-      bills_cancelled:  cancelMap.ORDER || 0,
-      kots_cancelled:   cancelMap.KOT || 0,
-      items_cancelled:  cancelMap.KOT_ITEM || 0,
+      bills_edited: auditMap.EDIT || 0,
+      bills_reprinted: auditMap.REPRINT || 0,
+      bills_cancelled: cancelMap.ORDER || 0,
+      kots_cancelled: cancelMap.KOT || 0,
+      items_cancelled: cancelMap.KOT_ITEM || 0,
       returns: kindMap.RETURN || { items: 0, value: 0 },
-      waste:   kindMap.WASTE  || { items: 0, value: 0 },
-      orders_merged:    auditMap.MERGE || 0,
-      orders_shifted:   auditMap.SHIFT || 0,
-      reverts:          auditMap.REVERT || 0,
-      tables_served:    Number(tablesServed.n),
-      avg_ticket:       salesAgg.orders > 0 ? round2(netSales / salesAgg.orders) : 0,
+      waste: kindMap.WASTE || { items: 0, value: 0 },
+      orders_merged: auditMap.MERGE || 0,
+      orders_shifted: auditMap.SHIFT || 0,
+      reverts: auditMap.REVERT || 0,
+      tables_served: Number(tablesServed.n),
+      avg_ticket: salesAgg.orders > 0 ? round2(netSales / salesAgg.orders) : 0,
       avg_prep_minutes: prep.avg_min === null ? null : round2(prep.avg_min),
     },
     verification: {
-      sales:    { sales: netSales, tendered: round2(paid + credit), difference: salesDiff },
+      sales: { sales: netSales, tendered: round2(paid + credit), difference: salesDiff },
       payments: { captured: round2(posPayTotal - changeGiven), sales: netSales, difference: paymentsDiff },
-      cash:     { expected: expectedCash, actual: actualCash, difference: cashDiff },
-      credits:  { ledger_delta: round2(ledgerDelta.delta), credit_extended: credit, difference: creditsDiff },
+      cash: { expected: expectedCash, actual: actualCash, difference: cashDiff },
+      credits: { ledger_delta: round2(ledgerDelta.delta), credit_extended: credit, difference: creditsDiff },
       credit_outstanding: { total: round2(creditOutstanding.total), customers: Number(creditOutstanding.customers) },
       cake_advances_outstanding: round2(cakePending.advances_held),
       flags,
@@ -662,9 +693,9 @@ router.post('/day-end/close', requireRole('MANAGER', 'ADMIN'), async (req, res) 
         orders_balanced, cakes_balanced, credits_balanced, day_closed, closed_by, notes)
      VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING *`,
     [dateStr, JSON.stringify(report),
-     f.sales_balanced ? 1 : 0, f.payments_balanced ? 1 : 0, f.cash_balanced ? 1 : 0,
-     f.orders_balanced ? 1 : 0, f.cakes_balanced ? 1 : 0, f.credits_balanced ? 1 : 0,
-     f.day_closed_ok ? 1 : 0, req.posUser.id, req.body.notes ?? null]);
+      f.sales_balanced ? 1 : 0, f.payments_balanced ? 1 : 0, f.cash_balanced ? 1 : 0,
+      f.orders_balanced ? 1 : 0, f.cakes_balanced ? 1 : 0, f.credits_balanced ? 1 : 0,
+      f.day_closed_ok ? 1 : 0, req.posUser.id, req.body.notes ?? null]);
 
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'DAY_CLOSURE', entityId: closure.id, action: 'CLOSE_DAY', delta: { date: dateStr, flags: f } });
   res.status(201).json({ ok: true, closed: true, closed_at: closure.closed_at, closed_by: req.posUser.name, report });

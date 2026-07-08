@@ -2,23 +2,31 @@ import { useState, useEffect, useRef } from 'react';
 import { mediaApi } from '../../services/api';
 import './MediaPicker.css';
 
-export default function MediaPicker({ onSelect, onClose, multiple = false }) {
+const SECTIONS = [['', 'All'], ['menu', 'Menu'], ['cake', 'Cake Catalogue'], ['blog', 'Blogs']];
+
+export default function MediaPicker({ onSelect, onClose, multiple = false, section = '' }) {
   const [media, setMedia] = useState([]);
   const [search, setSearch] = useState('');
+  const [sectionFilter, setSectionFilter] = useState(section);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selected, setSelected] = useState([]);
   const fileRef = useRef();
 
-  async function load(s = '') {
+  async function load(s = '', sec = sectionFilter) {
     setLoading(true);
     try {
-      const res = await mediaApi.pickerList({ search: s });
+      const res = await mediaApi.pickerList({ search: s, section: sec });
       setMedia(res.data);
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(search, sectionFilter); }, []); // eslint-disable-line
+
+  function handleSectionChange(sec) {
+    setSectionFilter(sec);
+    load(search, sec);
+  }
 
   async function handleUpload(e) {
     const files = e.target.files;
@@ -28,7 +36,10 @@ export default function MediaPicker({ onSelect, onClose, multiple = false }) {
     Array.from(files).forEach(f => fd.append('images', f));
     try {
       await mediaApi.upload(fd);
-      load(search);
+      // A brand-new file has no real usage yet, so a section filter would hide
+      // it — drop to "All" so the upload is guaranteed visible to select.
+      setSectionFilter('');
+      load(search, '');
     } finally { setUploading(false); e.target.value = ''; }
   }
 
@@ -63,6 +74,9 @@ export default function MediaPicker({ onSelect, onClose, multiple = false }) {
             style={{ flex: 1 }}
           />
           <button className="btn btn-primary btn-sm" onClick={() => load(search)}>Search</button>
+          <select value={sectionFilter} onChange={e => handleSectionChange(e.target.value)}>
+            {SECTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
           <button className="btn btn-add btn-sm" onClick={() => fileRef.current.click()} disabled={uploading}>
             {uploading ? '…' : '+ Upload'}
           </button>
@@ -83,6 +97,9 @@ export default function MediaPicker({ onSelect, onClose, multiple = false }) {
                   <img src={`/uploads/${item.filename}`} alt={item.alt_text || item.title} loading="lazy" />
                   {isSelected && <div className="picker-check">✓</div>}
                   <div className="picker-label">{item.title || item.filename}</div>
+                  {!!(item.sections || []).length && (
+                    <div className="picker-tags">{item.sections.map(s => <span key={s} className="picker-tag">{s}</span>)}</div>
+                  )}
                 </div>
               );
             })

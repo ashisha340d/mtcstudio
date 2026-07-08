@@ -930,7 +930,7 @@ export default function FoodMenu() {
       </div>
 
       {/* ── MediaPicker modal ── */}
-      {pickerFor && <MediaPicker onSelect={onImageSelect} onClose={() => setPickerFor(null)} />}
+      {pickerFor && <MediaPicker onSelect={onImageSelect} onClose={() => setPickerFor(null)} section="menu" />}
 
       {/* ── Import preview modal ── */}
       {importModal && (

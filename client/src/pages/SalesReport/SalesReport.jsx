@@ -16,6 +16,7 @@ export default function SalesReport() {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [search, setSearch]             = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -45,9 +46,14 @@ export default function SalesReport() {
     ? (salesData.cash || 0) + (salesData.card || 0) + (salesData.credit || 0)
     : 0;
 
-  const totalOrders = salesData
-    ? (salesData.orders || []).reduce((s, o) => s + (o.amount || 0), 0)
-    : 0;
+  const q = search.trim().toLowerCase();
+  const filteredOrders = (salesData?.orders || []).filter(o => !q
+    || String(o.id).includes(q)
+    || (o.customerName || '').toLowerCase().includes(q)
+    || (o.customerPhone || '').toLowerCase().includes(q)
+    || (o.tableName || '').toLowerCase().includes(q));
+
+  const totalOrders = filteredOrders.reduce((s, o) => s + (o.amount || 0), 0);
 
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -58,16 +64,20 @@ export default function SalesReport() {
 
       {/* ── Header ── */}
       <div className="sales-report-header">
-        <div>
-          <h1>Sales Report</h1>
-          <div className="report-date">{formattedDate}</div>
-        </div>
+        <h1>Sales Report <span className="report-date">— {formattedDate}</span></h1>
+        <input
+          type="text"
+          className="report-search"
+          placeholder="Search order #, customer, phone, table…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
         <input
           type="date"
           className="report-date-picker"
           value={date}
           max={todayNepal()}
-          onChange={e => { setDate(e.target.value); setExpandedOrder(null); }}
+          onChange={e => { setDate(e.target.value); setExpandedOrder(null); setSearch(''); }}
         />
       </div>
 
@@ -96,8 +106,16 @@ export default function SalesReport() {
         </div>
       )}
 
+      {/* ── No search matches ── */}
+      {!loading && !error && salesData && salesData.orders.length > 0 && filteredOrders.length === 0 && (
+        <div className="report-state">
+          <div className="report-state-icon">🔍</div>
+          <p>No orders match "{search}".</p>
+        </div>
+      )}
+
       {/* ── Data ── */}
-      {!loading && !error && salesData && salesData.orders.length > 0 && (
+      {!loading && !error && salesData && salesData.orders.length > 0 && filteredOrders.length > 0 && (
         <>
           {/* ── Summary ── */}
           <div className="sales-summary">
@@ -124,7 +142,7 @@ export default function SalesReport() {
           {/* ── Orders Table ── */}
           <div className="sales-orders">
             <div className="orders-section-label">
-              Orders — {salesData.orders.length} closed
+              Orders — {filteredOrders.length} closed
             </div>
             <div className="orders-table">
               <div className="table-header">
@@ -136,7 +154,7 @@ export default function SalesReport() {
                 <div className="col-action"></div>
               </div>
 
-              {salesData.orders.map(order => (
+              {filteredOrders.map(order => (
                 <div key={order.id} className="order-row">
                   <div
                     className={`table-row${expandedOrder === order.id ? ' table-row--expanded' : ''}`}
@@ -147,6 +165,7 @@ export default function SalesReport() {
                       <div className="order-time">{order.time}</div>
                     </div>
                     <div className="col-customer">
+                      {order.tableName && <div className="table-tag">Table {order.tableName}</div>}
                       <div className="customer-name">{order.customerName || 'Walk-in'}</div>
                       {order.customerPhone && (
                         <div className="customer-phone">{order.customerPhone}</div>
@@ -165,6 +184,17 @@ export default function SalesReport() {
 
                   {expandedOrder === order.id && (
                     <div className="order-details">
+                      <div className="details-summary">
+                        <span>Total: ₹{(order.amount || 0).toLocaleString('en-IN')}</span>
+                        <span>Discount: ₹{(order.discount || 0).toLocaleString('en-IN')}</span>
+                        <span className="details-summary__payments">
+                          {order.payments.map((p, i) => (
+                            <span key={i} className={`payment-badge payment-${p.method.toLowerCase()}`}>
+                              {PAYMENT_LABELS[p.method] || p.method}: ₹{(p.amount || 0).toLocaleString('en-IN')}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
                       {order.items.length === 0 ? (
                         <div style={{ padding: '12px 16px', color: '#94a3b8', fontSize: 12 }}>No items recorded</div>
                       ) : (

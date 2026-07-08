@@ -219,6 +219,7 @@ export default function ProductEdit() {
         <MediaPicker
           onSelect={m => setImage(m.id)}
           onClose={() => setShowPicker(false)}
+          section="menu"
         />
       )}
     </div>

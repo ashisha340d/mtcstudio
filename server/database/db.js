@@ -288,6 +288,13 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_id INT`);
     await dbRun(`ALTER TABLE media_library ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
+    await dbRun(`ALTER TABLE cake_design_media ADD COLUMN IF NOT EXISTS media_id INT`);
+    await dbRun(`ALTER TABLE cake_collections ADD COLUMN IF NOT EXISTS hero_media_id INT`);
+    await dbRun(`ALTER TABLE cake_design_media ADD INDEX IF NOT EXISTS idx_ckm_media (media_id)`);
+    await dbRun(`ALTER TABLE cake_collections ADD INDEX IF NOT EXISTS idx_cc_hero_media (hero_media_id)`);
+    await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_featured_image (featured_image)`);
+    await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_author_image (author_image)`);
+    await dbRun(`DROP TABLE IF EXISTS media_tags`); // superseded by live-computed usage (see mediaService.js)
 }
 
 let readyResolve, readyReject;

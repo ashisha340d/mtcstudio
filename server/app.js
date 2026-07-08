@@ -55,8 +55,8 @@ const posMaintenanceRouter = require('./routes/pos/maintenance');
 const foodMenuRouter = require('./routes/pos/foodmenu');
 const cakeOrdersRouter = require('./routes/pos/cakeOrders');
 const cakeProductionRouter = require('./routes/pos/cakeProduction');
-const posWaiterRouter   = require('./routes/pos/waiter');
-const posReportsRouter  = require('./routes/pos/reports');
+const posWaiterRouter = require('./routes/pos/waiter');
+const posReportsRouter = require('./routes/pos/reports');
 const posTransactionsRouter = require('./routes/pos/transactions');
 
 const { errorHandler } = require('./middleware/errorHandler');
@@ -94,7 +94,6 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/system', systemRouter);
-
 app.use('/api/auth', posAuthRouter);
 app.use('/api/pos', posMasterRouter);
 app.use('/api/pos/orders', posOrdersRouter);
@@ -106,7 +105,7 @@ app.use('/api/maintenance', posMaintenanceRouter);
 app.use('/api/food-menu', foodMenuRouter);
 app.use('/api/pos/cake-orders', cakeOrdersRouter);
 app.use('/api/pos/cake-production', cakeProductionRouter);
-app.use('/api/pos/waiter',   posWaiterRouter);
+app.use('/api/pos/waiter', posWaiterRouter);
 app.use('/api/pos/reports', posReportsRouter);
 app.use('/api/pos/transactions', posTransactionsRouter);
 
@@ -129,9 +128,9 @@ app.use(errorHandler);
 // ── Server ────────────────────────────────────────────────────
 const mainServer = PROTOCOL === 'https'
   ? https.createServer({
-      cert: fs.readFileSync(CERT_FILE),
-      key: fs.readFileSync(KEY_FILE),
-    }, app)
+    cert: fs.readFileSync(CERT_FILE),
+    key: fs.readFileSync(KEY_FILE),
+  }, app)
   : http.createServer(app);
 
 const io = socketServer.init(mainServer);
@@ -169,34 +168,34 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
   console.error('Database schema initialization failed:', err);
   process.exit(1);
 }).then(() => {
-mainServer.listen(PORT, HTTP_IP, () => {
-  const ip = getNetworkIP();
-  const portSuffix = (PROTOCOL === 'https' && PORT === 443) || (PROTOCOL === 'http' && PORT === 80)
-    ? ''
-    : `:${PORT}`;
-  const base = `${PROTOCOL}://${ip}${portSuffix}`;
-  startAutoSync(60_000);
-  console.log('');
-  console.log('  ╔══════════════════════════════════════════════╗');
-  console.log('  ║          MTC Studio Server — Ready           ║');
-  console.log('  ╚══════════════════════════════════════════════╝');
-  console.log('');
-  console.log(`  Protocol   →  ${PROTOCOL.toUpperCase()}`);
-  console.log(`  IP / Port  →  ${ip}:${PORT}`);
-  console.log(`  Bind       →  ${HTTP_IP}:${PORT}`);
-  console.log(`  Hostname   →  ${hostname()}`);
-  console.log('');
-  console.log(`  POS        →  ${base}/pos`);
-  console.log(`  Waiter     →  ${base}/waiter`);
-  console.log(`  KDS        →  ${base}/kds`);
-  console.log(`  CRM        →  ${base}/crm`);
-  console.log(`  Admin      →  ${base}/`);
-  console.log('');
-  console.log(`  API        →  ${base}/api/`);
-  console.log(`  Socket.IO  →  ${PROTOCOL === 'https' ? 'wss' : 'ws'}://${ip}:${PORT}`);
-  if (PROTOCOL === 'https' && HTTP_PORT !== HTTPS_PORT) {
-    console.log(`  HTTP       →  http://${ip}:${HTTP_PORT} redirects to HTTPS`);
-  }
-  console.log('');
-});
+  mainServer.listen(PORT, HTTP_IP, () => {
+    const ip = getNetworkIP();
+    const portSuffix = (PROTOCOL === 'https' && PORT === 443) || (PROTOCOL === 'http' && PORT === 80)
+      ? ''
+      : `:${PORT}`;
+    const base = `${PROTOCOL}://${ip}${portSuffix}`;
+    startAutoSync(60_000);
+    console.log('');
+    console.log('  ╔══════════════════════════════════════════════╗');
+    console.log('  ║          MTC Studio Server — Ready           ║');
+    console.log('  ╚══════════════════════════════════════════════╝');
+    console.log('');
+    console.log(`  Protocol   →  ${PROTOCOL.toUpperCase()}`);
+    console.log(`  IP / Port  →  ${ip}:${PORT}`);
+    console.log(`  Bind       →  ${HTTP_IP}:${PORT}`);
+    console.log(`  Hostname   →  ${hostname()}`);
+    console.log('');
+    console.log(`  POS        →  ${base}/pos`);
+    console.log(`  Waiter     →  ${base}/waiter`);
+    console.log(`  KDS        →  ${base}/kds`);
+    console.log(`  CRM        →  ${base}/crm`);
+    console.log(`  Admin      →  ${base}/`);
+    console.log('');
+    console.log(`  API        →  ${base}/api/`);
+    console.log(`  Socket.IO  →  ${PROTOCOL === 'https' ? 'wss' : 'ws'}://${ip}:${PORT}`);
+    if (PROTOCOL === 'https' && HTTP_PORT !== HTTPS_PORT) {
+      console.log(`  HTTP       →  http://${ip}:${HTTP_PORT} redirects to HTTPS`);
+    }
+    console.log('');
+  });
 });

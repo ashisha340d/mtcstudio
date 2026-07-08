@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CheckoutModal from './components/SplitTenderCheckoutContainer';
+import SalesReportModal from './components/SalesReportModal';
 import { printReceipt } from './components/ThermalReceipt';
 import './pos.css';
 
@@ -1009,6 +1010,7 @@ export default function POS() {
   const [productModal, setProductModal] = useState(null);
   const [custModal, setCustModal] = useState(false);
   const [checkoutModal, setCheckoutModal] = useState(false);
+  const [showSalesReport, setShowSalesReport] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const searchRef = useRef(null);
@@ -1115,11 +1117,18 @@ export default function POS() {
   useEffect(() => {
     const h = (e) => {
       if (e.key === 'Escape') {
+        if (showSalesReport) { setShowSalesReport(false); return; }
         if (productModal) { setProductModal(null); return; }
         if (custModal) { setCustModal(false); return; }
         if (checkoutModal) { setCheckoutModal(false); return; }
         if (ctxMenu) { setCtxMenu(null); return; }
         navigate('/pos');
+        return;
+      }
+      if (e.key === 'F8' && !productModal && !custModal && !checkoutModal) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        setShowSalesReport(true);
         return;
       }
       if (e.key === 'F2' && !productModal && !custModal && !checkoutModal) {
@@ -1130,7 +1139,7 @@ export default function POS() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [navigate, productModal, custModal, checkoutModal, ctxMenu]);
+  }, [navigate, productModal, custModal, checkoutModal, ctxMenu, showSalesReport]);
 
   /* ── Load categories + tables ───────────────────────────── */
   useEffect(() => {
@@ -1856,6 +1865,10 @@ export default function POS() {
           onClose={() => { isCheckingOutRef.current = false; setCheckoutModal(false); }}
           onSuccess={() => { navigate('/pos', { replace: true }); }}
         />
+      )}
+
+      {showSalesReport && (
+        <SalesReportModal onClose={() => setShowSalesReport(false)} />
       )}
     </div>
   );

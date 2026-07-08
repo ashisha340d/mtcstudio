@@ -3,9 +3,22 @@ import { mediaApi } from '../../services/api';
 import { useMsg } from '../../hooks/useApi';
 import './Media.css';
 
+const SECTIONS = [['', 'All Sections'], ['menu', 'Menu'], ['cake', 'Cake Catalogue'], ['blog', 'Blogs']];
+const STATE_KEY = 'mediaLibraryState';
+
+function loadSavedState() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STATE_KEY));
+    if (saved) return { search: saved.search || '', section: saved.section ?? 'menu' };
+  } catch (e) {}
+  return { search: '', section: 'menu' }; // default to Menu — cheapest section to query at scale
+}
+
 export default function Media() {
+  const initial = loadSavedState();
   const [media, setMedia] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initial.search);
+  const [section, setSection] = useState(initial.section);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -15,10 +28,10 @@ export default function Media() {
   const { msg, showMsg } = useMsg();
   const fileRef = useRef();
 
-  async function load(s = search) {
+  async function load(s = search, sec = section) {
     setLoading(true);
     try {
-      const res = await mediaApi.list({ search: s });
+      const res = await mediaApi.list({ search: s, section: sec });
       setMedia(res.data);
     } catch (e) {
       showMsg(e.response?.data?.error || e.message, false);
@@ -27,7 +40,8 @@ export default function Media() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { sessionStorage.setItem(STATE_KEY, JSON.stringify({ search, section })); }, [search, section]);
 
   async function handleUpload(e) {
     const files = e.target.files;
@@ -113,6 +127,11 @@ export default function Media() {
     load(search);
   }
 
+  function handleSectionChange(sec) {
+    setSection(sec);
+    load(search, sec);
+  }
+
   function formatSize(bytes) {
     if (!bytes) return '';
     if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -127,6 +146,9 @@ export default function Media() {
           <button type="submit" className="btn btn-primary btn-sm">Search</button>
           {search && <button type="button" className="btn btn-clear btn-sm" onClick={() => { setSearch(''); load(''); }}>Clear</button>}
         </form>
+        <select value={section} onChange={e => handleSectionChange(e.target.value)}>
+          {SECTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
         <button className="btn btn-add btn-sm" onClick={() => fileRef.current.click()} disabled={uploading}>
           {uploading ? 'Uploading…' : '+ Upload'}
         </button>
@@ -169,6 +191,13 @@ export default function Media() {
               <div className="media-info">
                 <div className="media-title">{m.title || m.filename}</div>
                 <div className="media-meta">{m.width && m.height ? `${m.width}×${m.height}` : ''} {formatSize(m.file_size)}</div>
+                {!!(m.sections || []).length && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, margin: '4px 0' }}>
+                    {m.sections.map(s => (
+                      <span key={s} style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '.03em', background: '#eee', color: '#555', borderRadius: 3, padding: '1px 5px' }}>{s}</span>
+                    ))}
+                  </div>
+                )}
                 <div className="media-actions">
                   <button className="btn btn-sm btn-save" onClick={() => setEditing({ ...m })}>Edit</button>
                   <button className="btn btn-sm btn-delete" onClick={() => deleteItem(m.id)}>Del</button>
@@ -180,7 +209,9 @@ export default function Media() {
         </div>
       )}
 
-      <div className="pager">Showing {media.length} files</div>
+      <div className="pager">
+        Showing {media.length} files{media.length >= 200 ? ' (capped — search or pick a section to narrow results)' : ''}
+      </div>
 
       {editing && (
         <div

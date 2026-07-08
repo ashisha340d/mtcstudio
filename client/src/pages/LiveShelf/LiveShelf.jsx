@@ -199,7 +199,7 @@ function ItemCard({ item, onSaveSync, onRemove, dragHandlers, isDragging, isDrag
         <div className="ls-drag-hint">⠿</div>
       </div>
 
-      {pickingImg && <MediaPicker onSelect={handleImagePick} onClose={() => setPickingImg(false)} />}
+      {pickingImg && <MediaPicker onSelect={handleImagePick} onClose={() => setPickingImg(false)} section="menu" />}
 
       {/* Body */}
       <div className="ls-card-body">

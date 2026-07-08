@@ -101,7 +101,7 @@ function validateDesign(data) {
         eggless_available: data.eggless_available === undefined ? 1 : (data.eggless_available ? 1 : 0),
         prep_time_hours: parseInt(data.prep_time_hours, 10) || 24,
         is_active:   data.is_active === undefined ? 1 : (data.is_active ? 1 : 0),
-        media:    (data.media || []).map(m => ({ url: String(m.url).trim(), alt: String(m.alt || '').trim() })),
+        media:    (data.media || []).map(m => ({ url: String(m.url).trim(), alt: String(m.alt || '').trim(), media_id: m.media_id || null })),
         sizes:    (data.sizes || []).map(s => ({ label: String(s.label).trim(), weight_kg: parseFloat(s.weight_kg), serves: String(s.serves || '').trim(), price: parseFloat(s.price) })),
         flavours: (data.flavours || []).map(f => ({ name: String(f.name).trim(), surcharge: parseFloat(f.surcharge) || 0 })),
         creams:   (data.creams || []).map(c => ({ cream_id: parseInt(c.cream_id, 10), surcharge: parseFloat(c.surcharge) || 0 })),
@@ -113,7 +113,7 @@ async function replaceChildren(tx, designId, v) {
         await tx.dbRun(`DELETE FROM ${t} WHERE design_id=?`, [designId]);
     let i = 0;
     for (const m of v.media)
-        await tx.dbRun(`INSERT INTO cake_design_media (design_id,url,alt,sort_order) VALUES (?,?,?,?)`, [designId, m.url, m.alt, i++]);
+        await tx.dbRun(`INSERT INTO cake_design_media (design_id,url,alt,sort_order,media_id) VALUES (?,?,?,?,?)`, [designId, m.url, m.alt, i++, m.media_id]);
     i = 0;
     for (const s of v.sizes)
         await tx.dbRun(`INSERT INTO cake_design_sizes (design_id,label,weight_kg,serves,price,sort_order) VALUES (?,?,?,?,?,?)`, [designId, s.label, s.weight_kg, s.serves, s.price, i++]);
@@ -224,6 +224,7 @@ function validateCollection(data) {
         intro: String(data.intro || '').trim(),
         quote: String(data.quote || '').trim(),
         hero_url: String(data.hero_url || '').trim(),
+        hero_media_id: data.hero_media_id || null,
         sort_order: parseInt(data.sort_order, 10) || 0,
         is_active: data.is_active === undefined ? 1 : (data.is_active ? 1 : 0),
         items: items.map(it => ({ design_id: parseInt(it.design_id, 10), note: String(it.note || '').trim() })),
@@ -244,8 +245,8 @@ async function createCollection(data) {
     let id;
     await transaction(async (tx) => {
         const r = await tx.dbRun(
-            `INSERT INTO cake_collections (slug,title,kicker,intro,quote,hero_url,sort_order,is_active) VALUES (?,?,?,?,?,?,?,?)`,
-            [slug, v.title, v.kicker, v.intro, v.quote, v.hero_url, v.sort_order, v.is_active]);
+            `INSERT INTO cake_collections (slug,title,kicker,intro,quote,hero_url,hero_media_id,sort_order,is_active) VALUES (?,?,?,?,?,?,?,?,?)`,
+            [slug, v.title, v.kicker, v.intro, v.quote, v.hero_url, v.hero_media_id, v.sort_order, v.is_active]);
         id = r.lastInsertRowid;
         await replaceCollectionItems(tx, id, v.items);
     });
@@ -259,8 +260,8 @@ async function updateCollection(id, data) {
     const slug = await uniqueSlug('cake_collections', v.title, data.slug, id);
     await transaction(async (tx) => {
         await tx.dbRun(
-            `UPDATE cake_collections SET slug=?, title=?, kicker=?, intro=?, quote=?, hero_url=?, sort_order=?, is_active=? WHERE id=?`,
-            [slug, v.title, v.kicker, v.intro, v.quote, v.hero_url, v.sort_order, v.is_active, id]);
+            `UPDATE cake_collections SET slug=?, title=?, kicker=?, intro=?, quote=?, hero_url=?, hero_media_id=?, sort_order=?, is_active=? WHERE id=?`,
+            [slug, v.title, v.kicker, v.intro, v.quote, v.hero_url, v.hero_media_id, v.sort_order, v.is_active, id]);
         await replaceCollectionItems(tx, id, v.items);
     });
 }

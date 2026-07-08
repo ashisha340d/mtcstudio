@@ -2,14 +2,14 @@ const svc = require('../services/mediaService');
 
 async function list(req, res, next) {
     try {
-        const media = await svc.getAll({ search: req.query.search || '', unassigned: req.query.unassigned === '1' });
+        const media = await svc.getAll({ search: req.query.search || '', unassigned: req.query.unassigned === '1', section: req.query.section || '' });
         res.json(media);
     } catch (e) { next(e); }
 }
 
 async function apiList(req, res, next) {
     try {
-        const media = await svc.getList({ search: req.query.search || '', unassigned: req.query.unassigned === '1' });
+        const media = await svc.getList({ search: req.query.search || '', unassigned: req.query.unassigned === '1', section: req.query.section || '' });
         res.json(media);
     } catch (e) { next(e); }
 }

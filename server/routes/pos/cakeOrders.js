@@ -324,13 +324,17 @@ function toWhatsAppNumber(phone) {
   return null;
 }
 
-router.get('/:id/whatsapp-message', async (req, res) => {
-  const full = await getFull(req.params.id);
-  if (!full) return res.status(404).json({ error: 'Not found' });
-  const waNumber = toWhatsAppNumber(full.phone);
-  if (!waNumber) return res.status(400).json({ error: 'No phone number on file' });
-  if (full.status !== 'CONFIRMED') return res.status(400).json({ error: 'No WhatsApp message available at this stage' });
+// Nepali mobile numbers only (SMS gateway is Nepal-only) — 977 9[678]XXXXXXXX
+function toNepaliSmsNumber(phone) {
+  let p = String(phone || '').replace(/\D/g, '');
+  if (!p) return null;
+  if (/^9779[678]\d{8}$/.test(p)) return '+' + p;
+  if (/^9[678]\d{8}$/.test(p)) return '+977' + p;
+  if (/^09[678]\d{8}$/.test(p)) return '+977' + p.slice(1);
+  return null;
+}
 
+async function buildOrderMessage(full) {
   const orderInfo = (full.items || [])
     .map(it => `${it.product_name}${it.variant_name ? ' - ' + it.variant_name : ''}${it.size ? ' ' + it.size : ''} x${it.qty}`)
     .join('\n') || 'Cake order';
@@ -393,7 +397,51 @@ router.get('/:id/whatsapp-message', async (req, res) => {
     ].filter(Boolean).join('\n');
   }
 
-  res.json({ phone: waNumber, message });
+  return message;
+}
+
+router.get('/:id/whatsapp-message', async (req, res) => {
+  const full = await getFull(req.params.id);
+  if (!full) return res.status(404).json({ error: 'Not found' });
+  const waNumber = toWhatsAppNumber(full.phone);
+  if (!waNumber) return res.status(400).json({ error: 'No phone number on file' });
+  if (full.status !== 'CONFIRMED') return res.status(400).json({ error: 'No WhatsApp message available at this stage' });
+  res.json({ phone: waNumber, message: await buildOrderMessage(full) });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SMS (TextBee) — Nepal numbers only, same content as WhatsApp
+// ═══════════════════════════════════════════════════════════════
+
+async function sendTextBeeSms(phone, message) {
+  const apiKey = process.env.TEXTBEE_API_KEY;
+  const deviceId = process.env.TEXTBEE_DEVICE_ID;
+  if (!apiKey || !deviceId) throw new Error('TextBee not configured — set TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID in server/.env');
+
+  const r = await fetch(`https://api.textbee.dev/api/v1/gateway/devices/${deviceId}/send-sms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+    body: JSON.stringify({ recipients: [phone], message }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || d.message || `TextBee request failed (${r.status})`);
+  return d;
+}
+
+router.post('/:id/send-sms', async (req, res) => {
+  const full = await getFull(req.params.id);
+  if (!full) return res.status(404).json({ error: 'Not found' });
+  const smsNumber = toNepaliSmsNumber(full.phone);
+  if (!smsNumber) return res.status(400).json({ error: 'SMS is only available for Nepalese numbers' });
+  if (full.status !== 'CONFIRMED') return res.status(400).json({ error: 'No SMS available at this stage' });
+
+  const message = await buildOrderMessage(full);
+  try {
+    await sendTextBeeSms(smsNumber, message);
+    res.json({ success: true, phone: smsNumber });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'SMS send failed' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════

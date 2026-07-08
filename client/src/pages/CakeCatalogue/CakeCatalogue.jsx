@@ -55,7 +55,7 @@ function DesignModal({ design, lookups, onSave, onClose }) {
       cream_choice: 1, eggless_available: 1, prep_time_hours: 24, is_active: 1
     });
 
-  const media = useRows(design ? design.media.map(m => ({ url: m.url, alt: m.alt || '' })) : []);
+  const media = useRows(design ? design.media.map(m => ({ url: m.url, alt: m.alt || '', media_id: m.media_id || null })) : []);
   const sizes = useRows(design ? design.sizes.map(s => ({ label: s.label, weight_kg: s.weight_kg, serves: s.serves || '', price: s.price })) : [{ label: '1 kg', weight_kg: 1, serves: '8–10', price: '' }]);
   const flavours = useRows(design ? design.flavours.map(f => ({ name: f.name, surcharge: f.surcharge })) : []);
   const creams = useRows(design ? design.creams.map(c => ({ cream_id: c.cream_id, surcharge: c.surcharge })) : []);
@@ -245,7 +245,7 @@ function DesignModal({ design, lookups, onSave, onClose }) {
         </div>
       </div>
 
-      {picking && <MediaPicker onSelect={m => { media.add({ url: `/uploads/${m.filename}`, alt: m.alt_text || form.name }); setPicking(false); }} onClose={() => setPicking(false)} />}
+      {picking && <MediaPicker onSelect={m => { media.add({ url: `/uploads/${m.filename}`, alt: m.alt_text || form.name, media_id: m.id }); setPicking(false); }} onClose={() => setPicking(false)} section="cake" />}
     </div>
   );
 }
@@ -300,9 +300,10 @@ function CollectionModal({ collection, designs, onSave, onClose }) {
     ? {
       title: collection.title, slug: collection.slug || '', kicker: collection.kicker || '',
       intro: collection.intro || '', quote: collection.quote || '', hero_url: collection.hero_url || '',
+      hero_media_id: collection.hero_media_id || null,
       sort_order: collection.sort_order || 0, is_active: collection.is_active ? 1 : 0
     }
-    : { title: '', slug: '', kicker: '', intro: '', quote: '', hero_url: '', sort_order: 0, is_active: 1 });
+    : { title: '', slug: '', kicker: '', intro: '', quote: '', hero_url: '', hero_media_id: null, sort_order: 0, is_active: 1 });
   const items = useRows(collection ? collection.items.map(i => ({ design_id: i.design_id, note: i.note || '' })) : []);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -373,7 +374,7 @@ function CollectionModal({ collection, designs, onSave, onClose }) {
           <button className="ck-btn ck-btn-new" onClick={save} disabled={saving}>{saving ? 'Saving…' : '💾 Save Collection'}</button>
         </div>
       </div>
-      {picking && <MediaPicker onSelect={m => { set('hero_url', `/uploads/${m.filename}`); setPicking(false); }} onClose={() => setPicking(false)} />}
+      {picking && <MediaPicker onSelect={m => { set('hero_url', `/uploads/${m.filename}`); set('hero_media_id', m.id); setPicking(false); }} onClose={() => setPicking(false)} section="cake" />}
     </div>
   );
 }

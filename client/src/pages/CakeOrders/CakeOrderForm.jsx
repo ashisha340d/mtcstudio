@@ -263,6 +263,11 @@ function AccessoryRow({ item, products, onChange, onRemove }) {
   );
 }
 
+function isNepaliNumber(phone) {
+  const p = String(phone || '').replace(/\D/g, '');
+  return /^9779[678]\d{8}$/.test(p) || /^9[678]\d{8}$/.test(p) || /^09[678]\d{8}$/.test(p);
+}
+
 const newItem = () => ({ _key: Math.random(), product_id: null, product_name: '', variant_id: null, variant_name: '', size: '', unit: 'PCS', qty: 1, rate: '' });
 const newAcc = () => ({ _key: Math.random(), product_id: null, product_name: '', variant_id: null, variant_name: '', unit: 'PCS', qty: 1, rate: '' });
 
@@ -306,6 +311,7 @@ export default function CakeOrderForm() {
   const [orderDate, setOrderDate] = useState('');
   const [status, setStatus] = useState('PENDING');
   const [sendingWA, setSendingWA] = useState(false);
+  const [sendingSMS, setSendingSMS] = useState(false);
   const [history, setHistory] = useState([]);
 
   // ── Customer ────────────────────────────────────────────────
@@ -581,6 +587,18 @@ export default function CakeOrderForm() {
     } finally { setSendingWA(false); }
   }
 
+  // ── SMS (Nepal only) ────────────────────────────────────────────
+  async function handleSendSMS() {
+    if (!id || sendingSMS) return;
+    setSendingSMS(true);
+    try {
+      const r = await fetch(`${API}/pos/cake-orders/${id}/send-sms`, { method: 'POST', headers: H });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error || 'Could not send SMS'); return; }
+      alert('SMS sent to ' + d.phone);
+    } finally { setSendingSMS(false); }
+  }
+
   // ── Delete ────────────────────────────────────────────────────
   async function handleDelete() {
     if (!id || !confirm('Delete this cake order?')) return;
@@ -653,6 +671,9 @@ export default function CakeOrderForm() {
               <button className="cake-btn-ghost" onClick={handlePrint} disabled={printing}>{printing ? '…' : '🖨 Print'}</button>
               {phone?.trim() && status === 'CONFIRMED' && (
                 <button className="cake-btn-ghost" onClick={handleSendWhatsApp} disabled={sendingWA}>{sendingWA ? '…' : '📲 WhatsApp'}</button>
+              )}
+              {phone?.trim() && status === 'CONFIRMED' && isNepaliNumber(phone) && (
+                <button className="cake-btn-ghost" onClick={handleSendSMS} disabled={sendingSMS}>{sendingSMS ? '…' : '✉️ SMS'}</button>
               )}
               <button className="cake-btn-danger" onClick={handleDelete}>Delete</button>
             </>
