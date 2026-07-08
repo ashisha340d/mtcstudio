@@ -46,12 +46,15 @@ router.get('/sales', async (req, res) => {
   );
 
   // Cake order payments collected on this day (checked out, regardless of order status)
+  // Deleted cake orders are excluded from all sales calculations
   const cakePayments = await dbAll(
-    `SELECT method, SUM(amount) AS amount
-     FROM   pos_payments
-     WHERE  cake_order_id IS NOT NULL
-       AND  created_at >= ? AND created_at <= ?
-     GROUP  BY method`,
+    `SELECT p.method, SUM(p.amount) AS amount
+     FROM   pos_payments p
+     JOIN   cake_orders co ON co.id = p.cake_order_id
+     WHERE  p.cake_order_id IS NOT NULL
+       AND  co.deleted_at IS NULL
+       AND  p.created_at >= ? AND p.created_at <= ?
+     GROUP  BY p.method`,
     [start, end]
   );
 
@@ -180,12 +183,15 @@ router.get('/cake-payments', async (req, res) => {
   // WALLET is stored as CARD with notes='WALLET' (POS checkout convention)
   const methodExpr = `CASE WHEN p.method='CARD' AND p.notes='WALLET' THEN 'WALLET' ELSE p.method END`;
 
+  // Deleted cake orders are excluded from all collection calculations
   const byMethod = await dbAll(
     `SELECT p.payment_type, ${methodExpr} AS method,
             SUM(CASE WHEN p.amount >= 0 THEN 1 ELSE 0 END) AS txns,
             COALESCE(SUM(p.amount),0) AS amount
      FROM pos_payments p
-     WHERE p.cake_order_id IS NOT NULL AND p.created_at >= ? AND p.created_at <= ?
+     JOIN cake_orders co ON co.id = p.cake_order_id
+     WHERE p.cake_order_id IS NOT NULL AND co.deleted_at IS NULL
+       AND p.created_at >= ? AND p.created_at <= ?
      GROUP BY p.payment_type, method
      ORDER BY p.payment_type, method`,
     [start, end]
@@ -204,7 +210,7 @@ router.get('/cake-payments', async (req, res) => {
 
   const txns = await dbAll(
     `SELECT p.id, p.payment_type, ${methodExpr} AS method, p.amount, p.created_at,
-            co.order_number, co.customer_name, co.status
+            co.order_number, co.customer_name, co.status, co.deleted_at
      FROM pos_payments p JOIN cake_orders co ON co.id = p.cake_order_id
      WHERE p.created_at >= ? AND p.created_at <= ?
      ORDER BY p.created_at, p.id`,
@@ -266,7 +272,8 @@ router.get('/cake-payments', async (req, res) => {
       order_status: t.status,
       type: t.amount < 0 ? 'REVERSAL' : (t.payment_type === 'ADVANCE' ? 'ADVANCE' : 'FOLLOWUP'),
       method: t.method,
-      amount: round2(t.amount),
+      amount: t.deleted_at ? 0 : round2(t.amount),
+      deleted: !!t.deleted_at,
     })),
   });
 });

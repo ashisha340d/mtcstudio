@@ -135,8 +135,8 @@
 }
 
 .summary-item--total {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--t-accent) 10%, transparent) 0%, color-mix(in srgb, var(--t-accent) 14%, transparent) 100%);
-  border-color: var(--t-accent);
+  background: #f1f5f9;
+  border-color: #0f172a;
 }
 
 .summary-label {
@@ -198,7 +198,7 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 54px 68px 1fr 100px 90px 36px;
+  grid-template-columns: var(--w-sn, 32px) var(--w-id, 54px) var(--w-time, 68px) var(--w-customer, 1fr) var(--w-payment, 100px) var(--w-amount, 90px) var(--w-action, 36px);
   gap: 8px;
   padding: 7px 14px;
   background: var(--t-surface-2);
@@ -220,12 +220,59 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 54px 68px 1fr 100px 90px 36px;
+  grid-template-columns: var(--w-sn, 32px) var(--w-id, 54px) var(--w-time, 68px) var(--w-customer, 1fr) var(--w-payment, 100px) var(--w-amount, 90px) var(--w-action, 36px);
   gap: 8px;
   padding: 7px 14px;
   align-items: center;
   cursor: pointer;
   transition: background 0.1s;
+}
+
+/* ── Grid lines ─────────────────────────────────────── */
+.table-header>div:not(:last-child),
+.table-row>div:not(:last-child) {
+  border-right: 1px solid var(--t-border);
+  padding-right: 8px;
+}
+
+.col-sn,
+.col-id,
+.col-time,
+.col-customer,
+.col-payment,
+.col-amount {
+  position: relative;
+}
+
+.col-sn {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-text-muted);
+  text-align: center;
+}
+
+/* ── No-grid mode (modal) ───────────────────────────── */
+.sales-report--no-grid .table-header>div,
+.sales-report--no-grid .table-row>div,
+.sales-report--no-grid .details-header>div,
+.sales-report--no-grid .details-row>div {
+  border-right: none;
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  width: 8px;
+  height: calc(100% + 14px);
+  cursor: col-resize;
+  z-index: 3;
+  user-select: none;
+}
+
+.col-resize-handle:hover,
+.col-resize-handle:active {
+  background: var(--t-accent-soft);
 }
 
 .table-row:hover {
@@ -234,6 +281,25 @@
 
 .table-row--expanded {
   background: var(--t-surface-3);
+}
+
+.table-row--deleted {
+  color: #dc2626;
+  font-style: italic;
+  text-decoration: line-through;
+}
+
+.table-row--deleted .customer-name,
+.table-row--deleted .customer-phone,
+.table-row--deleted .order-time,
+.table-row--deleted .col-amount,
+.table-row--deleted .col-id {
+  color: #dc2626;
+}
+
+.table-tag--deleted {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .col-id {
@@ -382,6 +448,12 @@
   color: var(--t-text);
 }
 
+.details-header>div:not(:last-child),
+.details-row>div:not(:last-child) {
+  border-right: 1px solid var(--t-border);
+  padding-right: 8px;
+}
+
 .details-row:last-child {
   border-bottom: none;
 }
@@ -405,27 +477,7 @@
   font-weight: 700;
 }
 
-/* ── Total row (fixed dark receipt-style strip, intentionally theme-independent) ── */
-.total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 12px;
-  background: #2a1f12;
-  border-radius: 0 0 9px 9px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #f8d8a0;
-  flex-shrink: 0;
-}
-
 /* ── Responsive ─────────────────────────────────────── */
-@media (max-width: 900px) {
-  .summary-breakdown {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 640px) {
   .sales-report-header {
     flex-direction: column;
@@ -439,12 +491,12 @@
   }
 
   .summary-breakdown {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .table-header,
   .table-row {
-    grid-template-columns: 24px 60px 1fr 80px 70px 28px;
+    grid-template-columns: 18px 24px 60px 1fr 80px 70px 28px;
     gap: 5px;
     font-size: 11px;
   }

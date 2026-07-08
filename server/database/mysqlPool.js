@@ -1,8 +1,20 @@
 'use strict';
 const mysql = require('mysql2/promise');
+//DUKAN KO COMPUTER
+// const MYSQL_CONFIG = {
+//   host: '192.168.1.5',
+//   user: 'root',
+//   password: 'Nepal@Narayan113',
+//   database: 'munchtim_mtcstudio',
+//   waitForConnections: true,
+//   connectionLimit: 10,
+//   dateStrings: true,
+//   port: 9900,
+// };
 
+//DUKAN KO COMPUTER :: TAILSCALE
 const MYSQL_CONFIG = {
-  host: '192.168.1.5',
+  host: '100.97.170.28',
   user: 'root',
   password: 'Nepal@Narayan113',
   database: 'munchtim_mtcstudio',
@@ -11,6 +23,17 @@ const MYSQL_CONFIG = {
   dateStrings: true,
   port: 9900,
 };
+
+//MY SQL LAPTOP CREDENTIALS
+// const MYSQL_CONFIG = {
+//   host: 'localhost',
+//   user: 'munchtim_admin',
+//   password: 'Nepal@Narayan113',
+//   database: 'munchtim_mtcstudio',
+//   waitForConnections: true,
+//   connectionLimit: 10,
+//   dateStrings: true,
+// };
 
 const pool = mysql.createPool(MYSQL_CONFIG);
 

@@ -47,16 +47,37 @@ export function orderEarliestKotAt(order) {
   return times.length ? Math.min(...times) : Date.now();
 }
 
+// True if the order has an unserved item for the given station — used to keep
+// sounds/alarms scoped to the station a KDS window is filtered to.
+// "All" (no station selected) plays no sound at all — only station-specific screens alarm.
+function orderMatchesStation(order, stationId) {
+  if (!stationId) return false;
+  return (order.kots || []).some(k =>
+    (k.items || []).some(i =>
+      i.station_id === stationId &&
+      i.status !== KOT_STATUS.SERVED && i.status !== KOT_STATUS.CANCELLED
+    )
+  );
+}
+
 // ── Audio: three independent sounds (new order / warning / critical) ──
 // Android Chrome suspends all audio until a user gesture — each Audio element
 // is primed silently on first click/touch so later programmatic .play() works.
 
 let _audioCtx = null;
 
+// Sound URLs are configured centrally (MTC Studio → File Maintenance → KDS Sounds)
+// and fetched once per session — no per-browser/per-station upload.
+const _centralSoundUrls = { new_order: null, warning: null, critical: null };
+
+export function setCentralSoundUrls(urls) {
+  Object.assign(_centralSoundUrls, urls);
+}
+
 const _audioStore = {
-  new_order: { audio: null, src: null, key: 'kds_sound_new_order' },
-  warning:   { audio: null, src: null, key: 'kds_sound_warning' },
-  critical:  { audio: null, src: null, key: 'kds_sound_critical' },
+  new_order: { audio: null, src: null },
+  warning:   { audio: null, src: null },
+  critical:  { audio: null, src: null },
 };
 
 const BEEP_PATTERNS = {
@@ -75,7 +96,7 @@ function getAudioCtx() {
 
 function syncAudio(type) {
   const store = _audioStore[type];
-  const src = localStorage.getItem(store.key) || null;
+  const src = _centralSoundUrls[type] || null;
   if (src === store.src) return;
   store.src = src;
   if (!src) { store.audio = null; return; }
@@ -341,6 +362,15 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
   const knownOrderIds = useRef(null); // null = first load; Set<id> thereafter
   const sseRef = useRef(null);
   const socketRef = useRef(null);
+  const settingsRef = useRef(state.settings); // lets one-time socket/SSE listeners read the *current* station filter
+  useEffect(() => { settingsRef.current = state.settings; }, [state.settings]);
+
+  // ── Load centrally-configured alert sounds (MTC Studio admin) ─────────────
+  useEffect(() => {
+    apiService.getKdsSoundConfig?.()
+      .then(setCentralSoundUrls)
+      .catch(() => {});
+  }, [apiService]);
 
   // ── Unlock audio on first existing user interaction (Android Chrome) ──────
   // Reuses any click/touch already in the app — no new UI elements added.
@@ -369,11 +399,13 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
       // knownOrderIds stays updated so neither SSE-triggered reloads nor
       // polling ever double-flash an order the socket already handled.
       if (knownOrderIds.current !== null) {
+        const stationId = settingsRef.current.activeDepartment ?? null;
         orders
           .filter(o => !knownOrderIds.current.has(o.id))
           .forEach(o => {
             dispatch({ type: A.FLASH_ORDER, payload: { id: o.id, flashType: 'new_order' } });
             setTimeout(() => dispatch({ type: A.UNFLASH_ORDER, payload: o.id }), 3200);
+            if (orderMatchesStation(o, stationId)) playSound('new_order');
           });
       }
       knownOrderIds.current = new Set(orders.map(o => o.id));
@@ -407,9 +439,8 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
       sseRef.current = es;
 
       es.addEventListener('new_kot', () => {
-        loadKOTs();
+        loadKOTs(); // plays 'new_order' itself, scoped to the active station filter
         loadServedKOTs();
-        playSound('new_order');
         dispatch({ type: A.SET_TAB, payload: 'active' });
       });
 
@@ -438,7 +469,7 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
       dispatch({ type: A.ORDER_UPSERT, payload: order });
       // Register immediately so loadKOTs (called by SSE) won't double-flash
       if (knownOrderIds.current) knownOrderIds.current.add(order.id);
-      playSound('new_order');
+      if (orderMatchesStation(order, settingsRef.current.activeDepartment ?? null)) playSound('new_order');
       dispatch({ type: A.FLASH_ORDER, payload: { id: order.id, flashType: 'new_order' } });
       setTimeout(() => dispatch({ type: A.UNFLASH_ORDER, payload: order.id }), 3200);
       dispatch({ type: A.SET_TAB, payload: 'active' });
@@ -530,8 +561,10 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
   // In that case we do NOT add to the set, so the alarm retries next tick.
   useEffect(() => {
     if (!state.settings.alarmEnabled) return;
+    const stationId = state.settings.activeDepartment ?? null;
     for (const order of state.orders) {
       if (orderAllServed(order)) continue;
+      if (!orderMatchesStation(order, stationId)) continue;
       const mins = (Date.now() - orderEarliestKotAt(order)) / 60000;
       if (mins >= state.settings.delayCriticalMins) {
         const lastPlayed = criticalLastPlayed.current.get(order.id);

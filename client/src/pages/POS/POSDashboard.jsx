@@ -14,6 +14,7 @@ import CashDrawerModal from './components/CashDrawerModal';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
 import SalesReportModal from './components/SalesReportModal';
 import FastPane from './components/FastPane';
+import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
 import { nepalNow } from '../../utils/dateTime';
 import './pos.css';
 
@@ -50,7 +51,7 @@ function DesktopWindow({ title, count, children }) {
 
 export default function POSDashboard() {
   const {
-    tables, orders, tableOrderMap, kotsByOrder,
+    tables, orders, tableOrderMap, kotsByOrder, ui,
     loadMasterData, loadActiveOrders,
   } = usePOS();
   const { user, lock } = useAuth();
@@ -70,19 +71,18 @@ export default function POSDashboard() {
     loadActiveOrders();
   }, []); // eslint-disable-line
 
-  // F8 → open Sales Report; ESC → close it
+  // F8 → toggle Sales Report
   useEffect(() => {
     const h = (e) => {
-      if (e.key === 'Escape' && showSalesReport) { setShowSalesReport(false); return; }
       if (e.key === 'F8') {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        setShowSalesReport(true);
+        setShowSalesReport(prev => !prev);
       }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [showSalesReport]);
+  }, []);
 
   // Table click → go to POS entry; pass existing order data if occupied
   const onTableClick = useCallback((table) => {
@@ -348,6 +348,13 @@ export default function POSDashboard() {
       )}
       {showSalesReport && (
         <SalesReportModal onClose={() => setShowSalesReport(false)} />
+      )}
+
+      {ui.notification && (
+        <div className={`pos-notification pos-notification--${ui.notification.type}`}>
+          {ui.notification.message}
+          {ui.notification.type === 'success' && <ConfettiBurst trigger={ui.notification} />}
+        </div>
       )}
     </div>
   );

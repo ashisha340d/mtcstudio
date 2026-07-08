@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { productsApi } from '../../services/api';
-import { getLookupMaster } from '../../services/posApi';
+import { getLookupMaster, getMaintenanceStations } from '../../services/posApi';
 import { useMsg } from '../../hooks/useApi';
 import MediaPicker from '../../components/MediaPicker/MediaPicker';
 import BadgeMultiSelect from './BadgeMultiSelect';
@@ -114,6 +114,56 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
   );
 }
 
+// ── POS Settings panel (POS price / prep / station / fast / QR menu / max qty) ──
+function PosPanel({ product: p, stations, onUpdate }) {
+  return (
+    <div className="fm-pos-panel">
+      <label>POS Price
+        <input type="number" className="cell" step="0.5" min="0" style={{ width: 80 }}
+          value={p.pos_price ?? 0}
+          onChange={e => onUpdate(p.id, 'pos_price', parseFloat(e.target.value))}
+          onFocus={e => e.target.select()}
+        />
+      </label>
+      <label>Prep (min)
+        <input type="number" className="cell" min="0" style={{ width: 60 }}
+          value={p.prep_time_minutes ?? 10}
+          onChange={e => onUpdate(p.id, 'prep_time_minutes', parseInt(e.target.value))}
+          onFocus={e => e.target.select()}
+        />
+      </label>
+      <label>Station
+        <select className="cell" style={{ width: 140 }}
+          value={p.pos_station_id ?? ''}
+          onChange={e => onUpdate(p.id, 'pos_station_id', e.target.value || null)}
+        >
+          <option value="">— None —</option>
+          {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </label>
+      <label className="fm-pos-toggle">
+        <input type="checkbox" checked={!!p.is_fast_moving}
+          onChange={e => onUpdate(p.id, 'is_fast_moving', e.target.checked ? 1 : 0)} /> Fast
+      </label>
+      <label className="fm-pos-toggle">
+        <input type="checkbox" checked={p.pos_active === undefined || p.pos_active === null ? true : !!p.pos_active}
+          onChange={e => onUpdate(p.id, 'pos_active', e.target.checked ? 1 : 0)} /> POS Active
+      </label>
+      <label className="fm-pos-toggle" title="Show on customer QR / web menu">
+        <input type="checkbox" checked={!!p.customer_visible}
+          onChange={e => onUpdate(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> QR/Web Menu
+      </label>
+      <label title="Max qty per customer order (blank = unlimited)">Max Qty
+        <input type="number" className="cell" min="1" placeholder="∞" style={{ width: 55 }}
+          value={p.customer_max_qty ?? ''}
+          onChange={e => onUpdate(p.id, 'customer_max_qty', e.target.value === '' ? null : parseInt(e.target.value))}
+          onFocus={e => e.target.select()}
+        />
+      </label>
+    </div>
+  );
+}
+
 function imgSrc(raw) {
   if (!raw) return null;
   const str = typeof raw === 'object' ? raw.filename : raw;
@@ -195,6 +245,7 @@ export default function FoodMenu() {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [badgeOptions, setBadgeOptions] = useState([]);
+  const [stations, setStations] = useState([]);
   const [meta, setMeta] = useState({ total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
 
@@ -278,6 +329,11 @@ export default function FoodMenu() {
       .catch(() => {});
   }, []);
 
+  // Load POS stations once — pos_stations rows are managed elsewhere (File Maintenance)
+  useEffect(() => {
+    getMaintenanceStations().then(setStations).catch(() => {});
+  }, []);
+
   // Global Ctrl/Cmd+S
   useEffect(() => {
     const h = e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAll(); } };
@@ -314,7 +370,10 @@ export default function FoodMenu() {
     const id = 'new_' + Date.now();
     const vid = 'new_v_' + Date.now();
     const defaultVariant = { id: vid, name: 'Regular', sku: '', selling_price: '', cost_price: '', stock: 0, unit: 'pcs', status: 'active', show_online: 1 };
-    const newItem = { id, name: '', slug: '', category_id: '', status: 'active', featured: false, sort_order: 0, primary_image: null, badge: '', variants: [defaultVariant] };
+    const newItem = {
+      id, name: '', slug: '', category_id: '', status: 'active', featured: false, sort_order: 0, primary_image: null, badge: '', variants: [defaultVariant],
+      pos_price: 0, prep_time_minutes: 10, is_fast_moving: 0, pos_station_id: null, pos_active: 1, customer_visible: 0, customer_max_qty: null,
+    };
     setItems(prev => [newItem, ...prev]);
     setDirtyProducts(prev => new Set([...prev, id]));
     setDirtyVariants(prev => ({ ...prev, [id]: new Set([vid]) }));
@@ -878,6 +937,7 @@ export default function FoodMenu() {
                   isExp && (
                     <tr key={`exp-${p.id}`} className="fm-exp-row">
                       <td colSpan={12} className="fm-exp-td">
+                        <PosPanel product={p} stations={stations} onUpdate={updateProduct} />
                         <VariantGrid
                           product={p}
                           dirtyVariantIds={dirtyVariants[p.id]}

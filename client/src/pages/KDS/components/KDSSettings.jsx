@@ -1,61 +1,9 @@
 import { useState } from 'react';
 import { useKDS } from '../../../context/KDSContext';
 
-const SOUND_KEYS = {
-  new_order: 'kds_sound_new_order',
-  warning:   'kds_sound_warning',
-  critical:  'kds_sound_critical',
-};
-
-function SoundRow({ type, label, sounds, setSounds }) {
-  const key = SOUND_KEYS[type];
-  const src = sounds[type];
-
-  const handleUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      localStorage.setItem(key, ev.target.result);
-      setSounds(prev => ({ ...prev, [type]: ev.target.result }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const clear = () => {
-    localStorage.removeItem(key);
-    setSounds(prev => ({ ...prev, [type]: '' }));
-  };
-
-  const inputId = `kds-snd-${type}`;
-
-  return (
-    <div className="kds-sound-row">
-      {label && <span className="kds-sound-row__label">{label}</span>}
-      <label htmlFor={inputId} className="kds-settings-option kds-settings-option--upload" style={{ cursor: 'pointer' }}>
-        {src ? '⬆ Change' : '⬆ Upload'}
-      </label>
-      <input id={inputId} type="file" accept="audio/*" onChange={handleUpload} style={{ display: 'none' }} />
-      {src && (
-        <>
-          <button className="kds-settings-option" onClick={() => new Audio(src).play()}>▶</button>
-          <button className="kds-settings-option kds-settings-option--danger" onClick={clear}>✕</button>
-        </>
-      )}
-      {!src && <span className="kds-sound-row__none">No sound — uses default beep</span>}
-    </div>
-  );
-}
-
 export default function KDSSettings({ onClose }) {
   const { settings, stations, updateSettings } = useKDS();
   const set = (key, value) => updateSettings({ [key]: value });
-
-  const [sounds, setSounds] = useState({
-    new_order: localStorage.getItem(SOUND_KEYS.new_order) || '',
-    warning:   localStorage.getItem(SOUND_KEYS.warning)   || '',
-    critical:  localStorage.getItem(SOUND_KEYS.critical)  || '',
-  });
 
   const [warnInput, setWarnInput] = useState(String(settings.delayWarningMins));
   const [critInput, setCritInput] = useState(String(settings.delayCriticalMins));
@@ -142,12 +90,6 @@ export default function KDSSettings({ onClose }) {
             </div>
           </div>
 
-          {/* New Order Arrival Sound */}
-          <div className="kds-settings-group">
-            <label className="kds-settings-label">New Order Arrival Sound</label>
-            <SoundRow type="new_order" sounds={sounds} setSounds={setSounds} />
-          </div>
-
           {/* Warning Delay */}
           <div className="kds-settings-group">
             <label className="kds-settings-label">Warning Delay</label>
@@ -162,7 +104,6 @@ export default function KDSSettings({ onClose }) {
                 onKeyDown={e => e.key === 'Enter' && commitWarning()}
               />
               <span className="kds-delay-unit kds-slider-warn">min</span>
-              <SoundRow type="warning" sounds={sounds} setSounds={setSounds} />
             </div>
           </div>
 
@@ -180,7 +121,6 @@ export default function KDSSettings({ onClose }) {
                 onKeyDown={e => e.key === 'Enter' && commitCritical()}
               />
               <span className="kds-delay-unit kds-slider-crit">min</span>
-              <SoundRow type="critical" sounds={sounds} setSounds={setSounds} />
             </div>
             {critTooLow && (
               <div className="kds-delay-error">Cannot be less than warning delay ({warnInput}m)</div>

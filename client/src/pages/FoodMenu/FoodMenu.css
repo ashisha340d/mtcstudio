@@ -403,6 +403,33 @@
   border-left: 3px solid var(--t-accent);
 }
 
+.fm-pos-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--t-accent);
+  background: var(--t-surface-2);
+}
+
+.fm-pos-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--t-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fm-pos-panel .fm-pos-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
 .fm-variant-table {
   width: 100%;
   border-collapse: collapse;

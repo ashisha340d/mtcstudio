@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import { createSocket } from '../socket';
+import { createAlertPlayer } from '../utils/alertSound';
 
 // ── Constants ─────────────────────────────────────────────────
 export const ORDER_TYPE = {
@@ -296,6 +297,26 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   // Track which KOT items are delayed to avoid re-triggering notifications
   const alarmSet      = useRef(new Set());
   const orangeSet     = useRef(new Set());
+
+  // ── Centrally-configured "order ready" alert sound ────────
+  const alertPlayerRef = useRef(null);
+  if (!alertPlayerRef.current) alertPlayerRef.current = createAlertPlayer(660);
+
+  useEffect(() => {
+    apiService.getKdsSoundConfig?.()
+      .then(cfg => alertPlayerRef.current.setSrc(cfg.pos_ready))
+      .catch(() => {});
+  }, [apiService]);
+
+  useEffect(() => {
+    const unlock = () => alertPlayerRef.current.unlock();
+    document.addEventListener('click', unlock, { once: true, passive: true });
+    document.addEventListener('touchstart', unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('touchstart', unlock);
+    };
+  }, []);
 
   // ── Master data load ──────────────────────────────────────
   const loadMasterData = useCallback(async () => {
@@ -622,6 +643,13 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   const loadMasterDataRef = useRef(loadMasterData);
   useEffect(() => { loadMasterDataRef.current = loadMasterData; });
 
+  // Kept current so the item-served socket handler (registered once) can
+  // resolve orderId/item details without a stale closure over state.
+  const kotsByOrderRef = useRef(state.kotsByOrder);
+  useEffect(() => { kotsByOrderRef.current = state.kotsByOrder; }, [state.kotsByOrder]);
+  const ordersRef = useRef(state.orders);
+  useEffect(() => { ordersRef.current = state.orders; }, [state.orders]);
+
   useEffect(() => {
     const token = sessionStorage.getItem('mtc_session') ?? localStorage.getItem('kds_session');
     const socket = createSocket({ role: 'pos', token: token ?? undefined });
@@ -634,6 +662,24 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     socket.on('order-completed', reload);
     socket.on('reconnect',       reload); // re-sync after connection drop
     socket.on('tables-updated',  () => loadMasterDataRef.current());
+
+    // Item prepared in KDS — update the order's ready count live and pop a toast.
+    socket.on('item-served', ({ kotId, itemId }) => {
+      const entry = Object.entries(kotsByOrderRef.current).find(([, kots]) => kots.some(k => k.id === kotId));
+      if (!entry) return;
+      const [orderIdStr, kots] = entry;
+      const orderId = Number(orderIdStr);
+      const item = kots.find(k => k.id === kotId)?.items?.find(i => i.id === itemId);
+
+      dispatch({ type: A.KOT_ITEM_SERVED, payload: { orderId, kotId, itemId } });
+
+      if (item) {
+        const order = ordersRef.current[orderId];
+        const who = order?.table_name || order?.customer_name || `Order #${orderId}`;
+        alertPlayerRef.current.play();
+        notify('success', `✅ ${item.product_name} ready — ${who}`);
+      }
+    });
 
     return () => socket.disconnect();
   }, []); // connect once per POSProvider lifetime

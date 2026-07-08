@@ -2,19 +2,18 @@ import { useState } from 'react';
 import TablesTab           from './tabs/TablesTab';
 import StationsTab         from './tabs/StationsTab';
 import UsersTab            from './tabs/UsersTab';
-import POSProductsTab      from './tabs/POSProductsTab';
 import SharedModifiersTab  from './tabs/SharedModifiersTab';
 import ModifierAssignment  from '../ModifierAssignment/ModifierAssignment';
 import ReceiptSettingsTab  from './tabs/ReceiptSettingsTab';
 import CakeSlipTab         from './tabs/CakeSlipTab';
 import CakeProductsTab     from './tabs/CakeProductsTab';
 import TableTagsTab        from './tabs/TableTagsTab';
+import KDSSoundSettingsTab from './tabs/KDSSoundSettingsTab';
 import './fm.css';
 
 const TABS = [
   { key: 'tables',        label: '🪑 Tables'            },
   { key: 'stations',      label: '🍳 Stations'          },
-  { key: 'products',      label: '🛒 POS Products'      },
   { key: 'modifiers',     label: '🧩 Modifier Setup'    },
   { key: 'assignment',    label: '🔗 Assign Modifiers'  },
   { key: 'users',         label: '👤 Users'             },
@@ -22,6 +21,7 @@ const TABS = [
   { key: 'cake-slip',     label: '🎂 Cake Order Slip'   },
   { key: 'cake-products', label: '🎂 Cake Products'     },
   { key: 'table-tags',   label: '🏷 Table Tags'         },
+  { key: 'kds-sound',    label: '🔔 Alert Sounds'       },
 ];
 
 export default function FileMaintenance() {
@@ -48,7 +48,6 @@ export default function FileMaintenance() {
 
       {active === 'tables'     && <TablesTab />}
       {active === 'stations'   && <StationsTab />}
-      {active === 'products'   && <POSProductsTab />}
       {active === 'modifiers'  && <SharedModifiersTab />}
       {active === 'assignment' && (
         <div style={{ margin: '-24px -28px' }}>
@@ -60,6 +59,7 @@ export default function FileMaintenance() {
       {active === 'cake-slip'     && <CakeSlipTab />}
       {active === 'table-tags'    && <TableTagsTab />}
       {active === 'cake-products' && <CakeProductsTab />}
+      {active === 'kds-sound'     && <KDSSoundSettingsTab />}
     </div>
   );
 }

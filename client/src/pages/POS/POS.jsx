@@ -1117,7 +1117,6 @@ export default function POS() {
   useEffect(() => {
     const h = (e) => {
       if (e.key === 'Escape') {
-        if (showSalesReport) { setShowSalesReport(false); return; }
         if (productModal) { setProductModal(null); return; }
         if (custModal) { setCustModal(false); return; }
         if (checkoutModal) { setCheckoutModal(false); return; }
@@ -1128,7 +1127,7 @@ export default function POS() {
       if (e.key === 'F8' && !productModal && !custModal && !checkoutModal) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        setShowSalesReport(true);
+        setShowSalesReport(prev => !prev);
         return;
       }
       if (e.key === 'F2' && !productModal && !custModal && !checkoutModal) {
@@ -1139,7 +1138,7 @@ export default function POS() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [navigate, productModal, custModal, checkoutModal, ctxMenu, showSalesReport]);
+  }, [navigate, productModal, custModal, checkoutModal, ctxMenu]);
 
   /* ── Load categories + tables ───────────────────────────── */
   useEffect(() => {

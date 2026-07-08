@@ -74,6 +74,9 @@ export const getServedKOTs = () => http.get('/pos/kots/served').then(r => r.data
 export const serveAllKots = (orderId) =>
   http.patch(`/pos/orders/${orderId}/serve-all`).then(r => r.data);
 
+// Centrally-configured KDS alert sounds — { new_order, warning, critical } URLs
+export const getKdsSoundConfig = () => http.get('/settings/kds-sound').then(r => r.data);
+
 export const getKDSReport = (stationId) =>
   http.get('/pos/kots/report/today', stationId ? { params: { station: stationId } } : {}).then(r => r.data);
 
@@ -152,17 +155,21 @@ export const getLookupMaster = (lookupType) =>
     lookupType ? r.data.filter(row => row.lookup_type === lookupType) : r.data
   );
 
+// All POS stations (including inactive) — used by admin screens for station assignment
+export const getMaintenanceStations = () =>
+  http.get('/maintenance/stations').then(r => r.data);
+
 const posApi = {
   // Auth
   pinLogin, logout, kdsSessionLogin, getKDSMe,
   // Master
-  getTables, getProducts, getCategories, getStations,
+  getTables, getProducts, getCategories, getStations, getMaintenanceStations,
   // Orders
   getActiveOrders, createOrder, updateOrderStatus, cancelOrder, checkout, mergeOrders, shiftOrder, serveAllKots,
   getTodayKOTs, getServedKOTs,
   // KOTs
   getActiveKOTs, getTodayKOTs, createKOT, markItemServed, unserveItem, updateItemStatus,
-  getKDSReport,
+  getKDSReport, getKdsSoundConfig,
   // Ledger
   getLedger,
   // Till / Cash Drawer
@@ -174,7 +181,7 @@ const posApi = {
   // Transaction Revert
   getTodayTransactions, revertOrderTransaction, revertCakeTransaction,
   // Lookup Master
-  getLookupMaster,
+  getLookupMaster, getMaintenanceStations,
 };
 
 export default posApi;

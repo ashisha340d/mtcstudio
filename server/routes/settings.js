@@ -1,9 +1,12 @@
 'use strict';
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const { dbAll, dbGet, dbRun } = require('../database/db');
 const { buildEscPos } = require('../services/escposBuilder');
 const { listUsbPrinters, printRawUsingConfig } = require('../services/usbPrinter');
+const { uploadAudio, uploadsDir } = require('../middleware/upload');
 
 // ── Receipt Config ────────────────────────────────────────────
 
@@ -97,6 +100,63 @@ router.post('/cake-slip', async (req, res, next) => {
                 [key, String(body[key])]
             );
         }
+        res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
+// ── KDS Sound Config ──────────────────────────────────────────
+// Centrally configured alert sounds for KDS, Waiter App & POS — replaces the
+// old per-browser localStorage upload so every screen plays the same sound.
+
+const KDS_SOUND_TYPES = ['new_order', 'warning', 'critical', 'waiter_ready', 'pos_ready'];
+
+router.get('/kds-sound', async (req, res, next) => {
+    try {
+        const rows = await dbAll(`SELECT \`key\`, value FROM receipt_config WHERE \`key\` LIKE 'kds_sound_%'`);
+        const cfg = {};
+        KDS_SOUND_TYPES.forEach(t => cfg[t] = null);
+        rows.forEach(r => cfg[r.key.replace('kds_sound_', '')] = r.value);
+        res.json(cfg);
+    } catch (e) { next(e); }
+});
+
+router.post('/kds-sound/upload/:type', uploadAudio.single('sound'), async (req, res, next) => {
+    try {
+        const { type } = req.params;
+        if (!KDS_SOUND_TYPES.includes(type)) return res.status(400).json({ error: 'Invalid sound type' });
+        if (!req.file) return res.status(400).json({ error: 'Invalid or missing audio file' });
+
+        const key = `kds_sound_${type}`;
+        const url = `/uploads/${req.file.filename}`;
+
+        const old = await dbGet(`SELECT value FROM receipt_config WHERE \`key\` = ?`, [key]);
+        await dbRun(
+            `INSERT INTO receipt_config (\`key\`, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = CURRENT_TIMESTAMP`,
+            [key, url]
+        );
+        if (old?.value) {
+            const oldPath = path.join(uploadsDir, path.basename(old.value));
+            fs.unlink(oldPath, () => {});
+        }
+
+        res.json({ success: true, url });
+    } catch (e) { next(e); }
+});
+
+router.post('/kds-sound/clear/:type', async (req, res, next) => {
+    try {
+        const { type } = req.params;
+        if (!KDS_SOUND_TYPES.includes(type)) return res.status(400).json({ error: 'Invalid sound type' });
+
+        const key = `kds_sound_${type}`;
+        const old = await dbGet(`SELECT value FROM receipt_config WHERE \`key\` = ?`, [key]);
+        await dbRun(`DELETE FROM receipt_config WHERE \`key\` = ?`, [key]);
+        if (old?.value) {
+            const oldPath = path.join(uploadsDir, path.basename(old.value));
+            fs.unlink(oldPath, () => {});
+        }
+
         res.json({ success: true });
     } catch (e) { next(e); }
 });

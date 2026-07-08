@@ -25,4 +25,15 @@ const upload = multer({
     fileFilter
 });
 
-module.exports = { upload, uploadsDir };
+const audioFileFilter = (req, file, cb) => {
+    const allowed = ['.mp3', '.wav', '.ogg', '.m4a'];
+    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+};
+
+const uploadAudio = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: audioFileFilter
+});
+
+module.exports = { upload, uploadAudio, uploadsDir };

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { createSocket } from '../../socket';
+import { createAlertPlayer } from '../../utils/alertSound';
+import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
 import './waiter.css';
 
 // ── Session keys ──────────────────────────────────────────────────────
@@ -141,6 +143,8 @@ export default function WaiterApp() {
   const [sending,       setSending]       = useState(false);
   const [billBusy,      setBillBusy]      = useState(false);
   const [toast,         setToast]         = useState('');
+  const [toastKind,     setToastKind]     = useState(null);
+  const [celebrateId,   setCelebrateId]   = useState(0);
   const [itemSearch,    setItemSearch]    = useState('');
   const [quickCat,      setQuickCat]      = useState(null); // floating category filter
   const [tick,          setTick]          = useState(0);    // for timer updates
@@ -173,6 +177,25 @@ export default function WaiterApp() {
     api.get('/pos/waiter/calls/active').then(r => setCalls(r.data)).catch(() => {});
   }, [user]);
 
+  // ── Centrally-configured "order ready" alert sound ──────────────
+  const alertPlayerRef = useRef(null);
+  if (!alertPlayerRef.current) alertPlayerRef.current = createAlertPlayer(880);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get('/settings/kds-sound').then(r => alertPlayerRef.current.setSrc(r.data.waiter_ready)).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    const unlock = () => alertPlayerRef.current.unlock();
+    document.addEventListener('click', unlock, { once: true, passive: true });
+    document.addEventListener('touchstart', unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('touchstart', unlock);
+    };
+  }, []);
+
   // ── Online → drain offline queue ────────────────────────────────
   useEffect(() => {
     const onOnline = () => drainOfflineQueue();
@@ -181,10 +204,12 @@ export default function WaiterApp() {
   }, []);
 
   // ── Toast ──────────────────────────────────────────────────────
-  const showToast = msg => {
+  const showToast = (msg, kind = null) => {
     setToast(msg);
+    setToastKind(kind);
+    if (kind === 'success') setCelebrateId(id => id + 1);
     if (toastRef.current) clearTimeout(toastRef.current);
-    toastRef.current = setTimeout(() => setToast(''), 2800);
+    toastRef.current = setTimeout(() => { setToast(''); setToastKind(null); }, 2800);
   };
 
   // ── Auth ───────────────────────────────────────────────────────
@@ -227,6 +252,9 @@ export default function WaiterApp() {
   const loadOrdersRef = useRef(loadOrders);
   useEffect(() => { loadOrdersRef.current = loadOrders; });
 
+  const activeOrdersRef = useRef(activeOrders);
+  useEffect(() => { activeOrdersRef.current = activeOrders; }, [activeOrders]);
+
   // ── Socket ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
@@ -237,7 +265,17 @@ export default function WaiterApp() {
     socket.on('order-updated',      reload);
     socket.on('order-cancelled',    reload);
     socket.on('order-completed',    reload);
-    socket.on('item-served',        reload);
+    socket.on('item-served', ({ kotId, itemId }) => {
+      reload();
+      const kot = (activeOrdersRef.current.kots || []).find(k => k.id === kotId);
+      const item = kot?.items?.find(i => i.id === itemId);
+      if (!item) return;
+      const order = (activeOrdersRef.current.orders || []).find(o => o.id === kot.order_id);
+      const who = order?.table_name || order?.customer_name || `Order #${kot.order_id}`;
+      if (navigator.vibrate) navigator.vibrate(150);
+      alertPlayerRef.current.play();
+      showToast(`✅ ${item.product_name} ready — ${who}`, 'success');
+    });
     socket.on('reconnect',          () => { reload(); drainOfflineQueue(); });
     socket.on('waiter-call', payload => {
       setCalls(prev => [...prev.filter(c => c.table_id !== payload.table_id), payload]);
@@ -636,7 +674,12 @@ export default function WaiterApp() {
           </div>
         )}
 
-        {toast && <div className="w-toast">{toast}</div>}
+        {toast && (
+          <div className="w-toast">
+            {toast}
+            {toastKind === 'success' && <ConfettiBurst trigger={celebrateId} count={32} scale={2} />}
+          </div>
+        )}
       </div>
     );
   }
@@ -794,7 +837,12 @@ export default function WaiterApp() {
           </div>
         )}
 
-        {toast && <div className="w-toast">{toast}</div>}
+        {toast && (
+          <div className="w-toast">
+            {toast}
+            {toastKind === 'success' && <ConfettiBurst trigger={celebrateId} count={32} scale={2} />}
+          </div>
+        )}
       </div>
     );
   }
@@ -879,7 +927,12 @@ export default function WaiterApp() {
           modsLoading={pickerModLoad} onCancel={closePicker} onConfirm={confirmPicker}
         />
       )}
-      {toast && <div className="w-toast">{toast}</div>}
+      {toast && (
+          <div className="w-toast">
+            {toast}
+            {toastKind === 'success' && <ConfettiBurst trigger={celebrateId} count={32} scale={2} />}
+          </div>
+        )}
     </div>
   );
 
@@ -931,7 +984,12 @@ export default function WaiterApp() {
           {sending ? 'Sending…' : '▶ Send to Kitchen'}
         </button>
       </div>
-      {toast && <div className="w-toast">{toast}</div>}
+      {toast && (
+          <div className="w-toast">
+            {toast}
+            {toastKind === 'success' && <ConfettiBurst trigger={celebrateId} count={32} scale={2} />}
+          </div>
+        )}
     </div>
   );
 

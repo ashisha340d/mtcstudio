@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(npx --yes esbuild src/pages/FoodMenu/FoodMenu.jsx --loader=jsx --bundle=false --format=esm --outfile=/dev/null)",
+      "Bash(npx --yes esbuild src/pages/FileMaintenance/FileMaintenance.jsx --loader=jsx --bundle=false --format=esm --outfile=/dev/null)",
+      "Bash(node --check \"C:/Users/admin/AppData/Local/Temp/claude/d--mtcstudio/e27fb56a-f869-4645-8a30-c864868ab54a/scratchpad/posApi.mjs\")",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

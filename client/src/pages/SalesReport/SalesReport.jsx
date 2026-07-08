@@ -3,13 +3,24 @@ import posApi from '../../services/posApi';
 import './SalesReport.css';
 
 const PAYMENT_LABELS = { CASH: 'Cash', CARD: 'Card', QR: 'QR/UPI', WALLET: 'Wallet', LEDGER: 'Ledger' };
-const CAKE_TYPE_LABELS = { ADVANCE: 'Advance', FOLLOWUP: 'Follow-up', REVERSAL: 'Reversal' };
+
+const COL_WIDTHS_KEY = 'salesReport.colWidths';
+const DEFAULT_COL_WIDTHS = { sn: 32, id: 54, time: 68, customer: 220, payment: 100, amount: 90, action: 36 };
+const MIN_COL_WIDTH = { sn: 24, id: 36, time: 50, customer: 120, payment: 70, amount: 60 };
+
+function loadColWidths() {
+  try {
+    return { ...DEFAULT_COL_WIDTHS, ...JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)) };
+  } catch {
+    return DEFAULT_COL_WIDTHS;
+  }
+}
 
 function todayNepal() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
 }
 
-export default function SalesReport() {
+export default function SalesReport({ gridLines = true } = {}) {
   const [date, setDate]                 = useState(todayNepal);
   const [salesData, setSalesData]       = useState(null);
   const [cakeData, setCakeData]         = useState(null);
@@ -17,6 +28,7 @@ export default function SalesReport() {
   const [error, setError]               = useState(null);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [search, setSearch]             = useState('');
+  const [colWidths, setColWidths]       = useState(loadColWidths);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,25 +54,84 @@ export default function SalesReport() {
 
   const toggleOrder = (id) => setExpandedOrder(prev => prev === id ? null : id);
 
-  const totalSales = salesData
-    ? (salesData.cash || 0) + (salesData.card || 0) + (salesData.credit || 0)
-    : 0;
+  const startResize = (col, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = colWidths[col];
+    const onMove = (moveEvent) => {
+      const newWidth = Math.max(MIN_COL_WIDTH[col], startWidth + (moveEvent.clientX - startX));
+      setColWidths(prev => ({ ...prev, [col]: newWidth }));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setColWidths(prev => {
+        localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(prev));
+        return prev;
+      });
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  const colVarStyle = {
+    '--w-sn': `${colWidths.sn}px`,
+    '--w-id': `${colWidths.id}px`,
+    '--w-time': `${colWidths.time}px`,
+    '--w-customer': `${colWidths.customer}px`,
+    '--w-payment': `${colWidths.payment}px`,
+    '--w-amount': `${colWidths.amount}px`,
+    '--w-action': `${colWidths.action}px`,
+  };
+
+  // Merge KOT and cake orders into a single list
+  const allRows = [
+    ...(salesData?.orders || []).map(o => ({
+      key: `f-${o.id}`,
+      source: 'FOOD',
+      label: `#${o.id}`,
+      time: o.time,
+      customerName: o.customerName,
+      customerPhone: o.customerPhone,
+      tableName: o.tableName,
+      paymentMethod: o.paymentMethod,
+      amount: o.amount || 0,
+      discount: o.discount || 0,
+      payments: o.payments,
+      items: o.items,
+    })),
+    ...(cakeData?.transactions || []).map(t => ({
+      key: `c-${t.id}`,
+      source: 'CAKE',
+      label: t.order_number,
+      time: t.time,
+      customerName: t.customer_name,
+      customerPhone: null,
+      tableName: null,
+      paymentMethod: t.method,
+      amount: t.amount || 0,
+      discount: 0,
+      payments: null,
+      items: null,
+      deleted: t.deleted,
+    })),
+  ].sort((a, b) => b.time.localeCompare(a.time));
 
   const q = search.trim().toLowerCase();
-  const filteredOrders = (salesData?.orders || []).filter(o => !q
-    || String(o.id).includes(q)
+  const filteredOrders = allRows.filter(o => !q
+    || o.label.toLowerCase().includes(q)
     || (o.customerName || '').toLowerCase().includes(q)
     || (o.customerPhone || '').toLowerCase().includes(q)
-    || (o.tableName || '').toLowerCase().includes(q));
-
-  const totalOrders = filteredOrders.reduce((s, o) => s + (o.amount || 0), 0);
+    || (o.tableName || '').toLowerCase().includes(q)
+    || (PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '').toLowerCase().includes(q));
 
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
   return (
-    <div className="sales-report">
+    <div className={`sales-report${gridLines ? '' : ' sales-report--no-grid'}`}>
 
       {/* ── Header ── */}
       <div className="sales-report-header">
@@ -68,7 +139,7 @@ export default function SalesReport() {
         <input
           type="text"
           className="report-search"
-          placeholder="Search order #, customer, phone, table…"
+          placeholder="Search order #, customer, phone, table, payment (QR, Card, Cash)…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -99,15 +170,15 @@ export default function SalesReport() {
       )}
 
       {/* ── No orders ── */}
-      {!loading && !error && salesData && salesData.orders.length === 0 && (
+      {!loading && !error && salesData && allRows.length === 0 && (
         <div className="report-state">
           <div className="report-state-icon">📊</div>
-          <p>No closed orders found for this date.</p>
+          <p>No orders found for this date.</p>
         </div>
       )}
 
       {/* ── No search matches ── */}
-      {!loading && !error && salesData && salesData.orders.length > 0 && filteredOrders.length === 0 && (
+      {!loading && !error && salesData && allRows.length > 0 && filteredOrders.length === 0 && (
         <div className="report-state">
           <div className="report-state-icon">🔍</div>
           <p>No orders match "{search}".</p>
@@ -115,17 +186,17 @@ export default function SalesReport() {
       )}
 
       {/* ── Data ── */}
-      {!loading && !error && salesData && salesData.orders.length > 0 && filteredOrders.length > 0 && (
+      {!loading && !error && salesData && allRows.length > 0 && filteredOrders.length > 0 && (
         <>
           {/* ── Summary ── */}
           <div className="sales-summary">
             <div className="summary-breakdown">
               <div className="summary-item summary-item--credit">
-                <div className="summary-label">Credit (Ledger)</div>
+                <div className="summary-label">Credit Ledger</div>
                 <div className="summary-amount">₹{(salesData.credit || 0).toLocaleString('en-IN')}</div>
               </div>
               <div className="summary-item summary-item--card">
-                <div className="summary-label">Card / QR / UPI</div>
+                <div className="summary-label">Card / UPI / QR</div>
                 <div className="summary-amount">₹{(salesData.card || 0).toLocaleString('en-IN')}</div>
               </div>
               <div className="summary-item summary-item--cash">
@@ -133,8 +204,8 @@ export default function SalesReport() {
                 <div className="summary-amount">₹{(salesData.cash || 0).toLocaleString('en-IN')}</div>
               </div>
               <div className="summary-item summary-item--total">
-                <div className="summary-label">Total Sales</div>
-                <div className="summary-amount">₹{totalSales.toLocaleString('en-IN')}</div>
+                <div className="summary-label">Total</div>
+                <div className="summary-amount">₹{((salesData.card || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</div>
               </div>
             </div>
           </div>
@@ -142,29 +213,34 @@ export default function SalesReport() {
           {/* ── Orders Table ── */}
           <div className="sales-orders">
             <div className="orders-section-label">
-              Orders — {filteredOrders.length} closed
+              Orders — {filteredOrders.length}
             </div>
-            <div className="orders-table">
+            <div className="orders-table" style={colVarStyle}>
               <div className="table-header">
-                <div className="col-id">#</div>
-                <div className="col-time">Time</div>
-                <div className="col-customer">Customer</div>
-                <div className="col-payment">Payment</div>
-                <div className="col-amount">Amount</div>
+                <div className="col-sn">SN<span className="col-resize-handle" onMouseDown={e => startResize('sn', e)} /></div>
+                <div className="col-id">#<span className="col-resize-handle" onMouseDown={e => startResize('id', e)} /></div>
+                <div className="col-time">Time<span className="col-resize-handle" onMouseDown={e => startResize('time', e)} /></div>
+                <div className="col-customer">Customer<span className="col-resize-handle" onMouseDown={e => startResize('customer', e)} /></div>
+                <div className="col-payment">Payment<span className="col-resize-handle" onMouseDown={e => startResize('payment', e)} /></div>
+                <div className="col-amount">Amount<span className="col-resize-handle" onMouseDown={e => startResize('amount', e)} /></div>
                 <div className="col-action"></div>
               </div>
 
-              {filteredOrders.map(order => (
-                <div key={order.id} className="order-row">
+              {filteredOrders.map((order, idx) => (
+                <div key={order.key} className="order-row">
                   <div
-                    className={`table-row${expandedOrder === order.id ? ' table-row--expanded' : ''}`}
-                    onClick={() => toggleOrder(order.id)}
+                    className={`table-row${expandedOrder === order.key ? ' table-row--expanded' : ''}${order.deleted ? ' table-row--deleted' : ''}`}
+                    onClick={() => order.items && toggleOrder(order.key)}
+                    style={{ cursor: order.items ? 'pointer' : 'default' }}
                   >
-                    <div className="col-id">#{order.id}</div>
+                    <div className="col-sn">{idx + 1}</div>
+                    <div className="col-id">{order.label}</div>
                     <div className="col-time">
                       <div className="order-time">{order.time}</div>
                     </div>
                     <div className="col-customer">
+                      {order.source === 'CAKE' && <div className="table-tag">Cake</div>}
+                      {order.deleted && <div className="table-tag table-tag--deleted">Deleted</div>}
                       {order.tableName && <div className="table-tag">Table {order.tableName}</div>}
                       <div className="customer-name">{order.customerName || 'Walk-in'}</div>
                       {order.customerPhone && (
@@ -176,13 +252,13 @@ export default function SalesReport() {
                         {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
                       </span>
                     </div>
-                    <div className="col-amount">₹{(order.amount || 0).toLocaleString('en-IN')}</div>
+                    <div className="col-amount">₹{order.deleted ? 0 : (order.amount || 0).toLocaleString('en-IN')}</div>
                     <div className="col-action">
-                      <span className="expand-chevron">{expandedOrder === order.id ? '▲' : '▼'}</span>
+                      {order.items && <span className="expand-chevron">{expandedOrder === order.key ? '▲' : '▼'}</span>}
                     </div>
                   </div>
 
-                  {expandedOrder === order.id && (
+                  {order.items && expandedOrder === order.key && (
                     <div className="order-details">
                       <div className="details-summary">
                         <span>Total: ₹{(order.amount || 0).toLocaleString('en-IN')}</span>
@@ -222,89 +298,8 @@ export default function SalesReport() {
                 </div>
               ))}
             </div>
-
-            <div className="total-row">
-              <span>Total Collected</span>
-              <span>₹{totalOrders.toLocaleString('en-IN')}</span>
-            </div>
           </div>
         </>
-      )}
-
-      {/* ── Cake Collections ── */}
-      {!loading && !error && cakeData && (cakeData.transactions.length > 0 || cakeData.outstanding.balance_due > 0 || cakeData.booked.orders > 0) && (
-        <div style={{ marginTop: 28 }}>
-          <div className="orders-section-label">Cake Orders — Collections</div>
-
-          <div className="sales-summary">
-            <div className="summary-breakdown">
-              <div className="summary-item summary-item--cash">
-                <div className="summary-label">Advance Received ({cakeData.collections.advance.txns} txn)</div>
-                <div className="summary-amount">₹{cakeData.collections.advance.amount.toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--card">
-                <div className="summary-label">Follow-up Received ({cakeData.collections.followup.txns} txn)</div>
-                <div className="summary-amount">₹{cakeData.collections.followup.amount.toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--total">
-                <div className="summary-label">Total Cake Collections</div>
-                <div className="summary-amount">₹{cakeData.collections.total.toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--credit">
-                <div className="summary-label">Delivered Revenue ({cakeData.delivered.orders})</div>
-                <div className="summary-amount">₹{cakeData.delivered.revenue.toLocaleString('en-IN')}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Method breakdown + day stats */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '10px 0 16px', fontSize: 12 }}>
-            {[...cakeData.collections.advance.methods.map(m => ({ ...m, t: 'Advance' })),
-              ...cakeData.collections.followup.methods.map(m => ({ ...m, t: 'Follow-up' }))].map((m, i) => (
-              <span key={i} style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(100,116,139,0.12)', color: '#475569', fontWeight: 600 }}>
-                {m.t} · {PAYMENT_LABELS[m.method] || m.method}: ₹{m.amount.toLocaleString('en-IN')}
-              </span>
-            ))}
-            <span style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(100,116,139,0.12)', color: '#475569', fontWeight: 600 }}>
-              Booked: {cakeData.booked.orders} (₹{cakeData.booked.value.toLocaleString('en-IN')})
-            </span>
-            {cakeData.cancelled.orders > 0 && (
-              <span style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(220,38,38,0.1)', color: '#b91c1c', fontWeight: 600 }}>
-                Cancelled: {cakeData.cancelled.orders}
-              </span>
-            )}
-            <span style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(217,119,6,0.12)', color: '#b45309', fontWeight: 600 }}>
-              Balance Outstanding: ₹{cakeData.outstanding.balance_due.toLocaleString('en-IN')} ({cakeData.outstanding.orders} orders)
-            </span>
-            <span style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(217,119,6,0.12)', color: '#b45309', fontWeight: 600 }}>
-              Advances Held (undelivered): ₹{cakeData.outstanding.advances_held.toLocaleString('en-IN')}
-            </span>
-          </div>
-
-          {/* Transactions */}
-          {cakeData.transactions.length > 0 && (
-            <div className="sales-orders">
-              <div className="orders-section-label">Cake Payments — {cakeData.transactions.length} transactions</div>
-              <div style={{ border: '1px solid rgba(100,116,139,0.2)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '70px 130px 1fr 100px 90px 110px', gap: 8, padding: '8px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', background: 'rgba(100,116,139,0.08)' }}>
-                  <span>Time</span><span>Order</span><span>Customer</span><span>Type</span><span>Method</span><span style={{ textAlign: 'right' }}>Amount</span>
-                </div>
-                {cakeData.transactions.map(t => (
-                  <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '70px 130px 1fr 100px 90px 110px', gap: 8, padding: '8px 14px', fontSize: 13, borderTop: '1px solid rgba(100,116,139,0.12)' }}>
-                    <span>{t.time}</span>
-                    <span>{t.order_number}</span>
-                    <span>{t.customer_name}</span>
-                    <span>{CAKE_TYPE_LABELS[t.type] || t.type}</span>
-                    <span>{PAYMENT_LABELS[t.method] || t.method}</span>
-                    <span style={{ textAlign: 'right', fontWeight: 700, color: t.amount < 0 ? '#b91c1c' : 'inherit' }}>
-                      ₹{t.amount.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       )}
     </div>
   );
