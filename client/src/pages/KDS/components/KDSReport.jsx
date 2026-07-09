@@ -4,15 +4,17 @@ import posApi from '../../../services/posApi';
 import { getNepalDateStr } from '../../../utils/dateTime';
 
 export default function KDSReport({ onClose }) {
-  const { settings, stations } = useKDS();
+  const { settings, stations, formatMinSec } = useKDS();
   const [rows, setRows]   = useState([]);
+  const [kotCount, setKotCount] = useState(0);
+  const [avgSecs, setAvgSecs]   = useState(null);
   const [loading, setLoading] = useState(true);
   const stationId = settings.activeDepartment;
 
   useEffect(() => {
     setLoading(true);
     posApi.getKDSReport(stationId)
-      .then(r => { setRows(r); setLoading(false); })
+      .then(r => { setRows(r.items); setKotCount(r.kot_count); setAvgSecs(r.avg_ticket_secs); setLoading(false); })
       .catch(() => setLoading(false));
   }, [stationId]);
 
@@ -35,6 +37,19 @@ export default function KDSReport({ onClose }) {
           <button className="kds-modal__close" onClick={onClose}>✕</button>
         </div>
 
+        {!loading && rows.length > 0 && (
+          <div className="kds-report__summary">
+            <div className="kds-report__summary-stat">
+              <span className="kds-report__summary-val">{kotCount}</span>
+              <span className="kds-report__summary-lbl">KOTs Served</span>
+            </div>
+            <div className="kds-report__summary-stat">
+              <span className="kds-report__summary-val">{formatMinSec(avgSecs)}</span>
+              <span className="kds-report__summary-lbl">Avg Ticket Time</span>
+            </div>
+          </div>
+        )}
+
         <div className="kds-report__body">
           {loading ? (
             <div className="kds-empty">Loading…</div>
@@ -44,9 +59,9 @@ export default function KDSReport({ onClose }) {
             <table className="kds-report__table">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Item</th>
-                  <th>Total Qty</th>
+                  <th className="kds-report__idx">#</th>
+                  <th className="kds-report__name">Item</th>
+                  <th className="kds-report__qty">Total Qty</th>
                 </tr>
               </thead>
               <tbody>
@@ -61,7 +76,7 @@ export default function KDSReport({ onClose }) {
               <tfoot>
                 <tr>
                   <td colSpan={2} className="kds-report__total-lbl">Total Items Served</td>
-                  <td className="kds-report__total-val">{rows.reduce((s, r) => s + r.total_qty, 0)}</td>
+                  <td className="kds-report__total-val">{rows.reduce((s, r) => s + Number(r.total_qty), 0)}</td>
                 </tr>
               </tfoot>
             </table>

@@ -146,6 +146,22 @@ export const revertOrderTransaction = ({ orderId, reason }) =>
 export const revertCakeTransaction = ({ cakeOrderId, reason }) =>
   http.post(`/pos/transactions/cake/${cakeOrderId}/revert`, { reason }).then(r => r.data);
 
+// ── Web Orders (approval queue) ───────────────────────────────
+export const getWebOrders = (status = 'PENDING_APPROVAL') =>
+  http.get('/pos/web-orders', { params: { status } }).then(r => r.data);
+
+export const getWebOrder = (id) =>
+  http.get(`/pos/web-orders/${id}`).then(r => r.data);
+
+export const getWebOrderCounts = () =>
+  http.get('/pos/web-orders/counts').then(r => r.data);
+
+export const approveWebOrder = (id) =>
+  http.post(`/pos/web-orders/${id}/approve`).then(r => r.data);
+
+export const rejectWebOrder = (id, reason) =>
+  http.post(`/pos/web-orders/${id}/reject`, { reason }).then(r => r.data);
+
 // ── Lookup Master ─────────────────────────────────────────────
 // Generic lookup_master reader (cream/shape/sponge/theme/dietary/table-tag/
 // product-badge types all live in the same table). Pass a lookup_type to
@@ -180,6 +196,8 @@ const posApi = {
   getDayEndReport, closeDayEnd, reopenDayEnd,
   // Transaction Revert
   getTodayTransactions, revertOrderTransaction, revertCakeTransaction,
+  // Web Orders
+  getWebOrders, getWebOrder, getWebOrderCounts, approveWebOrder, rejectWebOrder,
   // Lookup Master
   getLookupMaster, getMaintenanceStations,
 };

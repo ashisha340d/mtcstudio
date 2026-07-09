@@ -9,10 +9,12 @@ const SOUND_TYPES = [
     { key: 'critical',     label: 'KDS — Critical Alert' },
     { key: 'waiter_ready', label: 'Waiter App — Order Ready' },
     { key: 'pos_ready',    label: 'POS — Order Ready' },
+    { key: 'waiter_new_order', label: 'Waiter App — New Order Notification' },
+    { key: 'web_order',    label: 'POS — New Web Order' },
 ];
 
 export default function KDSSoundSettingsTab() {
-    const [cfg, setCfg] = useState({ new_order: null, warning: null, critical: null, waiter_ready: null, pos_ready: null });
+    const [cfg, setCfg] = useState({ new_order: null, warning: null, critical: null, waiter_ready: null, pos_ready: null, waiter_new_order: null, web_order: null });
     const [uploading, setUploading] = useState(null);
     const [toast, setToast] = useState(null);
 

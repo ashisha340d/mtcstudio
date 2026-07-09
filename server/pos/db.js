@@ -434,6 +434,64 @@ async function ensureSchema() {
     sort_order INT NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // ── Pending Web Orders (pushed from the website over the WS bridge) ──
+  await dbRun(`CREATE TABLE IF NOT EXISTS web_orders_pending (
+    id                INT PRIMARY KEY AUTO_INCREMENT,
+    web_order_id      INT NOT NULL UNIQUE,
+    order_number      VARCHAR(64) NOT NULL,
+    source            VARCHAR(32) NOT NULL DEFAULT 'WEB_ORDERING',
+    order_type        VARCHAR(20) NOT NULL DEFAULT 'Pickup',
+    customer_name     TEXT,
+    customer_phone    VARCHAR(32),
+    customer_address  TEXT,
+    landmark          TEXT,
+    customer_notes    TEXT,
+    items_json        LONGTEXT NOT NULL,
+    subtotal          DOUBLE NOT NULL DEFAULT 0,
+    discount          DOUBLE NOT NULL DEFAULT 0,
+    tax               DOUBLE NOT NULL DEFAULT 0,
+    delivery_charge   DOUBLE NOT NULL DEFAULT 0,
+    grand_total       DOUBLE NOT NULL DEFAULT 0,
+    distance_km       DOUBLE,
+    payment_method    VARCHAR(20) NOT NULL DEFAULT 'COD',
+    payment_status    VARCHAR(20) NOT NULL DEFAULT 'UNPAID',
+    payment_reference TEXT,
+    status            VARCHAR(32) NOT NULL DEFAULT 'PENDING_APPROVAL'
+                        CHECK(status IN ('PENDING_APPROVAL','APPROVED','REJECTED','CANCELLED','EXPIRED')),
+    pos_order_id      INT,
+    approved_by       INT,
+    approved_at       DATETIME,
+    rejected_by       INT,
+    rejected_at       DATETIME,
+    reject_reason     TEXT,
+    ordered_at        DATETIME,
+    received_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(pos_order_id) REFERENCES pos_orders(id),
+    FOREIGN KEY(approved_by) REFERENCES pos_users(id),
+    FOREIGN KEY(rejected_by) REFERENCES pos_users(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_wop_status   ON web_orders_pending(status)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_wop_received ON web_orders_pending(received_at)`);
+
+  await dbRun(`CREATE TABLE IF NOT EXISTS web_order_items (
+    id             INT PRIMARY KEY AUTO_INCREMENT,
+    pending_id     INT NOT NULL,
+    web_pid        VARCHAR(64),
+    kind           VARCHAR(20) NOT NULL DEFAULT 'product',
+    product_id     INT,
+    variant_id     INT,
+    item_name      TEXT NOT NULL,
+    variant_name   TEXT,
+    quantity       INT NOT NULL DEFAULT 1,
+    unit_price     DOUBLE NOT NULL DEFAULT 0,
+    line_total     DOUBLE NOT NULL DEFAULT 0,
+    modifiers_json LONGTEXT,
+    special_note   TEXT,
+    sort_order     INT NOT NULL DEFAULT 0,
+    FOREIGN KEY(pending_id) REFERENCES web_orders_pending(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_woi_pending ON web_order_items(pending_id)`);
+
   // ── Column additions on shared tables ─────────────────────────
   await dbRun(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS icon TEXT`);
 

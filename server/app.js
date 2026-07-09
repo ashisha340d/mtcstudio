@@ -58,6 +58,8 @@ const cakeProductionRouter = require('./routes/pos/cakeProduction');
 const posWaiterRouter = require('./routes/pos/waiter');
 const posReportsRouter = require('./routes/pos/reports');
 const posTransactionsRouter = require('./routes/pos/transactions');
+const posWebOrdersRouter = require('./routes/pos/webOrders');
+const webOrderBridge = require('./services/webOrderBridge');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { startAutoSync } = require('./services/liveShelfSync');
@@ -108,6 +110,7 @@ app.use('/api/pos/cake-production', cakeProductionRouter);
 app.use('/api/pos/waiter', posWaiterRouter);
 app.use('/api/pos/reports', posReportsRouter);
 app.use('/api/pos/transactions', posTransactionsRouter);
+app.use('/api/pos/web-orders', posWebOrdersRouter);
 
 // ── Cake Production PWA (own build, own path, own manifest/SW scope) ──
 // Registered before the generic SPA fallback below so /cake-app/* is never
@@ -175,6 +178,7 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
       : `:${PORT}`;
     const base = `${PROTOCOL}://${ip}${portSuffix}`;
     startAutoSync(60_000);
+    webOrderBridge.start(); // WS client → website's /pos-bridge (web order queue)
     console.log('');
     console.log('  ╔══════════════════════════════════════════════╗');
     console.log('  ║          MTC Studio Server — Ready           ║');

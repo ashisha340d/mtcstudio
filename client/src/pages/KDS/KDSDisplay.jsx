@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useKDS } from '../../context/KDSContext';
 import KOTCard from './components/KOTCard';
 import KDSSummary from './components/KDSSummary';
 import KDSSettings from './components/KDSSettings';
 import KDSReport from './components/KDSReport';
+import KDSConfetti from './components/KDSConfetti';
 import SocketStatus from '../../components/SocketStatus';
+import posApi from '../../services/posApi';
 import './kds.css';
 
 function Clock() {
@@ -32,12 +34,30 @@ export default function KDSDisplay() {
     setTab, setPage, setFilter,
     openSettings, closeSettings,
     openReport, closeReport,
+    formatMinSec,
   } = useKDS();
 
   useEffect(() => { loadKOTs(); }, []); // eslint-disable-line
   useEffect(() => {
     if (activeTab === 'served') loadServedKOTs();
   }, [activeTab]); // eslint-disable-line
+
+  // ── Celebrate when this department's active orders hit zero ──
+  const prevActiveCountRef = useRef(null);
+  const [celebrate, setCelebrate] = useState(false);
+  const [popperStats, setPopperStats] = useState(null); // { kotCount, avgSecs }
+  useEffect(() => {
+    const prev = prevActiveCountRef.current;
+    prevActiveCountRef.current = activeCount;
+    if (prev !== null && prev > 0 && activeCount === 0) {
+      setCelebrate(true);
+      posApi.getKDSReport(settings.activeDepartment)
+        .then(r => setPopperStats({ kotCount: r.kot_count, avgSecs: r.avg_ticket_secs }))
+        .catch(() => setPopperStats(null));
+      const t = setTimeout(() => setCelebrate(false), 3400);
+      return () => clearTimeout(t);
+    }
+  }, [activeCount]); // eslint-disable-line
 
   // Unified view: active | delayed | served | summary
   const view = activeTab === 'summary' ? 'summary'
@@ -120,10 +140,19 @@ export default function KDSDisplay() {
           {isLoading ? (
             <div className="kds-empty">Loading…</div>
           ) : isEmpty ? (
-            <div className="kds-empty">
+            <div className={`kds-empty${!isServedView && celebrate ? ' kds-empty--celebrate' : ''}`}>
               <div className="kds-empty__icon">✓</div>
-              <div className="kds-empty__text">{isServedView ? 'No served orders yet' : 'ALL CLEAR'}</div>
-              {!isServedView && <div className="kds-empty__sub">No active orders</div>}
+              <div className="kds-empty__text">
+                {isServedView ? 'No served orders yet' : (celebrate ? '🎉 गोर्खे दामी!🎉' : 'ALL CLEAR')}
+              </div>
+              {!isServedView && !celebrate && <div className="kds-empty__sub">No active orders</div>}
+              {!isServedView && celebrate && popperStats && (
+                <div className="kds-empty__popper-stats">
+                  <div className="kds-empty__sub">KOTs served — Average time</div>
+                  <div className="kds-empty__popper-row"><span>KOT</span><span>{popperStats.kotCount}</span></div>
+                  <div className="kds-empty__popper-row"><span>Time</span><span>{formatMinSec(popperStats.avgSecs)} min</span></div>
+                </div>
+              )}
             </div>
           ) : (
             cards.map(order => <KOTCard key={order.id} kot={order} showServed={isServedView} />)
@@ -131,6 +160,7 @@ export default function KDSDisplay() {
         </div>
       )}
 
+      {celebrate && <KDSConfetti />}
       {settingsOpen && <KDSSettings onClose={closeSettings} />}
       {reportOpen && <KDSReport onClose={closeReport} />}
     </div>

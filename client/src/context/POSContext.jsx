@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
 import { createSocket } from '../socket';
 import { createAlertPlayer } from '../utils/alertSound';
 
@@ -302,14 +302,34 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   const alertPlayerRef = useRef(null);
   if (!alertPlayerRef.current) alertPlayerRef.current = createAlertPlayer(660);
 
+  // "New web order" alert sound (separate slot, higher-pitch fallback beep)
+  const webOrderPlayerRef = useRef(null);
+  if (!webOrderPlayerRef.current) webOrderPlayerRef.current = createAlertPlayer(880);
+
   useEffect(() => {
     apiService.getKdsSoundConfig?.()
-      .then(cfg => alertPlayerRef.current.setSrc(cfg.pos_ready))
+      .then(cfg => {
+        alertPlayerRef.current.setSrc(cfg.pos_ready);
+        webOrderPlayerRef.current.setSrc(cfg.web_order);
+      })
       .catch(() => {});
   }, [apiService]);
 
+  // ── Pending Web Orders (approval queue) ───────────────────
+  const [webOrderCount, setWebOrderCount] = useState(0);
+  const [webOrderAlert, setWebOrderAlert] = useState(null); // last pushed order → popup
+
+  const refreshWebOrderCount = useCallback(async () => {
+    try {
+      const { pending } = await apiService.getWebOrderCounts();
+      setWebOrderCount(pending);
+    } catch { /* endpoint unavailable — badge stays as-is */ }
+  }, [apiService]);
+
+  useEffect(() => { refreshWebOrderCount(); }, [refreshWebOrderCount]);
+
   useEffect(() => {
-    const unlock = () => alertPlayerRef.current.unlock();
+    const unlock = () => { alertPlayerRef.current.unlock(); webOrderPlayerRef.current.unlock(); };
     document.addEventListener('click', unlock, { once: true, passive: true });
     document.addEventListener('touchstart', unlock, { once: true, passive: true });
     return () => {
@@ -647,9 +667,6 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   // resolve orderId/item details without a stale closure over state.
   const kotsByOrderRef = useRef(state.kotsByOrder);
   useEffect(() => { kotsByOrderRef.current = state.kotsByOrder; }, [state.kotsByOrder]);
-  const ordersRef = useRef(state.orders);
-  useEffect(() => { ordersRef.current = state.orders; }, [state.orders]);
-
   useEffect(() => {
     const token = sessionStorage.getItem('mtc_session') ?? localStorage.getItem('kds_session');
     const socket = createSocket({ role: 'pos', token: token ?? undefined });
@@ -664,21 +681,29 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     socket.on('tables-updated',  () => loadMasterDataRef.current());
 
     // Item prepared in KDS — update the order's ready count live and pop a toast.
-    socket.on('item-served', ({ kotId, itemId }) => {
+    // Uses the server-supplied product/table context (not local state) so this still
+    // fires even if the order/table was already checked out and dropped from the active list.
+    socket.on('item-served', (payload) => {
+      const { kotId, itemId, status, orderId: rawOrderId, product_name, table_name, customer_name, order_status } = payload;
       const entry = Object.entries(kotsByOrderRef.current).find(([, kots]) => kots.some(k => k.id === kotId));
-      if (!entry) return;
-      const [orderIdStr, kots] = entry;
-      const orderId = Number(orderIdStr);
-      const item = kots.find(k => k.id === kotId)?.items?.find(i => i.id === itemId);
+      const orderId = entry ? Number(entry[0]) : rawOrderId;
+      if (entry) dispatch({ type: A.KOT_ITEM_SERVED, payload: { orderId, kotId, itemId } });
 
-      dispatch({ type: A.KOT_ITEM_SERVED, payload: { orderId, kotId, itemId } });
-
-      if (item) {
-        const order = ordersRef.current[orderId];
-        const who = order?.table_name || order?.customer_name || `Order #${orderId}`;
+      if (status === 'SERVED' && product_name) {
+        const who = table_name ? `Table ${table_name}` : (customer_name || `Order #${orderId}`);
+        const closed = order_status === 'CLOSED' || order_status === 'CANCELLED';
         alertPlayerRef.current.play();
-        notify('success', `✅ ${item.product_name} ready — ${who}`);
+        notify('success', closed
+          ? `🍽️ ${product_name} ready for ${who} — already checked out, please deliver!`
+          : `✅ ${product_name} ready — ${who}`);
       }
+    });
+
+    // New pending web order pushed from the website — popup + sound + badge
+    socket.on('web-order-received', (payload) => {
+      webOrderPlayerRef.current.play();
+      setWebOrderAlert(payload);
+      setWebOrderCount(c => c + 1);
     });
 
     return () => socket.disconnect();
@@ -746,6 +771,12 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     // UI
     notify,
     setScreen: (s) => dispatch({ type: A.SET_SCREEN, payload: s }),
+
+    // Web Orders (approval queue)
+    webOrderCount,
+    webOrderAlert,
+    clearWebOrderAlert: () => setWebOrderAlert(null),
+    refreshWebOrderCount,
   };
 
   return <POSContext.Provider value={value}>{children}</POSContext.Provider>;

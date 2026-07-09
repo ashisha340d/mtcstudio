@@ -108,7 +108,7 @@ router.post('/cake-slip', async (req, res, next) => {
 // Centrally configured alert sounds for KDS, Waiter App & POS — replaces the
 // old per-browser localStorage upload so every screen plays the same sound.
 
-const KDS_SOUND_TYPES = ['new_order', 'warning', 'critical', 'waiter_ready', 'pos_ready'];
+const KDS_SOUND_TYPES = ['new_order', 'warning', 'critical', 'waiter_ready', 'pos_ready', 'waiter_new_order', 'web_order'];
 
 router.get('/kds-sound', async (req, res, next) => {
     try {

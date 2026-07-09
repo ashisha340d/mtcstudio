@@ -30,6 +30,17 @@ async function buildFullOrder(orderId) {
   return { ...order, kots };
 }
 
+// Order context for socket payloads — resolved fresh so it works even after
+// the order/table has been checked out and dropped from clients' active-orders cache.
+async function getOrderContext(orderId) {
+  return dbGet(
+    `SELECT o.id, o.status, o.customer_name, t.name AS table_name FROM pos_orders o
+     LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
+     WHERE o.id = ?`,
+    [orderId]
+  );
+}
+
 // SSE endpoint must NOT use requireSession middleware (EventSource can't send headers)
 // Token passed as ?token= query param instead
 router.get('/events', async (req, res) => {
@@ -290,22 +301,45 @@ router.get('/', async (req, res) => {
   res.json(orders);
 });
 
-// GET /api/pos/kots/report/today — item totals for today
+// GET /api/pos/kots/report/today — item totals + avg ticket time for today
 router.get('/report/today', async (req, res) => {
   const { start, end } = getNepalDayBoundsUTC(req.query.date);
   const stationId = req.query.station ? Number(req.query.station) : null;
-  let sql = `
-    SELECT ki.product_name, SUM(ki.quantity) AS total_qty
+
+  let itemSql = `
+    SELECT ki.product_name, CAST(SUM(ki.quantity) AS UNSIGNED) AS total_qty
     FROM   pos_kot_items ki
     JOIN   pos_kots k ON k.id = ki.kot_id
     WHERE  k.created_at >= ? AND k.created_at < ?
       AND  k.status != 'CANCELLED'
       AND  ki.status = 'SERVED'
   `;
-  const params = [start, end];
-  if (stationId) { sql += ` AND ki.station_id = ?`; params.push(stationId); }
-  sql += ` GROUP BY ki.product_name ORDER BY total_qty DESC`;
-  res.json(await dbAll(sql, params));
+  const itemParams = [start, end];
+  if (stationId) { itemSql += ` AND ki.station_id = ?`; itemParams.push(stationId); }
+  itemSql += ` GROUP BY ki.product_name ORDER BY total_qty DESC`;
+  const items = await dbAll(itemSql, itemParams);
+
+  // Avg ticket time: created_at -> served_at for fully-SERVED KOTs today
+  let ticketSql = `
+    SELECT COUNT(*) AS kot_count,
+           AVG(TIMESTAMPDIFF(SECOND, k.created_at, k.served_at)) AS avg_secs
+    FROM   pos_kots k
+    WHERE  k.created_at >= ? AND k.created_at < ?
+      AND  k.status = 'SERVED'
+      AND  k.served_at IS NOT NULL
+  `;
+  const ticketParams = [start, end];
+  if (stationId) {
+    ticketSql += ` AND EXISTS (SELECT 1 FROM pos_kot_items ki WHERE ki.kot_id = k.id AND ki.station_id = ?)`;
+    ticketParams.push(stationId);
+  }
+  const ticket = await dbGet(ticketSql, ticketParams);
+
+  res.json({
+    items,
+    kot_count: Number(ticket?.kot_count) || 0,
+    avg_ticket_secs: ticket?.avg_secs === null || ticket?.avg_secs === undefined ? null : Math.round(Number(ticket.avg_secs)),
+  });
 });
 
 const DISCOUNT_TYPES = ['MANUAL', 'PROMO', 'COMPLIMENTARY', 'EMPLOYEE'];
@@ -442,7 +476,11 @@ router.patch('/:id/items/:itemId/serve', async (req, res) => {
 
   const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
   const kot     = await dbGet(`SELECT * FROM pos_kots WHERE id=?`, [req.params.id]);
-  const servedPayload = { kotId: kot.id, orderId: kot.order_id, itemId: item.id, status: 'SERVED', served_at: updated.served_at, station_id: item.station_id ?? null };
+  const order   = await getOrderContext(kot.order_id);
+  const servedPayload = {
+    kotId: kot.id, orderId: kot.order_id, itemId: item.id, status: 'SERVED', served_at: updated.served_at, station_id: item.station_id ?? null,
+    product_name: item.product_name, table_name: order?.table_name ?? null, customer_name: order?.customer_name ?? null, order_status: order?.status ?? null,
+  };
   kdsEvents.broadcast('item_served', servedPayload);
   socketServer.emitItemServed(servedPayload);
   res.json({ item: updated, kotStatus: kot.status });
@@ -501,7 +539,11 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
 
   const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
   const kot     = await dbGet(`SELECT * FROM pos_kots WHERE id=?`, [req.params.id]);
-  const statusPayload = { kotId: kot.id, orderId: kot.order_id, itemId: item.id, status: updated.status, served_at: updated.served_at, station_id: item.station_id ?? null };
+  const order   = updated.status === 'SERVED' ? await getOrderContext(kot.order_id) : null;
+  const statusPayload = {
+    kotId: kot.id, orderId: kot.order_id, itemId: item.id, status: updated.status, served_at: updated.served_at, station_id: item.station_id ?? null,
+    product_name: item.product_name, table_name: order?.table_name ?? null, customer_name: order?.customer_name ?? null, order_status: order?.status ?? null,
+  };
   kdsEvents.broadcast('item_served', statusPayload);
   socketServer.emitItemServed(statusPayload);
 

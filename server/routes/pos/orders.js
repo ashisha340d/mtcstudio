@@ -7,6 +7,7 @@ const kdsEvents                       = require('../../pos/kdsEvents');
 const socketServer                    = require('../../pos/socketServer');
 const { triggerStockSync }            = require('../../services/liveShelfSync');
 const { validateSplitTender }         = require('../../pos/splitTender');
+const webOrderBridge                  = require('../../services/webOrderBridge');
 
 const router = express.Router();
 router.use(requireSession);
@@ -117,6 +118,7 @@ router.patch('/:id/serve-all', async (req, res) => {
 
   kdsEvents.broadcast('new_kot', { orderId });
   socketServer.emitOrderCompleted({ orderId });
+  webOrderBridge.notifyPosOrderEvent(orderId, 'READY'); // web-origin orders only, no-op otherwise
   res.json({ ok: true });
 });
 
@@ -149,6 +151,7 @@ router.post('/:id/cancel', requireRole('MANAGER', 'ADMIN'), async (req, res) => 
 
   triggerStockSync(); // cancelled items drop from today's SUM — available recalculates automatically
   socketServer.emitOrderCancelled({ orderId: order.id });
+  webOrderBridge.notifyPosOrderEvent(order.id, 'CANCELLED'); // web-origin orders only
   res.json({ ok: true });
 });
 
@@ -319,6 +322,7 @@ router.post('/:id/checkout', async (req, res) => {
   });
 
   socketServer.emitOrderCompleted({ orderId: order.id });
+  if (balance_due <= 0) webOrderBridge.notifyPosOrderEvent(order.id, 'COMPLETED'); // web-origin orders only
   res.json({ ok: true, balance: balance_due, change });
 });
 

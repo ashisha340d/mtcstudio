@@ -276,6 +276,7 @@ function AddProductModal({ product, existingItem, onClose, onConfirm }) {
   const [qty, setQty] = useState(existingItem?.quantity ?? 1);
   const [notes, setNotes] = useState(existingItem?.notes ?? '');
   const [rateInput, setRateInput] = useState(existingItem ? String(existingItem.unit_price) : '');
+  const [rateFocused, setRateFocused] = useState(false);
   const [homePack, setHomePack] = useState(
     !!(existingItem?.is_homepack ?? existingItem?.is_home_pack ?? false)
   );
@@ -499,10 +500,11 @@ function AddProductModal({ product, existingItem, onClose, onConfirm }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>Rate (₹)</div>
                 <input
-                  type="number"
-                  value={Number(rateInput || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  type={rateFocused ? 'number' : 'text'}
+                  value={rateFocused ? rateInput : Number(rateInput || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={e => setRateInput(e.target.value)}
-                  onFocus={e => e.target.select()}
+                  onFocus={e => { setRateFocused(true); e.target.select(); }}
+                  onBlur={() => setRateFocused(false)}
                   style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: `1.5px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.orange, fontSize: 22, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'right' }}
                 />
               </div>

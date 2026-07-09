@@ -13,6 +13,7 @@ import RevertTransactionModal from './components/RevertTransactionModal';
 import CashDrawerModal from './components/CashDrawerModal';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
 import SalesReportModal from './components/SalesReportModal';
+import WebOrdersModal from './components/WebOrdersModal';
 import FastPane from './components/FastPane';
 import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
 import { nepalNow } from '../../utils/dateTime';
@@ -52,7 +53,8 @@ function DesktopWindow({ title, count, children }) {
 export default function POSDashboard() {
   const {
     tables, orders, tableOrderMap, kotsByOrder, ui,
-    loadMasterData, loadActiveOrders,
+    loadMasterData, loadActiveOrders, notify,
+    webOrderCount, webOrderAlert, clearWebOrderAlert,
   } = usePOS();
   const { user, lock } = useAuth();
   const navigate = useNavigate();
@@ -65,6 +67,7 @@ export default function POSDashboard() {
   const [showRevert, setShowRevert] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
+  const [showWebOrders, setShowWebOrders] = useState(false);
 
   useEffect(() => {
     loadMasterData();
@@ -126,6 +129,15 @@ export default function POSDashboard() {
   // Direct Checkout button on card → open checkout modal for that existing order
   function openCheckoutForOrder(orderId) {
     setCheckoutOrderId(orderId);
+  }
+
+  // Checkout success → close modal, refresh, and celebrate if it was a table order
+  function handleCheckoutSuccess() {
+    const order = orders[checkoutOrderId];
+    const table = order?.table_id ? tables.find(t => t.id === order.table_id) : null;
+    setCheckoutOrderId(null);
+    loadActiveOrders();
+    if (table) notify('success', `🎉 Table ${table.name} Checked Out`);
   }
 
   // Click an active non-table order card → open it in POS entry (reuse existing order)
@@ -227,6 +239,17 @@ export default function POSDashboard() {
         </button>
 
         <button
+          className="pos-topbar__btn pos-topbar__btn--delivery"
+          onClick={() => setShowWebOrders(true)}
+          title="Website orders waiting for approval"
+        >
+          🌐 Web Orders
+          {webOrderCount > 0 && (
+            <span className="pos-topbar__badge">{webOrderCount}</span>
+          )}
+        </button>
+
+        <button
           className="pos-topbar__btn pos-topbar__btn--merge"
           onClick={() => setShowMerge(true)}
           title="Merge orders across all types"
@@ -316,7 +339,7 @@ export default function POSDashboard() {
         <CheckoutModal
           orderId={checkoutOrderId}
           onClose={() => setCheckoutOrderId(null)}
-          onSuccess={() => { setCheckoutOrderId(null); loadActiveOrders(); }}
+          onSuccess={handleCheckoutSuccess}
         />
       )}
       {showMerge && (
@@ -348,6 +371,39 @@ export default function POSDashboard() {
       )}
       {showSalesReport && (
         <SalesReportModal onClose={() => setShowSalesReport(false)} />
+      )}
+      {showWebOrders && (
+        <WebOrdersModal
+          onClose={() => setShowWebOrders(false)}
+          onApproved={loadActiveOrders}
+        />
+      )}
+
+      {/* New web order popup — stays until dismissed or reviewed */}
+      {webOrderAlert && !showWebOrders && (
+        <div className="modal-overlay" onClick={clearWebOrderAlert}>
+          <div className="modal" style={{ maxWidth: 420, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <span className="modal__title">🌐 New Web Order!</span>
+            <p style={{ margin: '10px 0 4px', fontSize: 15 }}>
+              <strong>{webOrderAlert.orderNumber}</strong> · {webOrderAlert.orderType}
+            </p>
+            <p style={{ margin: '0 0 6px', fontSize: 14 }}>
+              {webOrderAlert.customerName || 'Customer'} · 📞 {webOrderAlert.customerPhone || '—'}
+            </p>
+            <p style={{ margin: '0 0 12px', fontSize: 14 }}>
+              {webOrderAlert.itemCount} item(s) · <strong>Rs {Number(webOrderAlert.grandTotal || 0).toLocaleString('en-IN')}</strong>
+            </p>
+            <div className="modal__actions" style={{ justifyContent: 'center' }}>
+              <button className="modal__btn modal__btn--cancel" onClick={clearWebOrderAlert}>Later</button>
+              <button
+                className="modal__btn modal__btn--confirm"
+                onClick={() => { clearWebOrderAlert(); setShowWebOrders(true); }}
+              >
+                Review Now
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {ui.notification && (

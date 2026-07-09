@@ -23,6 +23,14 @@ export function formatElapsed(ms) {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
+// "M:SS" — used for avg ticket time (report + all-clear popper)
+export function formatMinSec(totalSecs) {
+  if (totalSecs === null || totalSecs === undefined) return '—';
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function getDelayState(createdAt, warningMins, criticalMins) {
   const mins = elapsedMs(createdAt) / 60000;
   if (mins >= criticalMins) return 'critical';
@@ -43,7 +51,8 @@ export function orderAllServed(order) {
 }
 
 export function orderEarliestKotAt(order) {
-  const times = (order.kots || []).map(k => toUtcMs(k.created_at));
+  const kots = (order.kots || []).filter(k => k.status !== KOT_STATUS.SERVED && k.status !== KOT_STATUS.CANCELLED);
+  const times = (kots.length ? kots : (order.kots || [])).map(k => toUtcMs(k.created_at));
   return times.length ? Math.min(...times) : Date.now();
 }
 
@@ -768,6 +777,7 @@ export function KDSProvider({ children, apiService, pollIntervalMs = 8000 }) {
 
     getDelayState: (createdAt) => getDelayState(createdAt, delayWarningMins, delayCriticalMins),
     formatElapsed,
+    formatMinSec,
     elapsedMs,
     orderAllServed,
     orderEarliestKotAt,

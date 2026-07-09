@@ -169,4 +169,11 @@ function emitTablesUpdated() {
   io.to('waiter').emit('tables-updated');
 }
 
-module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitCakeProductionChanged };
+// New pending web order imported from the website — POS screens show a popup,
+// play the web_order sound and refresh the Web Orders badge.
+function emitWebOrderReceived(payload) {
+  if (!io) return;
+  io.to('pos').emit('web-order-received', payload);
+}
+
+module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitCakeProductionChanged, emitWebOrderReceived };

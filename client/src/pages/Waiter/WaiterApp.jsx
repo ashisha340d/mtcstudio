@@ -156,6 +156,9 @@ export default function WaiterApp() {
   const [queueCount, setQueueCount] = useState(offlineQ.current.length);
 
   const toastRef  = useRef(null);
+  // Order IDs this waiter just punched in themselves — suppresses the "new order"
+  // toast/sound for our own action (still alerts for orders placed from POS/other waiters).
+  const selfCreatedOrdersRef = useRef(new Set());
   const touchStart = useRef({ x: 0, y: 0 });
 
   // ── Timer tick every 30s ────────────────────────────────────────
@@ -181,13 +184,20 @@ export default function WaiterApp() {
   const alertPlayerRef = useRef(null);
   if (!alertPlayerRef.current) alertPlayerRef.current = createAlertPlayer(880);
 
+  // ── Centrally-configured "new order" alert sound (distinct from "ready") ──
+  const newOrderPlayerRef = useRef(null);
+  if (!newOrderPlayerRef.current) newOrderPlayerRef.current = createAlertPlayer(660);
+
   useEffect(() => {
     if (!user) return;
-    api.get('/settings/kds-sound').then(r => alertPlayerRef.current.setSrc(r.data.waiter_ready)).catch(() => {});
+    api.get('/settings/kds-sound').then(r => {
+      alertPlayerRef.current.setSrc(r.data.waiter_ready);
+      newOrderPlayerRef.current.setSrc(r.data.waiter_new_order);
+    }).catch(() => {});
   }, [user]);
 
   useEffect(() => {
-    const unlock = () => alertPlayerRef.current.unlock();
+    const unlock = () => { alertPlayerRef.current.unlock(); newOrderPlayerRef.current.unlock(); };
     document.addEventListener('click', unlock, { once: true, passive: true });
     document.addEventListener('touchstart', unlock, { once: true, passive: true });
     return () => {
@@ -252,29 +262,39 @@ export default function WaiterApp() {
   const loadOrdersRef = useRef(loadOrders);
   useEffect(() => { loadOrdersRef.current = loadOrders; });
 
-  const activeOrdersRef = useRef(activeOrders);
-  useEffect(() => { activeOrdersRef.current = activeOrders; }, [activeOrders]);
-
   // ── Socket ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem(S_KEY);
     const socket = createSocket({ role: 'waiter', token: token ?? undefined });
     const reload = () => loadOrdersRef.current();
-    socket.on('new-order',          reload);
+    // New order/KOT landed — reload the board, and alert unless we just punched it
+    // in ourselves from this Waiter app (POS/other-waiter/customer-QR orders still alert).
+    socket.on('new-order', (payload) => {
+      reload();
+      if (payload?.id != null && selfCreatedOrdersRef.current.has(payload.id)) {
+        selfCreatedOrdersRef.current.delete(payload.id);
+        return;
+      }
+      const who = payload?.table_name ? `Table ${payload.table_name}` : (payload?.customer_name || `Order #${payload?.id ?? ''}`);
+      if (navigator.vibrate) navigator.vibrate(150);
+      newOrderPlayerRef.current.play();
+      showToast(`🧾 New order — ${who}`, 'success');
+    });
     socket.on('order-updated',      reload);
     socket.on('order-cancelled',    reload);
     socket.on('order-completed',    reload);
-    socket.on('item-served', ({ kotId, itemId }) => {
+    socket.on('item-served', (payload) => {
       reload();
-      const kot = (activeOrdersRef.current.kots || []).find(k => k.id === kotId);
-      const item = kot?.items?.find(i => i.id === itemId);
-      if (!item) return;
-      const order = (activeOrdersRef.current.orders || []).find(o => o.id === kot.order_id);
-      const who = order?.table_name || order?.customer_name || `Order #${kot.order_id}`;
+      const { status, orderId, product_name, table_name, customer_name, order_status } = payload;
+      if (status !== 'SERVED' || !product_name) return;
+      const who = table_name ? `Table ${table_name}` : (customer_name || `Order #${orderId}`);
+      const closed = order_status === 'CLOSED' || order_status === 'CANCELLED';
       if (navigator.vibrate) navigator.vibrate(150);
       alertPlayerRef.current.play();
-      showToast(`✅ ${item.product_name} ready — ${who}`, 'success');
+      showToast(closed
+        ? `🍽️ ${product_name} ready for ${who} — already checked out, please deliver!`
+        : `✅ ${product_name} ready — ${who}`, 'success');
     });
     socket.on('reconnect',          () => { reload(); drainOfflineQueue(); });
     socket.on('waiter-call', payload => {
@@ -317,6 +337,8 @@ export default function WaiterApp() {
           const r = await api.post('/pos/orders', { order_type: 'DINE_IN', table_id: item.tableId, status: 'OPEN', pax_count: item.paxCount, table_tags: item.tags });
           orderId = r.data.id;
         }
+        selfCreatedOrdersRef.current.add(orderId);
+        setTimeout(() => selfCreatedOrdersRef.current.delete(orderId), 5000);
         await api.post('/pos/kots', { order_id: orderId, items: item.items });
       } catch { failed.push(item); }
     }
@@ -492,6 +514,8 @@ export default function WaiterApp() {
         // Only patch if there's actual meta to save (avoids "Nothing to update" error)
         await api.patch(`/pos/orders/${orderId}`, { pax_count: paxCount, table_tags: tableTags.join(',') });
       }
+      selfCreatedOrdersRef.current.add(orderId);
+      setTimeout(() => selfCreatedOrdersRef.current.delete(orderId), 5000);
       await api.post('/pos/kots', {
         order_id: orderId, punched_by: user?.id,
         items: cart.map(i => ({ product_id: i.product_id, variant_id: i.variant_id ?? null, product_name: i.product_name, quantity: i.quantity, unit_price: i.unit_price, is_home_pack: i.is_homepack ? 1 : 0, notes: [i.notes, ...(i.modifiers?.map(m => m.name) || [])].filter(Boolean).join(', ') || null })),
