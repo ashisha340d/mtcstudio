@@ -492,6 +492,11 @@ async function ensureSchema() {
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
   await dbRun(`CREATE INDEX IF NOT EXISTS idx_woi_pending ON web_order_items(pending_id)`);
 
+  // Web cake items carry their full configuration (design/size/flavour/cream/
+  // dietary/neededAt/message); approval books them into cake_orders, not a KOT.
+  await dbRun(`ALTER TABLE web_order_items ADD COLUMN IF NOT EXISTS cake_json LONGTEXT`);
+  await dbRun(`ALTER TABLE web_orders_pending ADD COLUMN IF NOT EXISTS cake_order_id INT`);
+
   // ── Column additions on shared tables ─────────────────────────
   await dbRun(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS icon TEXT`);
 

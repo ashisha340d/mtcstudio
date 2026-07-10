@@ -7,6 +7,7 @@ const kdsEvents      = require('../../pos/kdsEvents');
 const socketServer   = require('../../pos/socketServer');
 const { getNepalDayBoundsUTC } = require('../../utils/nepalDateTime');
 const { triggerStockSync } = require('../../services/liveShelfSync');
+const webOrderBridge = require('../../services/webOrderBridge');
 
 const router = express.Router();
 
@@ -368,17 +369,22 @@ router.post('/', async (req, res) => {
       const lineValue = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
       const discAmt = Math.min(Math.max(Number(item.discount_amount) || 0, 0), lineValue);
       const discType = discAmt > 0 && DISCOUNT_TYPES.includes(item.discount_type) ? item.discount_type : (discAmt > 0 ? 'MANUAL' : null);
+      // No station = not kitchen-tracked (water, delivery charge, retail) — auto-SERVED
+      // so KDS skips it and web-order progress (n/N) never stalls on it
+      const stationId = prod?.pos_station_id ?? null;
       saved.push(await tx.dbGet(
         `INSERT INTO pos_kot_items
-           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`,
+           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, status, served_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, IF(? IS NULL, NOW(), NULL)) RETURNING *`,
         [
           kot.id, item.product_id, item.variant_id ?? null, item.product_name,
           item.quantity, item.unit_price,
           item.notes ?? null, item.is_home_pack ? 1 : 0,
           item.prep_time_minutes ?? prod?.prep_time_minutes ?? 10,
-          prod?.pos_station_id ?? null,
+          stationId,
           discAmt, discType,
+          stationId == null ? 'SERVED' : 'ORDERSENT',
+          stationId,
         ]
       ));
       // Flag variant as dirty so triggerStockSync() will push available qty to website
@@ -400,6 +406,8 @@ router.post('/', async (req, res) => {
   if (fullOrder) socketServer.emitNewOrder(fullOrder);
 
   triggerStockSync(); // background qty-only push to website
+  webOrderBridge.notifyKotItemsChanged(result.order_id); // web-origin orders only, no-op otherwise
+  webOrderBridge.notifyKotItemProgress(result.order_id);
 
   res.status(201).json(result);
 });
@@ -462,6 +470,10 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     is_home_pack: updated.is_home_pack,
     station_id: updated.station_id ?? null,
   });
+  if (quantity !== undefined) { // line change → mirror bill on the website (web orders only)
+    const kotRow = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [updated.kot_id]);
+    if (kotRow) webOrderBridge.notifyKotItemsChanged(kotRow.order_id);
+  }
 
   res.json({ ok: true, quantity, notes, is_home_pack });
 });
@@ -483,6 +495,7 @@ router.patch('/:id/items/:itemId/serve', async (req, res) => {
   };
   kdsEvents.broadcast('item_served', servedPayload);
   socketServer.emitItemServed(servedPayload);
+  webOrderBridge.notifyKotItemProgress(kot.order_id); // web-origin orders only, no-op otherwise
   res.json({ item: updated, kotStatus: kot.status });
 });
 
@@ -504,6 +517,7 @@ router.patch('/:id/items/:itemId/unserve', async (req, res) => {
   const unservedPayload = { kotId: Number(req.params.id), orderId: kot?.order_id, itemId: item.id, status: 'ORDERSENT', served_at: null, station_id: item.station_id ?? null };
   kdsEvents.broadcast('item_served', unservedPayload);
   socketServer.emitItemServed(unservedPayload);
+  if (kot?.order_id) webOrderBridge.notifyKotItemProgress(kot.order_id); // web-origin orders only
   res.json({ ok: true });
 });
 
@@ -546,6 +560,9 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
   };
   kdsEvents.broadcast('item_served', statusPayload);
   socketServer.emitItemServed(statusPayload);
+  webOrderBridge.notifyKotItemProgress(kot.order_id); // web-origin orders only, no-op otherwise
+  if (status === 'CANCELLED' || item.status === 'CANCELLED') // line removed/restored → mirror bill
+    webOrderBridge.notifyKotItemsChanged(kot.order_id);
 
   res.json({ ok: true, status });
 });

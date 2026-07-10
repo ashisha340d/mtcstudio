@@ -1,32 +1,19 @@
 const http = require('http');
-const https = require('https');
-const fs = require('fs');
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { hostname, networkInterfaces } = require('os');
 
-require('dotenv').config({ path: path.resolve(__dirname, '..', 'mtc.config.env') });
-require('dotenv').config();
-
-function envFlag(name) {
-  return String(process.env[name] || '').toLowerCase() === 'true';
-}
+const APP_ENV = process.env.APP_ENV || 'local';
+require('dotenv').config({ path: path.resolve(__dirname, `.env.${APP_ENV}`) });
 
 function envPort(name, fallback) {
   const port = parseInt(process.env[name], 10);
   return Number.isInteger(port) && port > 0 ? port : fallback;
 }
 
-const HTTP_IP = process.env.HTTP_IP || '0.0.0.0';
-const HTTP_PORT = envPort('HTTP_PORT', envPort('PORT', 3000));
-const HTTPS_PORT = envPort('HTTPS_PORT', 443);
-const HTTPS_ENABLED = envFlag('HTTPS_ENABLED');
-const CERT_FILE = path.join(__dirname, 'certs', 'localhost.pem');
-const KEY_FILE = path.join(__dirname, 'certs', 'localhost-key.pem');
-const HAS_TLS_CERTS = fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE);
-const PROTOCOL = HTTPS_ENABLED && HAS_TLS_CERTS ? 'https' : 'http';
-const PORT = PROTOCOL === 'https' ? HTTPS_PORT : HTTP_PORT;
+const HOST = process.env.HOST || '0.0.0.0';
+const PORT = envPort('PORT', 3001);
 
 // ── CMS routes ────────────────────────────────────────────────
 const categoriesRouter = require('./routes/categories');
@@ -38,6 +25,7 @@ const liveshelfRouter = require('./routes/liveshelf');
 const cakeCatalogueRouter = require('./routes/cakeCatalogue');
 const dashboardRouter = require('./routes/dashboard');
 const crmRouter = require('./routes/crm');
+const automationRouter = require('./routes/automation');
 const settingsRouter = require('./routes/settings');
 const ocrRouter = require('./routes/ocr');
 
@@ -94,6 +82,7 @@ app.use('/api/liveshelf', liveshelfRouter);
 app.use('/api/cake-catalogue', cakeCatalogueRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/crm', crmRouter);
+app.use('/api/automation', automationRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/auth', posAuthRouter);
@@ -129,12 +118,7 @@ app.get('/{*path}', (req, res, next) => {
 app.use(errorHandler);
 
 // ── Server ────────────────────────────────────────────────────
-const mainServer = PROTOCOL === 'https'
-  ? https.createServer({
-    cert: fs.readFileSync(CERT_FILE),
-    key: fs.readFileSync(KEY_FILE),
-  }, app)
-  : http.createServer(app);
+const mainServer = http.createServer(app);
 
 const io = socketServer.init(mainServer);
 app.locals.io = io;
@@ -152,31 +136,13 @@ function getNetworkIP() {
   return lan || all[0] || '0.0.0.0';
 }
 
-if (HTTPS_ENABLED && !HAS_TLS_CERTS) {
-  console.warn('HTTPS_ENABLED=true, but TLS certificate files were not found.');
-  console.warn(`Expected: ${CERT_FILE}`);
-  console.warn(`Expected: ${KEY_FILE}`);
-  console.warn(`Falling back to HTTP on ${HTTP_IP}:${HTTP_PORT}`);
-}
-
-if (PROTOCOL === 'https' && HTTP_PORT !== HTTPS_PORT) {
-  http.createServer((req, res) => {
-    const host = (req.headers.host || '').replace(/:\d+$/, '');
-    res.writeHead(308, { Location: `https://${host}${req.url}` });
-    res.end();
-  }).listen(HTTP_PORT, HTTP_IP);
-}
-
 Promise.all([cmsDb.ready, db.ready]).catch(err => {
   console.error('Database schema initialization failed:', err);
   process.exit(1);
 }).then(() => {
-  mainServer.listen(PORT, HTTP_IP, () => {
+  mainServer.listen(PORT, HOST, () => {
     const ip = getNetworkIP();
-    const portSuffix = (PROTOCOL === 'https' && PORT === 443) || (PROTOCOL === 'http' && PORT === 80)
-      ? ''
-      : `:${PORT}`;
-    const base = `${PROTOCOL}://${ip}${portSuffix}`;
+    const base = `http://${ip}:${PORT}`;
     startAutoSync(60_000);
     webOrderBridge.start(); // WS client → website's /pos-bridge (web order queue)
     console.log('');
@@ -184,9 +150,9 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
     console.log('  ║          MTC Studio Server — Ready           ║');
     console.log('  ╚══════════════════════════════════════════════╝');
     console.log('');
-    console.log(`  Protocol   →  ${PROTOCOL.toUpperCase()}`);
+    console.log(`  Env        →  ${APP_ENV}`);
     console.log(`  IP / Port  →  ${ip}:${PORT}`);
-    console.log(`  Bind       →  ${HTTP_IP}:${PORT}`);
+    console.log(`  Bind       →  ${HOST}:${PORT}`);
     console.log(`  Hostname   →  ${hostname()}`);
     console.log('');
     console.log(`  POS        →  ${base}/pos`);
@@ -196,10 +162,7 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
     console.log(`  Admin      →  ${base}/`);
     console.log('');
     console.log(`  API        →  ${base}/api/`);
-    console.log(`  Socket.IO  →  ${PROTOCOL === 'https' ? 'wss' : 'ws'}://${ip}:${PORT}`);
-    if (PROTOCOL === 'https' && HTTP_PORT !== HTTPS_PORT) {
-      console.log(`  HTTP       →  http://${ip}:${HTTP_PORT} redirects to HTTPS`);
-    }
+    console.log(`  Socket.IO  →  ws://${ip}:${PORT}`);
     console.log('');
   });
 });

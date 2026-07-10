@@ -16,6 +16,7 @@ import CakeCatalogue    from './pages/CakeCatalogue/CakeCatalogue';
 import FileMaintenance       from './pages/FileMaintenance/FileMaintenance';
 import ModifierAssignment   from './pages/ModifierAssignment/ModifierAssignment';
 import CRM                  from './pages/CRM/CRM';
+import Automation            from './pages/Automation/Automation';
 
 // ── POS / KDS / Auth ─────────────────────────────────────────
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="file-maintenance"      element={<FileMaintenance />} />
           <Route path="modifier-assignment"   element={<ModifierAssignment />} />
           <Route path="crm"                   element={<CRM />} />
+          <Route path="automation"            element={<Automation />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

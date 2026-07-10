@@ -36,7 +36,7 @@ async function generate(req, res, next) {
             publicDir,
             uploadsDir,
             viewsDir,
-            baseUrl: 'https://munchtimecafe.com.np'
+            baseUrl: process.env.PUBLIC_SITE_URL
         });
         res.json({ success: true, result });
     } catch (e) { next(e); }

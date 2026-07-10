@@ -6,7 +6,7 @@ import { io } from 'socket.io-client';
 // that can reach the Vite server on port 5173 without needing port 3001 open directly.
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  : window.location.origin;
 
 // Create a socket factory so POS and KDS can connect with different roles/stations
 export function createSocket({ role = 'pos', station = null, token = null } = {}) {

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
+const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' });
 
 // ── Categories ───────────────────────────────────────────────────────────────
 export const categoriesApi = {
@@ -102,6 +102,27 @@ export const cakeCatalogueApi = {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const dashboardApi = {
   stats: () => api.get('/dashboard/stats')
+};
+
+// ── Automation (Rule Engine) ────────────────────────────────────────────────
+export const automationApi = {
+  conditionTypes:   () => api.get('/automation/condition-types'),
+  actionTypes:      () => api.get('/automation/action-types'),
+  categoryActions:  () => api.get('/automation/category-actions'),
+  settings:         () => api.get('/automation/settings'),
+  updateSettings:   (scope, data) => api.put(`/automation/settings/${scope}`, data),
+  list:             (params) => api.get('/automation/rules', { params }),
+  get:              (id) => api.get(`/automation/rules/${id}`),
+  create:           (data) => api.post('/automation/rules', data),
+  update:           (id, data) => api.put(`/automation/rules/${id}`, data),
+  remove:           (id) => api.delete(`/automation/rules/${id}`),
+  purge:            (id) => api.delete(`/automation/rules/${id}/purge`),
+  publish:          (id, published_by) => api.post(`/automation/rules/${id}/publish`, { published_by }),
+  versions:         (id) => api.get(`/automation/rules/${id}/versions`),
+  rollback:         (id, versionRowId) => api.post(`/automation/rules/${id}/rollback/${versionRowId}`),
+  test:             (id, sample_payload) => api.post(`/automation/rules/${id}/test`, { sample_payload }),
+  testRuns:         (id) => api.get(`/automation/rules/${id}/test-runs`),
+  syncNow:          (scope, ruleIds) => api.post('/automation/sync-now', { scope, ruleIds }),
 };
 
 export default api;

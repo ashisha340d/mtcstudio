@@ -1,0 +1,121 @@
+# MTC Studio – Smart Marketing / Automation Rule Engine
+# Final Consolidated Specification
+# Version: Final Draft v1
+
+---
+
+## 1. Purpose
+
+Rule Engine lets admin build marketing/automation logic without code — no-code wizard, conditions, actions, schedule, test, publish.
+
+Site scope: ~70 items (products). Because catalog is small, rule engine MUST enforce frequency capping — a customer should NOT see 3+ different rules/popups per session on such small catalog. This spec fixes that as a first-class control, not an afterthought.
+
+Rule Engine config is manual now (admin-built via wizard). Structure must stay AI-writable later — same schema, same metadata registry, so an AI agent can generate/edit rules through same API without redesign.
+
+---
+
+## 2. Core Objects
+
+* Rule (a.k.a. Automation)
+* Trigger
+* Condition Group (nested AND/OR)
+* Action
+* Schedule
+* Frequency Cap (NEW — required)
+* Priority / Conflict Strategy
+* Recommendation Set
+* Test/Simulation Log
+* Execution Log (audit trail)
+
+---
+
+## 3. Frequency Cap (Core Fix)
+
+Every rule carries a cap, mandatory field in wizard Step "Schedule" or new Step "Limits":
+
+* Max Shows Per Session (default 1)
+* Max Shows Per Customer Per Day (default 1)
+* Max Shows Per Customer Lifetime (optional, for one-time offers e.g. First Order)
+* Cooldown Between Repeats (e.g. 4 hours)
+
+Global safety net (site-wide, not per-rule):
+
+* Max Total Rule-Triggered Popups Per Session across ALL rules = 3–4 (configurable single number in Automation Center settings)
+* Once global cap hit, engine stops firing popups for rest of session even if more rules match — silent match still logged for analytics, just not displayed.
+
+This solves catalog-size problem directly: 70 items is small, customer must not get bombarded.
+
+---
+
+## 4. Conflict Resolution (Must Be Explicit, Not Optional)
+
+Previous draft listed 4 conflict strategies as all "optional" with no default — that's a gap. Final rule: pick ONE strategy per Scope (Website / POS / Kiosk), set at system level, not per-rule:
+
+Default: **Highest Priority Wins, then Merge Results up to Frequency Cap.**
+
+Meaning:
+1. Evaluate all matching rules.
+2. Sort by Priority (1–100).
+3. Fill available "slots" (bounded by session/global Frequency Cap) starting from highest priority.
+4. If two rules have equal priority, Highest Score Wins (score = relevance/margin-based, computed by recommendation engine) breaks tie.
+5. Stop Processing flag on a rule (if Yes) halts evaluation of lower-priority rules entirely, regardless of cap.
+
+This makes behavior deterministic and testable — no silent contradictory outcomes.
+
+---
+
+## 5. Rule Wizard (Final Steps)
+
+1. General — name, description, priority, status, scope
+2. Trigger — single event (add product, cart open, checkout, payment, kitchen, delivery, scheduled, manual)
+3. Conditions — nested AND/OR groups (Product, Customer, History, Context/Weather, Cart, Business/Inventory)
+4. Actions — category-dependent action list (Sales, Service, Kitchen, Inventory, Operations, CX, Notifications, Knowledge, Custom)
+5. Schedule + Frequency Cap — date range, repeat, time window, PLUS session/day/lifetime caps and cooldown
+6. Review — human-readable summary + Simulation (test against sample data, not live prod records)
+7. Publish — Publish Now / Save as Draft / Duplicate
+
+---
+
+## 6. Extensibility (AI-Ready)
+
+* Condition types and Action types registered via metadata table, not hardcoded — required so future AI agent can register new condition/action types without schema migration.
+* Category → allowed-actions mapping also metadata-driven (a lookup table), not hardcoded in UI, so AI can add new categories/actions without code change.
+* Every rule stored as structured JSON (trigger, conditions tree, actions, schedule, caps, priority) — same format a human builds via wizard or an AI writes via API later. One schema, two authors.
+
+---
+
+## 7. Testing / Simulation Safety
+
+* Step 6 "Run Test" must run against a sandboxed sample dataset, not live customer/inventory records, to avoid accidental side effects (loyalty points awarded, discounts applied) during testing.
+* Separate "Save & Test" (dry run, logged, no customer impact) from live production firing.
+
+---
+
+## 8. Audit & Rollback
+
+* Every Publish creates a version snapshot (rule diff), viewable in history.
+* Rollback = revert to prior version, not just Disable — Disable stops firing but doesn't restore last-known-good config if edited badly.
+* Execution Log records: which rule fired, for which session/customer, what action, timestamp — needed to debug conflicting or over-firing rules.
+
+---
+
+## 9. Open Items Still Needing a Decision
+
+* Exact global cap number (3 or 4) — pick one, make it a setting not a hardcoded constant.
+* Whether Frequency Cap counts across Website + POS + Kiosk combined, or per-channel separately (recommend: per-channel, since customer experience differs).
+* Whether "Stop Processing" should override the global frequency cap (recommend: yes, admin intent should win).
+
+
+MTC Studio:
+
+Create/edit/test rules locally.
+Store rule definitions locally during development.
+Publish/export the compiled rule JSON (or database dump) to the website.
+
+Website:
+
+Store the published rule data.
+Execute/consume the published rules.
+Never provide rule editing.
+
+No local API server is required if your publish process deploys the rule data directly to the website's database or files. The website then reads the deployed rules locally.

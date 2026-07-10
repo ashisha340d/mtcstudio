@@ -1,7 +1,7 @@
 const { dbAll } = require('../database/db');
 const { syncMedia } = require('./mediaSyncService');
 
-const SYNC_URL = 'https://munchtimecafe.com.np/api/synccakes.php';
+const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/synccakes.php`;
 const API_KEY = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
 
 // Full v3 cake catalogue — replicated wholesale to the webserver's MariaDB,

@@ -3,7 +3,7 @@ const path = require('path');
 const { dbAll, dbRun } = require('../database/db');
 const { uploadsDir }   = require('../middleware/upload');
 
-const SYNC_URL = 'https://munchtimecafe.com.np/api/syncimages.php';
+const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/syncimages.php`;
 const API_KEY  = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
 
 /**

@@ -17,6 +17,5 @@ robocopy "%SRC%" "%DEST%" /E /Z /R:2 /W:5 ^
   /XD "%SRC%\.git" "%SRC%\.claude" "%SRC%\.vscode" "%SRC%\.agents" ^
       "%SRC%\client" "%SRC%\node_modules" "%SRC%\server\node_modules" ^
       "%SRC%\server\logs" "%SRC%\server\backups" "%SRC%\server\certs" ^
-  /XF "*.log" "*.pem" ".env"
-
+  /XF "*.log" "*.pem" ".env" ".env.local" ".env.live" ".env.production"
 pause

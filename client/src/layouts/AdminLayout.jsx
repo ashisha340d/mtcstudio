@@ -13,6 +13,7 @@ import LiveShelf from '../pages/LiveShelf/LiveShelf';
 import CakeCatalogue from '../pages/CakeCatalogue/CakeCatalogue';
 import FileMaintenance from '../pages/FileMaintenance/FileMaintenance';
 import CRM from '../pages/CRM/CRM';
+import Automation from '../pages/Automation/Automation';
 import SystemMonitor from '../pages/SystemMonitor/SystemMonitor';
 import SalesReport from '../pages/SalesReport/SalesReport';
 import DayEnd from '../pages/DayEnd/DayEnd';
@@ -47,6 +48,7 @@ const ALL_APPS = [
   { key: 'cake-catalogue', label: 'Cake Catalogue', icon: '🍰', path: '/cake-catalogue', accent: '#e91e8c', desc: 'Website cake catalogue', component: CakeCatalogue },
   { key: 'blogs', label: 'Blogs', icon: '✍', path: '/blogs', accent: '#d97706', desc: 'Articles & content', component: BlogsApp },
   { key: 'crm', label: 'CRM', icon: '👥', path: '/crm', accent: '#0891b2', desc: 'Customers & loyalty', component: CRM },
+  { key: 'automation', label: 'Automation', icon: '⚙️', path: '/automation', accent: '#9333ea', desc: 'Marketing rule engine', component: Automation },
   { key: 'sales-report', label: 'Sales Report', icon: '📊', path: '/sales-report', accent: '#10b981', desc: 'Daily sales & order analytics', component: SalesReport },
   { key: 'day-end', label: 'Day End', icon: '🔒', path: '/day-end', accent: '#b45309', desc: 'Daily closing / Z report', component: DayEnd },
   { key: 'system-monitor', label: 'System Monitor', icon: '⚡', path: '/system-monitor', accent: '#0f766e', desc: 'Status · Devices · Logs', component: SystemMonitor },
@@ -94,12 +96,13 @@ const GROUP_DEFS = {
   'blogs': { col: 1, row: 4 },
   // Apps — col 2 (no Dashboard)
   'crm': { col: 2, row: 0 },
-  'pos': { col: 2, row: 1 },
-  'kds': { col: 2, row: 2 },
-  'cake-orders': { col: 2, row: 3 },
-  'sales-report': { col: 2, row: 4 },
-  'day-end': { col: 2, row: 5 },
-  'system-monitor': { col: 2, row: 6 },
+  'automation': { col: 2, row: 1 },
+  'pos': { col: 2, row: 2 },
+  'kds': { col: 2, row: 3 },
+  'cake-orders': { col: 2, row: 4 },
+  'sales-report': { col: 2, row: 5 },
+  'day-end': { col: 2, row: 6 },
+  'system-monitor': { col: 2, row: 7 },
 };
 const COL_X = [16, 120, 224];
 const ROW_Y0 = 40;   // y of first icon row (below group label)
@@ -130,7 +133,7 @@ function loadShortcuts() {
   return [
     'categories', 'food-menu', 'file-maintenance',
     'media', 'liveshelf', 'cake-catalogue', 'blogs',
-    'crm', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor',
+    'crm', 'automation', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor',
   ];
 }
 function saveShortcuts(s) { localStorage.setItem(LS_SHORTCUTS, JSON.stringify(s)); }
@@ -378,7 +381,7 @@ function ShortcutsPanel({ shortcuts, onToggle, onArrange, onClose }) {
           {[
             { header: '📂  Files', keys: ['categories', 'food-menu', 'file-maintenance'] },
             { header: '🌐  CMS', keys: ['media', 'liveshelf', 'cake-catalogue', 'blogs'] },
-            { header: '⚡  Apps', keys: ['crm', 'pos', 'kds', 'cake-orders', 'system-monitor'] },
+            { header: '⚡  Apps', keys: ['crm', 'automation', 'pos', 'kds', 'cake-orders', 'system-monitor'] },
           ].map(group => (
             <div key={group.header}>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#9c8870', padding: '8px 8px 3px' }}>{group.header}</div>

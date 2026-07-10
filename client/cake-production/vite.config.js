@@ -1,39 +1,16 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import fs from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
-// Mirrors client/vite.config.js's config-reading logic exactly, so this app
-// resolves the same POS server target from the same shared mtc.config.env.
-function readConfig() {
-  const file = fileURLToPath(new URL('../../mtc.config.env', import.meta.url));
-  if (!fs.existsSync(file)) return {};
+export default defineConfig(({ mode }) => {
+  // Mirrors client/vite.config.js's config-reading logic exactly, so this app
+  // resolves the same POS server target from the same client/.env files.
+  const env = loadEnv(mode, fileURLToPath(new URL('../', import.meta.url)), '');
+  const devPort = 5174; // client/ dev server uses 5173
+  const appTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:3001';
 
-  return Object.fromEntries(
-    fs.readFileSync(file, 'utf8')
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith('#') && line.includes('='))
-      .map(line => {
-        const idx = line.indexOf('=');
-        return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
-      })
-  );
-}
-
-const net = readConfig();
-const devHost = net.DEV_IP || '0.0.0.0';
-const devPort = 5174; // client/ dev server uses 5173
-const appHost = net.HTTP_IP && net.HTTP_IP !== '0.0.0.0' ? net.HTTP_IP : 'localhost';
-const httpsEnabled = String(net.HTTPS_ENABLED || '').toLowerCase() === 'true';
-const appProtocol = httpsEnabled ? 'https' : 'http';
-const appPort = httpsEnabled
-  ? Number(net.HTTPS_PORT) || 443
-  : Number(net.PORT || net.HTTP_PORT) || 3000;
-const appTarget = `${appProtocol}://${appHost}:${appPort}`;
-
-export default defineConfig({
+  return {
   base: '/cake-app/',
 
   plugins: [
@@ -82,7 +59,7 @@ export default defineConfig({
   },
 
   server: {
-    host: devHost,
+    host: '0.0.0.0',
     port: devPort,
 
     proxy: {
@@ -92,4 +69,5 @@ export default defineConfig({
       '/socket.io': { target: appTarget, changeOrigin: true, secure: false, ws: true },
     },
   },
+  };
 });

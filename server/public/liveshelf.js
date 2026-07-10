@@ -1,4 +1,4 @@
-const API_URL = 'http://192.168.1.90:3001/api/liveshelf';
+const API_URL = '/api/liveshelf';
 
 const shelfContainer = document.getElementById('shelfContainer');
 const lastUpdated = document.getElementById('lastUpdated');

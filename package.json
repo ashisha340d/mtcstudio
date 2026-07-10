@@ -5,6 +5,9 @@
   "type": "commonjs",
   "scripts": {
     "dev:server": "npm --prefix server run dev",
+    "dev:server:local": "cross-env APP_ENV=local npm --prefix server run dev",
+    "dev:server:live": "cross-env APP_ENV=live npm --prefix server run dev",
+    "start:production": "cross-env APP_ENV=production npm --prefix server run start",
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build"
   },

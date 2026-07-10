@@ -11,16 +11,16 @@
 //  - idempotent import keyed on web_orders_pending.web_order_id (UNIQUE)
 //  - every imported order is acknowledged; duplicates are re-acknowledged
 //
-//  Config (mtc.config.env / env):
+//  Config (server/.env.<APP_ENV>):
 //    WEB_ORDER_BRIDGE_ENABLED  default true
-//    WEB_ORDER_WS_URL          default ws://127.0.0.1:3001/pos-bridge
+//    WEB_ORDER_WS_URL          required
 //    WEB_ORDER_BRIDGE_TOKEN    default mtc-pos-bridge-2026
 const WebSocket = require('ws');
 const { dbAll, dbGet, dbRun, transaction } = require('../pos/db');
 const socketServer = require('../pos/socketServer');
 
 const ENABLED = String(process.env.WEB_ORDER_BRIDGE_ENABLED ?? 'true').toLowerCase() !== 'false';
-const WS_URL = process.env.WEB_ORDER_WS_URL || 'ws://127.0.0.1:3001/pos-bridge';
+const WS_URL = process.env.WEB_ORDER_WS_URL;
 const TOKEN = process.env.WEB_ORDER_BRIDGE_TOKEN || 'mtc-pos-bridge-2026';
 const WATCHDOG_MS = 75_000;   // no traffic for this long → assume dead, reconnect
 const PING_MS = 25_000;       // client-side ping keeps traffic flowing both ways
@@ -73,7 +73,12 @@ async function importOrder(o) {
 
   const c = o.customer || {}, t = o.totals || {}, pay = o.payment || {};
   const resolved = [];
-  for (const it of o.items) resolved.push({ ...it, ...(await resolveItem(it)) });
+  for (const it of o.items) {
+    // cake items never map to POS food products — approval books them into
+    // cake_orders from their cake_json instead of a KOT line
+    if (it.kind === 'cake') resolved.push({ ...it, productId: null, variantId: null });
+    else resolved.push({ ...it, ...(await resolveItem(it)) });
+  }
 
   const pendingId = await transaction(async (tx) => {
     const ins = await tx.dbRun(
@@ -97,18 +102,19 @@ async function importOrder(o) {
       await tx.dbRun(
         `INSERT INTO web_order_items
            (pending_id, web_pid, kind, product_id, variant_id, item_name, variant_name,
-            quantity, unit_price, line_total, modifiers_json, special_note, sort_order)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            quantity, unit_price, line_total, modifiers_json, special_note, sort_order, cake_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [ins.lastInsertRowid, it.pid == null ? null : String(it.pid), it.kind || 'product',
          it.productId, it.variantId, String(it.name || 'Item'), it.variant || null,
          Math.max(1, Math.floor(+it.qty || 1)), +it.unitPrice || 0, +it.lineTotal || 0,
-         it.modifiers?.length ? JSON.stringify(it.modifiers) : null, it.note || null, sort++]
+         it.modifiers?.length ? JSON.stringify(it.modifiers) : null, it.note || null, sort++,
+         it.cake ? JSON.stringify(it.cake) : null]
       );
     }
     return ins.lastInsertRowid;
   });
 
-  const unmatched = resolved.filter(i => !i.productId).length;
+  const unmatched = resolved.filter(i => i.kind !== 'cake' && !i.productId).length;
   log(`imported ${o.orderNumber} (web #${webOrderId}) as pending #${pendingId}` +
       (unmatched ? ` — ${unmatched} item(s) unmatched to POS products` : ''));
 
@@ -131,15 +137,20 @@ function sendRaw(obj) {
   return false;
 }
 
-// Status update to the website (buffered while offline, flushed on reconnect)
-function sendStatus(webOrderId, status, { posOrderId = null, reason = null } = {}) {
-  const msg = { type: 'status', orderId: webOrderId, status, posOrderId, reason };
+// Send now or buffer until reconnect (flushed in onOpen)
+function sendOrQueue(msg, what) {
   if (!sendRaw(msg)) {
     pendingStatusQueue.push(msg);
-    log(`status ${status} for web #${webOrderId} queued (offline)`);
+    log(`${what} queued (offline)`);
   } else {
-    log(`status ${status} sent for web #${webOrderId}`);
+    log(`${what} sent`);
   }
+}
+
+// Status update to the website (buffered while offline, flushed on reconnect)
+function sendStatus(webOrderId, status, { posOrderId = null, reason = null, progress = null, etaMinutes = null, lines = null } = {}) {
+  sendOrQueue({ type: 'status', orderId: webOrderId, status, posOrderId, reason, progress, etaMinutes, lines },
+    `status ${status} for web #${webOrderId}`);
 }
 
 // Relay POS-side lifecycle events (serve-all → READY, checkout → COMPLETED,
@@ -151,6 +162,69 @@ async function notifyPosOrderEvent(posOrderId, status) {
       [posOrderId]);
     if (row) sendStatus(row.web_order_id, status, { posOrderId });
   } catch (e) { log('notifyPosOrderEvent failed:', e.message); }
+}
+
+// Per-item KDS progress for web-origin orders: counts SERVED vs total live KOT
+// items on the POS order and pushes PREPARING {done,total} (website renders
+// "Order Prepared (n/N)"). When every item is served it pushes READY ("Packed").
+// Reads pos_kot_items only — no POS model change.
+// TODO(delivery-tracking): after READY/Packed, track a delivery leg
+// (OUT_FOR_DELIVERY → DELIVERED) via a rider-dispatch field/event, then relay
+// it here the same way.
+async function notifyKotItemProgress(posOrderId) {
+  try {
+    const row = await dbGet(
+      `SELECT web_order_id FROM web_orders_pending WHERE pos_order_id=? AND status='APPROVED'`,
+      [posOrderId]);
+    if (!row) return;
+    // Per-line served flags ride along so the website bill can tick items green
+    const rows = await dbAll(
+      `SELECT ki.product_name AS name, ki.quantity AS qty, (ki.status='SERVED') AS served
+       FROM pos_kot_items ki
+       JOIN pos_kots k ON k.id = ki.kot_id
+       WHERE k.order_id=? AND k.status!='CANCELLED' AND ki.status!='CANCELLED'
+       ORDER BY ki.id`, [posOrderId]);
+    const total = rows.length;
+    if (!total) return;
+    const done = rows.reduce((s, r) => s + (r.served ? 1 : 0), 0);
+    const lines = rows.map(r => ({ name: r.name, qty: +r.qty || 1, served: r.served ? 1 : 0 }));
+    if (done >= total) sendStatus(row.web_order_id, 'READY', { posOrderId, progress: { done, total }, lines });
+    else sendStatus(row.web_order_id, 'PREPARING', { posOrderId, progress: { done, total }, lines });
+  } catch (e) { log('notifyKotItemProgress failed:', e.message); }
+}
+
+// KOT line edits (item added / qty change / cancel) on a web-origin order:
+// push the exact live bill snapshot so the website bill mirrors the POS bill.
+// Regular POS orders exit on the first indexed lookup — nothing built or sent.
+async function notifyKotItemsChanged(posOrderId) {
+  try {
+    const row = await dbGet(
+      `SELECT web_order_id FROM web_orders_pending WHERE pos_order_id=? AND status='APPROVED'`,
+      [posOrderId]);
+    if (!row) return;
+    const items = await dbAll(
+      `SELECT ki.product_name AS name, ki.quantity AS qty, ki.unit_price AS price, ki.notes
+       FROM pos_kot_items ki
+       JOIN pos_kots k ON k.id = ki.kot_id
+       WHERE k.order_id=? AND k.status!='CANCELLED' AND ki.status!='CANCELLED'
+       ORDER BY ki.id`, [posOrderId]);
+    const total = +items.reduce((s, i) => s + (+i.qty || 0) * (+i.price || 0), 0).toFixed(2);
+    sendOrQueue({ type: 'items', orderId: row.web_order_id, posOrderId, items, total },
+      `bill snapshot (${items.length} lines) for web #${row.web_order_id}`);
+  } catch (e) { log('notifyKotItemsChanged failed:', e.message); }
+}
+
+// Same relay for cake-order lifecycle (READY / DELIVERED / CANCELLED). Only
+// drives the website status when the web order was cake-only — mixed orders
+// (food + cake) stay driven by their pos_order events to avoid status ping-pong.
+async function notifyCakeOrderEvent(cakeOrderId, status) {
+  try {
+    const row = await dbGet(
+      `SELECT web_order_id FROM web_orders_pending
+       WHERE cake_order_id=? AND pos_order_id IS NULL AND status='APPROVED'`,
+      [cakeOrderId]);
+    if (row) sendStatus(row.web_order_id, status, { posOrderId: cakeOrderId });
+  } catch (e) { log('notifyCakeOrderEvent failed:', e.message); }
 }
 
 // ── Connection lifecycle ─────────────────────────────────────────────────────
@@ -232,4 +306,4 @@ function stop() {
   try { ws?.close(); } catch {}
 }
 
-module.exports = { start, stop, sendStatus, notifyPosOrderEvent };
+module.exports = { start, stop, sendStatus, notifyPosOrderEvent, notifyCakeOrderEvent, notifyKotItemProgress, notifyKotItemsChanged };

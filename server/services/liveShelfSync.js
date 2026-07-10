@@ -2,8 +2,8 @@ const { dbAll, dbRun } = require('../database/db');
 const scheduleSvc = require('./liveStoreScheduleService');
 const { getNepalDayBoundsUTC } = require('../utils/nepalDateTime');
 
-const SYNC_API_URL     = 'https://munchtimecafe.com.np/api/syncproducts.php';
-const SCHEDULE_API_URL = 'https://munchtimecafe.com.np/api/syncschedule.php';
+const SYNC_API_URL     = `${process.env.PUBLIC_SITE_URL}/api/syncproducts.php`;
+const SCHEDULE_API_URL = `${process.env.PUBLIC_SITE_URL}/api/syncschedule.php`;
 const API_KEY          = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
 
 let _syncing     = false;

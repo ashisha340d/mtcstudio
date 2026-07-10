@@ -295,6 +295,177 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_featured_image (featured_image)`);
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_author_image (author_image)`);
     await dbRun(`DROP TABLE IF EXISTS media_tags`); // superseded by live-computed usage (see mediaService.js)
+
+    // --- Automation Rule Engine (schema v1) ---
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_condition_types (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        \`key\`     VARCHAR(100) NOT NULL UNIQUE,
+        label       VARCHAR(255) NOT NULL,
+        category    ENUM('product','customer','history','context','cart','business') NOT NULL,
+        value_schema JSON,
+        is_active   TINYINT DEFAULT 1,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_action_types (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        \`key\`     VARCHAR(100) NOT NULL UNIQUE,
+        label       VARCHAR(255) NOT NULL,
+        category    ENUM('sales','service','kitchen','inventory','operations','cx','notifications','knowledge','custom') NOT NULL,
+        value_schema JSON,
+        is_active   TINYINT DEFAULT 1,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_category_actions (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        category    VARCHAR(100) NOT NULL,
+        action_key  VARCHAR(100) NOT NULL,
+        UNIQUE KEY uniq_cat_action (category, action_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_settings (
+        scope               ENUM('website','pos','kiosk') PRIMARY KEY,
+        global_session_cap  INT DEFAULT 3,
+        conflict_strategy   VARCHAR(100) DEFAULT 'priority_then_score',
+        stop_overrides_cap  TINYINT DEFAULT 1,
+        updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    const settingsCount = await dbGet(`SELECT COUNT(*) as cnt FROM automation_settings`);
+    if (!settingsCount || settingsCount.cnt === 0) {
+        for (const scope of ['website', 'pos', 'kiosk']) {
+            await dbRun(
+                `INSERT INTO automation_settings (scope, global_session_cap, conflict_strategy, stop_overrides_cap)
+                 VALUES (?, 3, 'priority_then_score', 1)`,
+                [scope]
+            );
+        }
+    }
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_rules (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        name            VARCHAR(255) NOT NULL,
+        description     TEXT,
+        priority        INT DEFAULT 50,
+        status          ENUM('draft','published','disabled') DEFAULT 'draft',
+        scope           ENUM('website','pos','kiosk') NOT NULL,
+        trigger_type    VARCHAR(100) NOT NULL,
+        conditions      JSON,
+        actions         JSON,
+        schedule        JSON,
+        frequency_cap   JSON,
+        stop_processing TINYINT DEFAULT 0,
+        version         INT DEFAULT 1,
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_rules_scope_status (scope, status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_rule_versions (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        rule_id     INT NOT NULL,
+        version     INT NOT NULL,
+        snapshot    JSON NOT NULL,
+        published_by VARCHAR(255),
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_rv_rule (rule_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_execution_log (
+        id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+        rule_id     INT NOT NULL,
+        scope       ENUM('website','pos','kiosk') NOT NULL,
+        session_id  VARCHAR(255),
+        customer_id VARCHAR(32),
+        action_key  VARCHAR(100),
+        fired       TINYINT DEFAULT 1,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_exec_rule (rule_id),
+        INDEX idx_exec_session (session_id),
+        INDEX idx_exec_customer (customer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS automation_test_runs (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        rule_id        INT NOT NULL,
+        sample_payload JSON,
+        result         JSON,
+        created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_test_rule (rule_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    const condTypeCount = await dbGet(`SELECT COUNT(*) as cnt FROM automation_condition_types`);
+    if (!condTypeCount || condTypeCount.cnt === 0) {
+        const conditionTypes = [
+            ['category_in', 'Category is one of', 'product', { field: 'category_id', op: 'in', valueType: 'array<int>' }],
+            ['product_in', 'Product is one of', 'product', { field: 'product_id', op: 'in', valueType: 'array<int>' }],
+            ['price_range', 'Price between', 'product', { field: 'price', op: 'between', valueType: '[number,number]' }],
+            ['is_first_order', 'Is first order', 'customer', { field: 'order_count', op: 'eq', valueType: 'boolean' }],
+            ['loyalty_tier', 'Loyalty tier is', 'customer', { field: 'loyalty_tier', op: 'eq', valueType: 'string' }],
+            ['tag_has', 'Customer has tag', 'customer', { field: 'tags', op: 'contains', valueType: 'string' }],
+            ['last_order_days_ago', 'Last order was X days ago', 'history', { field: 'last_order_days_ago', op: 'gte', valueType: 'number' }],
+            ['order_count_gte', 'Total orders at least', 'history', { field: 'order_count', op: 'gte', valueType: 'number' }],
+            ['weather_condition', 'Weather condition is', 'context', { field: 'weather', op: 'eq', valueType: 'string' }],
+            ['time_of_day', 'Time of day is', 'context', { field: 'time_of_day', op: 'eq', valueType: 'string' }],
+            ['day_of_week', 'Day of week is', 'context', { field: 'day_of_week', op: 'in', valueType: 'array<int>' }],
+            ['cart_total_gte', 'Cart total at least', 'cart', { field: 'cart_total', op: 'gte', valueType: 'number' }],
+            ['cart_item_count_gte', 'Cart item count at least', 'cart', { field: 'cart_item_count', op: 'gte', valueType: 'number' }],
+            ['cart_has_category', 'Cart contains category', 'cart', { field: 'cart_categories', op: 'contains', valueType: 'int' }],
+            ['stock_level_below', 'Stock level below', 'business', { field: 'stock_level', op: 'lt', valueType: 'number' }],
+            ['item_out_of_stock', 'Item is out of stock', 'business', { field: 'stock_level', op: 'eq', valueType: 'boolean' }],
+        ];
+        for (const [key, label, category, schema] of conditionTypes) {
+            await dbRun(
+                `INSERT INTO automation_condition_types (\`key\`, label, category, value_schema) VALUES (?, ?, ?, ?)`,
+                [key, label, category, JSON.stringify(schema)]
+            );
+        }
+    }
+
+    const actionTypeCount = await dbGet(`SELECT COUNT(*) as cnt FROM automation_action_types`);
+    if (!actionTypeCount || actionTypeCount.cnt === 0) {
+        const actionTypes = [
+            ['show_popup_discount', 'Show discount popup', 'sales', { params: ['discount_pct', 'message'] }],
+            ['recommend_product', 'Recommend product', 'sales', { params: ['product_id', 'message'] }],
+            ['show_upsell_banner', 'Show upsell banner', 'service', { params: ['message', 'target_product_id'] }],
+            ['flag_kitchen_note', 'Flag kitchen note', 'kitchen', { params: ['note'] }],
+            ['suppress_item_promo', 'Suppress item promo', 'inventory', { params: ['product_id'] }],
+            ['notify_staff', 'Notify staff', 'operations', { params: ['message', 'channel'] }],
+            ['show_survey_prompt', 'Show survey prompt', 'cx', { params: ['survey_id'] }],
+            ['send_sms', 'Send SMS', 'notifications', { params: ['template_id'] }],
+            ['send_email', 'Send email', 'notifications', { params: ['template_id'] }],
+            ['show_info_tooltip', 'Show info tooltip', 'knowledge', { params: ['message'] }],
+            ['custom_webhook', 'Call custom webhook', 'custom', { params: ['url', 'payload_template'] }],
+        ];
+        for (const [key, label, category, schema] of actionTypes) {
+            await dbRun(
+                `INSERT INTO automation_action_types (\`key\`, label, category, value_schema) VALUES (?, ?, ?, ?)`,
+                [key, label, category, JSON.stringify(schema)]
+            );
+        }
+    }
+
+    const catActionCount = await dbGet(`SELECT COUNT(*) as cnt FROM automation_category_actions`);
+    if (!catActionCount || catActionCount.cnt === 0) {
+        const categoryActions = [
+            ['sales', 'show_popup_discount'], ['sales', 'recommend_product'],
+            ['service', 'show_upsell_banner'],
+            ['kitchen', 'flag_kitchen_note'],
+            ['inventory', 'suppress_item_promo'],
+            ['operations', 'notify_staff'],
+            ['cx', 'show_survey_prompt'],
+            ['notifications', 'send_sms'], ['notifications', 'send_email'],
+            ['knowledge', 'show_info_tooltip'],
+            ['custom', 'custom_webhook'],
+        ];
+        for (const [category, actionKey] of categoryActions) {
+            await dbRun(
+                `INSERT INTO automation_category_actions (category, action_key) VALUES (?, ?)`,
+                [category, actionKey]
+            );
+        }
+    }
 }
 
 let readyResolve, readyReject;

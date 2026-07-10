@@ -166,6 +166,11 @@ router.patch('/:id/status', async (req, res) => {
 
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: existing.id, action: 'PRODUCTION_STATUS', delta: { from: existing.production_status, to: status } });
   socketServer.emitCakeProductionChanged({ cake_order_id: existing.id, kind: 'status' });
+  // web-origin cake orders: production stage → customer-facing status (no-op otherwise)
+  if (status === 'In Production')
+    require('../../services/webOrderBridge').notifyCakeOrderEvent(existing.id, 'BAKING');
+  else if (status === 'Ready for Delivery')
+    require('../../services/webOrderBridge').notifyCakeOrderEvent(existing.id, 'READY');
   res.json(await getFullForSync(existing.id));
 });
 

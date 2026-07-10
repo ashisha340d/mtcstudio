@@ -537,6 +537,9 @@ router.patch('/:id/status', async (req, res) => {
   });
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: existing.id, action: 'STATUS', delta: { from: existing.status, to: status } });
   socketServer.emitCakeProductionChanged({ cake_order_id: existing.id, kind: 'status' });
+  // web-origin cake orders: push the lifecycle change back to the website (no-op otherwise)
+  if (status === 'DELIVERED' || status === 'CANCELLED')
+    require('../../services/webOrderBridge').notifyCakeOrderEvent(existing.id, status);
   res.json(await getFull(existing.id));
 });
 
