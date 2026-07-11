@@ -2,8 +2,8 @@ const { dbAll, dbRun } = require('../database/db');
 const scheduleSvc = require('./liveStoreScheduleService');
 const { getNepalDayBoundsUTC } = require('../utils/nepalDateTime');
 
-const SYNC_API_URL     = `${process.env.PUBLIC_SITE_URL}/api/syncproducts.php`;
-const SCHEDULE_API_URL = `${process.env.PUBLIC_SITE_URL}/api/syncschedule.php`;
+const SYNC_API_URL     = `${process.env.PUBLIC_SITE_URL}/api/sync/products`;
+const SCHEDULE_API_URL = `${process.env.PUBLIC_SITE_URL}/api/sync/schedule`;
 const API_KEY          = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
 
 let _syncing     = false;
@@ -51,16 +51,10 @@ async function _syncStockOnly() {
 
         const data = rows.map(r => ({ id: r.id, quantity: r.quantity }));
 
-        const formBody = new URLSearchParams({
-            api_key: API_KEY,
-            mode:    'qty_only',
-            data:    JSON.stringify(data),
-        });
-
         const response = await fetch(SYNC_API_URL, {
             method:  'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body:    formBody.toString(),
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ api_key: API_KEY, mode: 'qty_only', data }),
         });
 
         if (!response.ok) {
@@ -147,18 +141,12 @@ async function syncLiveShelf() {
             show_online: 1,
         }));
 
-        // mode=full_replace tells the remote PHP to delete any row whose id
+        // mode=full_replace tells the remote endpoint to delete any row whose id
         // is not present in this payload before upserting what's here.
-        const formBody = new URLSearchParams({
-            api_key: API_KEY,
-            mode:    'full_replace',
-            data:    JSON.stringify(data),
-        });
-
         const response = await fetch(SYNC_API_URL, {
             method:  'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body:    formBody.toString(),
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ api_key: API_KEY, mode: 'full_replace', data }),
         });
 
         if (!response.ok) {
@@ -203,15 +191,10 @@ async function syncSchedule() {
     const days = await scheduleSvc.getUnsyncedSchedule();
     if (days.length === 0) return { synced: 0 };
 
-    const formBody = new URLSearchParams({
-        api_key: API_KEY,
-        data:    JSON.stringify(days),
-    });
-
     const response = await fetch(SCHEDULE_API_URL, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:    formBody.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ api_key: API_KEY, data: days }),
     });
 
     if (!response.ok) {

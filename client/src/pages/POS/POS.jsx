@@ -78,6 +78,7 @@ const W = {
   orange: '#c1440e',
   green: '#2d7a2d',
   red: '#c0392b',
+  blue: '#1d4ed8',
 };
 
 /* ── Draggable · Resizable · Persistent Modal Shell ─────────── */
@@ -786,7 +787,7 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
 }
 
 /* ── Cart Line ────────────────────────────────────────────────── */
-function CartLine({ item, onQty, onRemove, onNotesChange, onDoubleClick, onHomePack }) {
+function CartLine({ item, isLatest, onQty, onRemove, onNotesChange, onDoubleClick, onHomePack }) {
   const [hovered, setHovered] = useState(false);
   const addonTotal = (item.modifiers ?? []).reduce((s, m) => s + (m.price ?? 0), 0);
   const unitWithAddons = item.unit_price + addonTotal;
@@ -816,7 +817,7 @@ function CartLine({ item, onQty, onRemove, onNotesChange, onDoubleClick, onHomeP
       >
         <p style={{
           flex: 1, minWidth: 0, margin: 0,
-          fontSize: 12, fontWeight: 800, color: W.text1,
+          fontSize: 12, fontWeight: 800, color: isLatest ? W.blue : W.text1,
           textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.2,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{label}</p>
@@ -1017,6 +1018,7 @@ export default function POS() {
   const [saving, setSaving] = useState(false);
   const searchRef = useRef(null);
   const socketRef = useRef(null);
+  const cartScrollRef = useRef(null);
 
   /* ── Panel layout state ─────────────────────────────────────── */
   const containerRef = useRef(null);
@@ -1141,6 +1143,17 @@ export default function POS() {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [navigate, productModal, custModal, checkoutModal, ctxMenu]);
+
+  /* ── Auto-focus search on load ──────────────────────────────── */
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  /* ── Auto-scroll cart to bottom when it grows ───────────────── */
+  useEffect(() => {
+    const el = cartScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [cart.length, editableItems.length]);
 
   /* ── Load categories + tables ───────────────────────────── */
   useEffect(() => {
@@ -1473,10 +1486,10 @@ export default function POS() {
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 0 rgba(255,255,255,0.45)', flex: 1 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: W.blue, letterSpacing: '0.02em', flexShrink: 0 }}>{todayStr}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 0 rgba(255,255,255,0.45)', flex: 1, textAlign: 'right' }}>
             {existingOrderId ? 'Edit Order' : 'New Order'} — {orderLabel}
           </span>
-          <span style={{ fontSize: 9, color: W.text3 }}>{todayStr}</span>
         </div>
 
         <div style={{ display: 'flex', gap: 5 }}>
@@ -1541,7 +1554,7 @@ export default function POS() {
       </button>
 
       {/* Scrollable items */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={cartScrollRef} style={{ flex: 1, overflowY: 'auto' }}>
         {editableItems.length > 0 && (
           <div style={{ padding: '10px 16px 0' }}>
             <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: W.text3, marginBottom: 6, marginTop: 0 }}>Sent to Kitchen</p>
@@ -1570,8 +1583,8 @@ export default function POS() {
               </div>
               <p style={{ fontSize: 12, color: W.text3, fontWeight: 600, margin: 0 }}>Tap a dish to add it</p>
             </div>
-            : cart.map(item => (
-              <CartLine key={item._id} item={item}
+            : cart.map((item, idx) => (
+              <CartLine key={item._id} item={item} isLatest={idx === 0}
                 onQty={changeQty} onRemove={removeItem}
                 onNotesChange={changeNotes}
                 onDoubleClick={() => handleCartItemClick(item)}
@@ -1582,12 +1595,18 @@ export default function POS() {
         </div>
       </div>
 
+      {/* Total */}
+      <div style={{ padding: '8px 16px', display: 'flex', justifyContent: 'flex-end', alignItems: 'baseline', gap: 6, borderTop: `1px solid ${W.border}`, flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: W.text3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total</span>
+        <span style={{ fontSize: 18, fontWeight: 800, color: W.text1 }}>₹{grandTotal.toFixed(0)}</span>
+      </div>
+
       {/* Action buttons */}
-      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${W.border}`, flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
+      <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderTop: `1px solid ${W.border}`, flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
         <button
           onClick={liveOrderId ? handleCheckout : () => { }}
           style={{
-            width: '100%', height: 48,
+            flex: 1, height: 48,
             borderRadius: 10, border: 'none',
             background: liveOrderId ? W.green : 'rgba(45,122,45,0.15)',
             color: liveOrderId ? '#fff' : 'rgba(45,122,45,0.5)',
@@ -1602,36 +1621,19 @@ export default function POS() {
           Checkout
         </button>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={handlePrint}
-            disabled={grandTotal === 0}
-            style={{
-              flex: 1, height: 44, borderRadius: 9,
-              border: `2px solid ${grandTotal > 0 ? W.border : W.borderLight}`,
-              background: 'transparent',
-              color: grandTotal > 0 ? W.text2 : W.text3,
-              fontSize: 12, fontWeight: 700,
-              cursor: grandTotal > 0 ? 'pointer' : 'not-allowed',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              transition: 'all 0.12s',
-            }}
-          >🖨 Print</button>
-
-          <button
-            onClick={handleSaveAndSend}
-            disabled={saving}
-            style={{
-              flex: 2, height: 44,
-              borderRadius: 9, border: 'none',
-              background: W.orange, color: '#fff',
-              fontSize: 13, fontWeight: 800,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              boxShadow: '0 3px 12px rgba(193,68,14,0.25)',
-              transition: 'all 0.15s', letterSpacing: '0.03em',
-            }}
-          >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
-        </div>
+        <button
+          onClick={handleSaveAndSend}
+          disabled={saving}
+          style={{
+            flex: 1, height: 48,
+            borderRadius: 10, border: 'none',
+            background: W.orange, color: '#fff',
+            fontSize: 14, fontWeight: 800,
+            cursor: saving ? 'not-allowed' : 'pointer',
+            boxShadow: '0 3px 12px rgba(193,68,14,0.25)',
+            transition: 'all 0.15s', letterSpacing: '0.03em',
+          }}
+        >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
       </div>
     </div>
   );

@@ -186,7 +186,7 @@ async function getLookups() {
                WHERE lookup_type='CREAM_TYPE' AND is_active=1 ORDER BY sort_order, name`).catch(() => []),
         dbAll(`SELECT code, name, value AS icon FROM lookup_master
                WHERE lookup_type='PRODUCT_BADGE' AND is_active=1 ORDER BY sort_order, name`).catch(() => []),
-        dbAll(`SELECT name FROM cake_shapes WHERE is_active=1 ORDER BY sort_order`).catch(() => []),
+        dbAll(`SELECT name FROM lookup_master WHERE lookup_type='SHAPE_TYPE' AND is_active=1 ORDER BY sort_order, name`).catch(() => []),
         dbAll(`SELECT DISTINCT name FROM cake_design_flavours ORDER BY name`),
     ]);
     return {

@@ -3,64 +3,15 @@ const path = require('path');
 const { dbAll, dbRun } = require('../database/db');
 const { uploadsDir }   = require('../middleware/upload');
 
-const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/syncimages.php`;
+const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/sync/images`;
 const API_KEY  = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
 
-/**
- * Build a multipart/form-data body manually using Buffers.
- * Node.js built-in FormData+Blob does not produce $_FILES-compatible
- * multipart bodies for PHP, so we construct the raw bytes ourselves.
- */
-function buildMultipart(fields, file) {
-    const boundary = '----MTC' + Date.now().toString(16) + Math.random().toString(16).slice(2);
-    const CRLF = '\r\n';
-    const parts = [];
-
-    // Text fields
-    for (const [name, value] of Object.entries(fields)) {
-        parts.push(Buffer.from(
-            `--${boundary}${CRLF}` +
-            `Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}` +
-            `${value}${CRLF}`
-        ));
-    }
-
-    // File part
-    parts.push(Buffer.from(
-        `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="file"; filename="${file.filename}"${CRLF}` +
-        `Content-Type: ${file.mimeType}${CRLF}${CRLF}`
-    ));
-    parts.push(file.buffer);
-    parts.push(Buffer.from(CRLF));
-
-    // Closing boundary
-    parts.push(Buffer.from(`--${boundary}--${CRLF}`));
-
-    return {
-        body:        Buffer.concat(parts),
-        contentType: `multipart/form-data; boundary=${boundary}`,
-    };
-}
-
 async function deleteRemote(filename) {
-    const boundary = '----MTC' + Date.now().toString(16) + Math.random().toString(16).slice(2);
-    const CRLF = '\r\n';
-    const body = Buffer.from(
-        `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="api_key"${CRLF}${CRLF}${API_KEY}${CRLF}` +
-        `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="action"${CRLF}${CRLF}delete${CRLF}` +
-        `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="filename"${CRLF}${CRLF}${filename}${CRLF}` +
-        `--${boundary}--${CRLF}`
-    );
-
     try {
         const res = await fetch(SYNC_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-            body,
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ api_key: API_KEY, action: 'delete', filename }),
         });
         const text = await res.text().catch(() => '');
         const json = JSON.parse(text);
@@ -84,17 +35,11 @@ async function uploadOne(row) {
     }
 
     const fileBuffer = fs.readFileSync(filePath);
-    const mimeType   = row.file_type || 'image/jpeg';
-
-    const { body, contentType } = buildMultipart(
-        { api_key: API_KEY, original_name: row.filename },
-        { filename: row.filename, mimeType, buffer: fileBuffer }
-    );
 
     const res = await fetch(SYNC_URL, {
         method:  'POST',
-        headers: { 'Content-Type': contentType },
-        body,
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ api_key: API_KEY, original_name: row.filename, file: fileBuffer.toString('base64') }),
     });
 
     const text = await res.text().catch(() => '');

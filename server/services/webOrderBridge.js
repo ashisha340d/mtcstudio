@@ -38,6 +38,13 @@ const log = (...a) => console.log(new Date().toISOString(), '[web-orders]', ...a
 // ── Product resolution — map a web item onto POS products/variants ──────────
 async function resolveItem(it) {
   let productId = null, variantId = null;
+  if (it.kind === 'shelf' && it.pid) {
+    const vid = +String(it.pid).replace('shelf-', '') || 0;
+    if (vid) {
+      const v = await dbGet(`SELECT id, product_id FROM product_variants WHERE id=?`, [vid]);
+      if (v) { productId = v.product_id; variantId = v.id; }
+    }
+  }
   if (it.kind === 'product' && Number.isInteger(+it.pid)) {
     const p = await dbGet(`SELECT id FROM products WHERE id=?`, [+it.pid]);
     if (p) productId = p.id;

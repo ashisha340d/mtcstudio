@@ -1,17 +1,12 @@
 const { dbAll } = require('../database/db');
 
-const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/syncmenu.php`;
+const SYNC_URL = `${process.env.PUBLIC_SITE_URL}/api/sync/menu`;
 const API_KEY  = 'MTC_LIVE_SHELF_2026_X7K9P2Q8';
-
-const TABLES = [
-    'categories', 'media_library', 'products', 'product_variants', 'product_images',
-    'product_modifier_assignments', 'modifier_groups', 'shared_modifiers', 'product_badges',
-];
 
 async function syncMenuCatalog() {
     // product_badges: the badge catalogue lives in lookup_master (lookup_type='PRODUCT_BADGE').
     // We ship it under a friendlier name so the remote menu can render badges dynamically.
-    const [categories, media_library, products, modifier_groups, shared_modifiers, product_badges] = await Promise.all([
+    const [categories, media_library, products, modifier_groups, shared_modifiers, product_badges, lookup_master] = await Promise.all([
         dbAll(`SELECT * FROM categories WHERE status = 'active'`),
         dbAll(`SELECT * FROM media_library`),
         dbAll(`SELECT * FROM products WHERE status = 'active' AND featured = 1`),
@@ -21,6 +16,13 @@ async function syncMenuCatalog() {
                FROM   lookup_master
                WHERE  lookup_type = 'PRODUCT_BADGE' AND is_active = 1
                ORDER  BY sort_order, name`),
+        // Cake Atelier picklists (CREAM_TYPE, SHAPE_TYPE, SPONGE_TYPE, THEME_TYPE,
+        // DIETARY_TYPE, ...) — ids must match verbatim on the website so a web cake
+        // order's creamId/dietaryIds resolve straight back to the same lookup row here.
+        dbAll(`SELECT id, lookup_type, code, name, value, extra_charge, description, sort_order, is_active
+               FROM   lookup_master
+               WHERE  lookup_type != 'PRODUCT_BADGE' AND lookup_type != 'TABLE_TAG'
+               ORDER  BY lookup_type, sort_order, name`),
     ]);
 
     const ids = products.map(p => p.id);
@@ -36,18 +38,13 @@ async function syncMenuCatalog() {
 
     const payload = {
         categories, media_library, products, product_variants, product_images,
-        product_modifier_assignments, modifier_groups, shared_modifiers, product_badges,
+        product_modifier_assignments, modifier_groups, shared_modifiers, product_badges, lookup_master,
     };
-
-    const formBody = new URLSearchParams({ api_key: API_KEY });
-    for (const table of TABLES) {
-        formBody.set(table, JSON.stringify(payload[table]));
-    }
 
     const response = await fetch(SYNC_URL, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:    formBody.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ api_key: API_KEY, ...payload }),
     });
 
     if (!response.ok) {
@@ -70,6 +67,7 @@ async function syncMenuCatalog() {
         modifier_groups: json.modifier_groups ?? 0,
         shared_modifiers: json.shared_modifiers ?? 0,
         product_badges: json.product_badges ?? 0,
+        lookup_master: json.lookup_master ?? 0,
     };
 }
 

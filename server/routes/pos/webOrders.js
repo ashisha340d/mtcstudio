@@ -150,15 +150,32 @@ router.post('/:id/approve', async (req, res) => {
       if (!cakeOnly) internalBits.push('Part of a mixed web order — food items are on the linked POS order');
       if (wo.customer_notes) internalBits.push(`Customer: ${wo.customer_notes}`);
 
+      // lookup_master (CREAM_TYPE/DIETARY_TYPE) ids are shared verbatim between
+      // munchtim_web and this DB, so the customer's picks map straight across —
+      // no name matching needed. SPONGE_TYPE has no id on the web side (design
+      // flavours are a separate per-design table), so it's best-effort by name.
+      // SHAPE_TYPE/THEME_TYPE aren't customer-selectable on the website at all
+      // (only a CSV of *possible* shapes per design) — nothing to map, stays manual.
+      const primary = cakes[0].c;
+      const creamTypeId = Number.isInteger(+primary.creamId) && +primary.creamId ? +primary.creamId : null;
+      const dietaryTypeId = Array.isArray(primary.dietaryIds) && primary.dietaryIds.length ? +primary.dietaryIds[0] : null;
+      let spongeTypeId = null;
+      if (primary.flavour) {
+        const sp = await tx.dbGet(`SELECT id FROM lookup_master WHERE lookup_type='SPONGE_TYPE' AND is_active=1 AND name=? LIMIT 1`, [primary.flavour]);
+        if (sp) spongeTypeId = sp.id;
+      }
+
       const cakeNumber = await nextCakeOrderNumber(tx);
       const ins = await tx.dbRun(`
         INSERT INTO cake_orders (
           order_number, phone, customer_name, order_date, delivery_date, delivery_time,
+          cream_type_id, sponge_type_id, dietary_type_id,
           message_on_cake, design_notes, dietary_notes, internal_notes,
           discount, advance_paid, advance_method, status, production_status, created_by
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'CASH','CONFIRMED','New',?)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'CASH','CONFIRMED','New',?)`,
         [cakeNumber, wo.customer_phone || null, wo.customer_name || 'Web Customer',
          today, needed ? needed.slice(0, 10) : null, needed ? needed.slice(11, 16) : null,
+         creamTypeId, spongeTypeId, dietaryTypeId,
          messages.join(' / ').slice(0, 255) || null, designNotes || null,
          dietary.join(', ') || null, internalBits.join(' | '),
          cakeOnly ? (+wo.discount || 0) : 0, req.posUser.id]);

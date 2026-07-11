@@ -4,7 +4,7 @@ import { mutations } from '../sync/syncEngine';
 // Internet channel — fully independent of the LAN sync engine. Uploads
 // directly to the user's own external image server; only the resulting URL
 // flows back to POS, over the LAN, as a normal queued mutation.
-const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || 'https://munchtimecafe.com.np/api/uploadimages.php';
+const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || 'https://munchtimecafe.com.np/api/sync/cake-photo';
 const UPLOAD_API_KEY = import.meta.env.VITE_UPLOAD_API_KEY || '';
 
 const BACKOFF_BASE_MS = 5000;
@@ -32,19 +32,36 @@ function extractUrl(body) {
   return null;
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function uploadOne(item) {
   const order = await db.orders.get(item.cake_order_id);
+  const fileName = item.fileName || `slot${item.slot}.jpg`;
+  const ext = (fileName.split('.').pop() || 'jpg').toLowerCase();
 
-  const form = new FormData();
-  form.append('photo', item.blob, item.fileName || `slot${item.slot}.jpg`);
-  form.append('order_id', String(item.cake_order_id));
-  if (order?.order_number) form.append('order_number', order.order_number);
-  form.append('slot', String(item.slot));
-  if (UPLOAD_API_KEY) form.append('api_key', UPLOAD_API_KEY);
+  const payload = {
+    api_key: UPLOAD_API_KEY,
+    order_id: item.cake_order_id,
+    order_number: order?.order_number || '',
+    slot: item.slot,
+    ext,
+    photo: await blobToBase64(item.blob),
+  };
 
   let res;
   try {
-    res = await fetch(UPLOAD_URL, { method: 'POST', body: form });
+    res = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
   } catch {
     return false; // no internet / host unreachable — caller applies backoff
   }
@@ -55,7 +72,7 @@ async function uploadOne(item) {
 
   const url = extractUrl(body);
   if (!url) {
-    console.warn('[cake-production] uploadimages.php response had no recognizable URL field', body);
+    console.warn('[cake-production] cake-photo sync response had no recognizable URL field', body);
     return false;
   }
 

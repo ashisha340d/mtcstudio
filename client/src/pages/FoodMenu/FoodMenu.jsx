@@ -1042,6 +1042,7 @@ export default function FoodMenu() {
                   <tr><td>Product Variants</td><td>{syncModal.result.product_variants}</td></tr>
                   <tr><td>Product Images</td><td>{syncModal.result.product_images}</td></tr>
                   <tr><td>Modifier Assignments</td><td>{syncModal.result.product_modifier_assignments}</td></tr>
+                  <tr><td>Cake Lookups</td><td>{syncModal.result.lookup_master}</td></tr>
                 </tbody>
               </table>
             )}
