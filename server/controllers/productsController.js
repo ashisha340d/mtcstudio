@@ -9,6 +9,11 @@ async function list(req, res, next) {
             category: q.category || '',
             statusFilter: q.status || '',
             featuredFilter: q.featured !== undefined ? q.featured : '',
+            station: q.station || '',
+            liveShop: q.live_shop || '',
+            qrActive: q.qr_active || '',
+            blankMax: q.blank_max || '',
+            badge: q.badge || '',
             sort: q.sort || 'id',
             sortDir: q.sort_dir || 'desc',
             page: q.page || 1
@@ -107,8 +112,12 @@ async function exportCsv(req, res, next) {
 async function getTemplate(req, res, next) {
     try {
         const { stringify } = require('csv-stringify/sync');
-        const headers = ['category_id', 'product_name', 'slug', 'short_description', 'description', 'featured', 'product_status', 'product_sort_order', 'variant_name', 'sku', 'selling_price', 'cost_price', 'stock', 'reorder_level', 'unit', 'barcode', 'variant_status'];
-        const example = ['1', 'Black Forest Cake', 'black-forest-cake', 'A rich layered cake', 'Full description here', '0', 'active', '0', '500g', 'BFC-500G', '350', '200', '10', '3', 'pcs', '', 'active'];
+        const headers = ['category_id', 'product_name', 'slug', 'short_description', 'description', 'featured', 'product_status', 'product_sort_order',
+            'pos_price', 'prep_time_minutes', 'is_fast_moving', 'pos_station_id', 'pos_active', 'badge', 'storefront_category', 'customer_visible', 'customer_max_qty',
+            'variant_name', 'sku', 'selling_price', 'cost_price', 'stock', 'reorder_level', 'unit', 'barcode', 'variant_status'];
+        const example = ['1', 'Black Forest Cake', 'black-forest-cake', 'A rich layered cake', 'Full description here', '0', 'active', '0',
+            '350', '20', '0', '', '1', '', '', '0', '',
+            '500g', 'BFC-500G', '350', '200', '10', '3', 'pcs', '', 'active'];
         const csv = stringify([headers, example]);
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="products_template.csv"');

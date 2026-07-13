@@ -462,8 +462,10 @@ router.patch('/:id/items/:itemId', async (req, res) => {
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'KOT_ITEM', entityId: item.id, action: 'EDIT', delta: { quantity, notes, is_home_pack, discount_amount, discount_type } });
 
   const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
+  const kotRow  = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [updated.kot_id]);
   socketServer.emitItemUpdated({
     kotId: updated.kot_id,
+    orderId: kotRow?.order_id ?? null,
     itemId: updated.id,
     quantity: updated.quantity,
     notes: updated.notes,
@@ -471,7 +473,6 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     station_id: updated.station_id ?? null,
   });
   if (quantity !== undefined) { // line change → mirror bill on the website (web orders only)
-    const kotRow = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [updated.kot_id]);
     if (kotRow) webOrderBridge.notifyKotItemsChanged(kotRow.order_id);
   }
 

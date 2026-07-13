@@ -296,6 +296,23 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_author_image (author_image)`);
     await dbRun(`DROP TABLE IF EXISTS media_tags`); // superseded by live-computed usage (see mediaService.js)
 
+    // --- Weather Recommendations (File Maintenance → Weather Recommends; synced to website) ---
+    await dbRun(`CREATE TABLE IF NOT EXISTS weather_recommendations (
+        id         INT PRIMARY KEY AUTO_INCREMENT,
+        bucket     VARCHAR(20) NOT NULL,
+        product_id INT NOT NULL,
+        sort_order INT DEFAULT 0,
+        UNIQUE KEY uq_wr_bucket_product (bucket, product_id),
+        INDEX idx_wr_bucket (bucket)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS weather_reco_settings (
+        id              INT PRIMARY KEY,
+        enabled         INT DEFAULT 1,
+        modal_seconds   INT DEFAULT 8,
+        max_per_session INT DEFAULT 1
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await dbRun(`INSERT IGNORE INTO weather_reco_settings (id, enabled, modal_seconds, max_per_session) VALUES (1, 1, 8, 1)`);
+
     // --- Automation Rule Engine (schema v1) ---
     await dbRun(`CREATE TABLE IF NOT EXISTS automation_condition_types (
         id          INT AUTO_INCREMENT PRIMARY KEY,

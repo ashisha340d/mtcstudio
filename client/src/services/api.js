@@ -35,6 +35,12 @@ export const productsApi = {
   }
 };
 
+// ── Food Menu lookups ──────────────────────────────────────────────────────────
+export const getFoodMenuStations = () => api.get('/food-menu/stations').then(r => r.data);
+export const getFoodMenuBadges = () => api.get('/food-menu/badges').then(r =>
+  r.data.filter(row => row.is_active).map(row => ({ code: row.code, name: row.name, icon: row.value || '' }))
+);
+
 // ── Media ────────────────────────────────────────────────────────────────────
 export const mediaApi = {
   list:       (params) => api.get('/media', { params }),
@@ -123,6 +129,12 @@ export const automationApi = {
   test:             (id, sample_payload) => api.post(`/automation/rules/${id}/test`, { sample_payload }),
   testRuns:         (id) => api.get(`/automation/rules/${id}/test-runs`),
   syncNow:          (scope, ruleIds) => api.post('/automation/sync-now', { scope, ruleIds }),
+
+  // Recommended Products — customer menu "you might also like"
+  recommendedList:    () => api.get('/automation/recommended-products'),
+  recommendedAdd:     (product_id) => api.post('/automation/recommended-products', { product_id }),
+  recommendedReorder: (ids) => api.post('/automation/recommended-products/reorder', { ids }),
+  recommendedRemove:  (id) => api.delete(`/automation/recommended-products/${id}`),
 };
 
 export default api;

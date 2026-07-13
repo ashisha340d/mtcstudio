@@ -26,6 +26,7 @@ import AuthGate                 from './components/AuthGate';
 import KDSAuthGate              from './components/KDSAuthGate';
 import posApi                   from './services/posApi';
 import POSDashboard  from './pages/POS/POSDashboard';
+import WebOrderDock  from './pages/POS/components/WebOrderDock';
 import POS           from './pages/POS/POS';
 import KDSDisplay    from './pages/KDS/KDSDisplay';
 import CakeOrders    from './pages/CakeOrders/CakeOrders';
@@ -54,7 +55,10 @@ function POSRoot({ children }) {
   return (
     <AuthProvider apiService={posApi}>
       <AuthGate>
-        <POSKDSRoot>{children}</POSKDSRoot>
+        <POSKDSRoot>
+          {children}
+          <WebOrderDock />
+        </POSKDSRoot>
       </AuthGate>
     </AuthProvider>
   );

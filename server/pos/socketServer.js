@@ -42,9 +42,13 @@ function init(httpServer) {
     const role = socket.handshake.query?.role ?? 'pos';
 
     if (role === 'customer') {
-      // Customer QR app — join order-specific room for live notifications
+      // Customer QR app — join order-specific room(s) for live notifications
       const orderId = socket.handshake.query?.orderId;
       if (orderId) socket.join(`order-${orderId}`);
+      // Client may track several open orders for its table (across reloads/multiple KOTs)
+      socket.on('join-order',   (id) => { if (id) socket.join(`order-${id}`); });
+      // Orders awaiting POS approval — no pos_order_id yet, tracked by pending id
+      socket.on('join-pending', (id) => { if (id) socket.join(`pending-${id}`); });
       socket.on('disconnect', () => {});
       return; // customers don't join pos/kds rooms
     }
@@ -110,6 +114,7 @@ async function emitItemServed(payload) {
       if (room) io.to(room).emit('item-served', payload);
     }
   }
+  if (payload.orderId) io.to(`order-${payload.orderId}`).emit('item-updated', payload);
 }
 
 function emitOrderCompleted(payload) {
@@ -128,7 +133,7 @@ function emitCustomerNotify(orderId, event, payload) {
 
 async function emitItemUpdated(payload) {
   if (!io) return;
-  // payload: { kotId, itemId, quantity, notes, is_home_pack, station_id? }
+  // payload: { kotId, orderId, itemId, quantity, notes, is_home_pack, station_id? }
   io.to('kds').emit('item-updated', payload);
   io.to('pos').emit('item-updated', payload);
   if (payload.station_id) {
@@ -138,6 +143,7 @@ async function emitItemUpdated(payload) {
       if (room) io.to(room).emit('item-updated', payload);
     }
   }
+  if (payload.orderId) io.to(`order-${payload.orderId}`).emit('item-updated', payload);
 }
 
 function emitOrderCancelled(payload) {
@@ -176,4 +182,14 @@ function emitWebOrderReceived(payload) {
   io.to('pos').emit('web-order-received', payload);
 }
 
-module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitCakeProductionChanged, emitWebOrderReceived };
+// POS approved/rejected a pending order — tell the customer waiting on it
+function emitPendingApproved(pendingId, payload) {
+  if (!io || !pendingId) return;
+  io.to(`pending-${pendingId}`).emit('pending-approved', payload);
+}
+function emitPendingRejected(pendingId, payload) {
+  if (!io || !pendingId) return;
+  io.to(`pending-${pendingId}`).emit('pending-rejected', payload);
+}
+
+module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected };

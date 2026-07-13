@@ -5,6 +5,43 @@ const socketServer = require('../pos/socketServer');
 
 const router = express.Router();
 
+// Resolve CSV badge codes + attach variants (low→high effective price) — shared
+// by /menu and /recommended so both product lists render identically.
+async function shapeProducts(products) {
+  if (!products.length) return products;
+
+  const badgeCatalogue = await dbAll(
+    `SELECT code, name, value AS icon FROM lookup_master WHERE lookup_type = 'PRODUCT_BADGE' AND is_active = 1`
+  );
+  const badgeByCode = new Map(badgeCatalogue.map(b => [b.code, b]));
+  for (const p of products) {
+    p.badges = String(p.badge || '').split(',').map(c => c.trim()).filter(Boolean)
+      .map(c => badgeByCode.get(c)).filter(Boolean);
+    delete p.badge;
+  }
+
+  const ids = products.map(p => p.id);
+  const ph  = ids.map(() => '?').join(',');
+  const variants = await dbAll(`
+    SELECT pv.id, pv.product_id, pv.name, COALESCE(pv.selling_price, 0) AS price, pv.sort_order
+    FROM   product_variants pv
+    JOIN   products p2 ON p2.id = pv.product_id
+    WHERE  pv.product_id IN (${ph}) AND pv.status = 'active'
+    ORDER  BY COALESCE(NULLIF(pv.selling_price, 0), p2.pos_price), pv.sort_order, pv.id
+  `, ids);
+
+  const byProd = {};
+  for (const v of variants) (byProd[v.product_id] ??= []).push(v);
+  for (const p of products) {
+    p.variants = byProd[p.id] || [];
+    p.price = p.variants.length
+      ? Math.min(...p.variants.map(v => v.price || p.base_price))
+      : p.base_price;
+    p.has_variants = p.variants.length > 1;
+  }
+  return products;
+}
+
 // ── GET /api/customer/menu?tableId=1 ─────────────────────────────────────────
 router.get('/menu', async (req, res) => {
   const { tableId } = req.query;
@@ -28,7 +65,7 @@ router.get('/menu', async (req, res) => {
   const products = await dbAll(`
     SELECT
       p.id, p.name, p.description, p.pos_price AS base_price,
-      p.customer_max_qty, p.prep_time_minutes, p.is_fast_moving,
+      p.customer_max_qty, p.prep_time_minutes, p.is_fast_moving, p.badge,
       p.category_id, p.pos_station_id,
       c.name AS category_name, c.icon AS category_icon,
       ml.filename AS image_filename
@@ -40,36 +77,43 @@ router.get('/menu', async (req, res) => {
     ORDER  BY c.sort_order, p.sort_order, p.name
   `, []);
 
-  // Attach variants to each product
-  if (products.length) {
-    const ids = products.map(p => p.id);
-    const ph  = ids.map(() => '?').join(',');
-    const variants = await dbAll(`
-      SELECT id, product_id, name, COALESCE(selling_price, 0) AS price, sort_order
-      FROM   product_variants
-      WHERE  product_id IN (${ph}) AND status = 'active'
-      ORDER  BY sort_order, id
-    `, ids);
-
-    const byProd = {};
-    for (const v of variants) (byProd[v.product_id] ??= []).push(v);
-    for (const p of products) {
-      p.variants = byProd[p.id] || [];
-      p.price = p.variants.length
-        ? Math.min(...p.variants.map(v => v.price || p.base_price))
-        : p.base_price;
-      p.has_variants = p.variants.length > 1;
-    }
-  }
+  await shapeProducts(products);
 
   res.json({ table, categories, products });
+});
+
+// ── GET /api/customer/recommended ────────────────────────────────────────────
+// Admin-curated "you might also like" list (Automation module → Recommended
+// Products). Shown on the customer menu when an item is added to cart or the
+// cart opens. Same product shape as /menu so the existing Card/quickAdd/detail
+// sheet UI works unchanged.
+router.get('/recommended', async (req, res) => {
+  const products = await dbAll(`
+    SELECT
+      p.id, p.name, p.description, p.pos_price AS base_price,
+      p.customer_max_qty, p.prep_time_minutes, p.is_fast_moving, p.badge,
+      p.category_id, p.pos_station_id,
+      c.name AS category_name, c.icon AS category_icon,
+      ml.filename AS image_filename
+    FROM   recommended_products rp
+    JOIN   products p ON p.id = rp.product_id
+    LEFT JOIN categories     c      ON c.id = p.category_id
+    LEFT JOIN product_images pi_img ON pi_img.product_id = p.id AND pi_img.is_primary = 1
+    LEFT JOIN media_library  ml     ON ml.id = pi_img.media_id
+    WHERE  rp.is_active = 1 AND p.customer_visible = 1 AND p.pos_active = 1
+    ORDER  BY rp.sort_order, rp.id
+  `, []);
+
+  await shapeProducts(products);
+
+  res.json({ products });
 });
 
 // ── POST /api/customer/order ──────────────────────────────────────────────────
 // One order per table session — additional submissions add new KOTs to the
 // existing OPEN order for that table rather than creating a new order.
 router.post('/order', async (req, res) => {
-  const { table_id, customer_name, items, order_type } = req.body;
+  const { table_id, customer_name, customer_phone, items, order_type } = req.body;
 
   const VALID_TYPES = ['DINE_IN', 'TAKEAWAY'];
   // If no explicit type, infer from context: table present → DINE_IN, else TAKEAWAY
@@ -133,109 +177,54 @@ router.post('/order', async (req, res) => {
     });
   }
 
-  // For DINE_IN: find an existing OPEN order on this table → append KOTs to it.
-  // For TAKEAWAY: always create a fresh order (no session grouping).
-  let existingOrder = null;
-  if (table_id && type === 'DINE_IN') {
-    existingOrder = await dbGet(
-      `SELECT * FROM pos_orders WHERE table_id = ? AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1`, [table_id]
-    );
-  }
-
-  const result = await transaction(async (tx) => {
-    let order;
-    let isNewOrder = false;
-
-    if (existingOrder) {
-      order = existingOrder;
-    } else {
-      order = await tx.dbGet(`
-        INSERT INTO pos_orders (order_type, table_id, customer_name, status, punched_by)
-        VALUES (?, ?, ?, 'OPEN', NULL) RETURNING *
-      `, [type, table_id || null, customer_name?.trim() || null]);
-      isNewOrder = true;
-    }
-
-    // Next KOT number for this order
-    const { mx } = await tx.dbGet(`SELECT COALESCE(MAX(kot_number), 0) AS mx FROM pos_kots WHERE order_id = ?`, [order.id]);
-    let kotNum = mx + 1;
-
-    // Group by station → one KOT per station
-    const byStation = {};
-    for (const item of enriched) {
-      const key = item.pos_station_id ?? 'general';
-      (byStation[key] ??= []).push(item);
-    }
-
-    const newKots = [];
-    for (const stationItems of Object.values(byStation)) {
-      const kot = await tx.dbGet(`
-        INSERT INTO pos_kots (order_id, kot_number, status, punched_by)
-        VALUES (?, ?, 'ORDERSENT', NULL) RETURNING *
-      `, [order.id, kotNum++]);
-
-      const kotItems = [];
-      for (const item of stationItems) {
-        const ki = await tx.dbGet(`
-          INSERT INTO pos_kot_items
-            (kot_id, product_id, product_name, quantity, unit_price,
-             notes, station_id, prep_time_minutes, status, variant_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ORDERSENT', ?) RETURNING *
-        `, [
-          kot.id, item.id, item.name, item.quantity, item.unit_price,
-          item.notes ?? null, item.pos_station_id ?? null,
-          item.prep_time_minutes ?? 10, item.variant_id ?? null
-        ]);
-        kotItems.push(ki);
-      }
-      newKots.push({ ...kot, items: kotItems });
-    }
-
-    // For new orders: set initial total (trigger also recalculates, this is belt-and-braces)
-    if (isNewOrder) {
-      const total = enriched.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-      await tx.dbRun(`UPDATE pos_orders SET total_amount = ? WHERE id = ?`, [total, order.id]);
-    }
-    // For existing orders: the trg_pos_recalc_insert trigger recalculates automatically.
-
-    return { order: { ...order, table_name: table?.name || null }, newKots, isNewOrder };
-  });
-
-  // Re-read total after trigger has fired (existing order total is recalculated by trigger)
-  const finalTotal = (await dbGet(`SELECT total_amount FROM pos_orders WHERE id = ?`, [result.order.id]))?.total_amount || 0;
-
-  // Build full order payload: KDS ORDER_UPSERT needs ALL kots for an existing order
-  let socketPayload;
-  if (result.isNewOrder) {
-    socketPayload = { ...result.order, total_amount: finalTotal, kots: result.newKots, source: 'customer_qr' };
-  } else {
-    const allKots  = await dbAll(`SELECT * FROM pos_kots WHERE order_id = ? ORDER BY created_at`, [result.order.id]);
-    const kotIds   = allKots.map(k => k.id);
-    const allItems = kotIds.length
-      ? await dbAll(`SELECT * FROM pos_kot_items WHERE kot_id IN (${kotIds.map(() => '?').join(',')}) ORDER BY id`, kotIds)
-      : [];
-    const byKot = {};
-    for (const it of allItems) (byKot[it.kot_id] ??= []).push(it);
-    for (const k of allKots) k.items = byKot[k.id] || [];
-
-    const freshOrder = await dbGet(`SELECT * FROM pos_orders WHERE id = ?`, [result.order.id]);
-    socketPayload = { ...freshOrder, table_name: table?.name || null, kots: allKots, source: 'customer_qr' };
-  }
-
-  // Notify KDS + POS. For a new KOT on an existing order this upserts the order in KDS.
-  socketServer.emitNewOrder(socketPayload);
-
-  const thisKotTotal = enriched.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  // Customer orders no longer punch straight to KDS — they land in the same
+  // pending-approval queue as website orders (web_orders_pending, source
+  // 'CUSTOMER_QR'); a POS user approves them, which is what actually creates/
+  // appends the pos_orders + pos_kots row (see routes/pos/webOrders.js).
+  const orderNumber = `QR-${Date.now().toString(36).toUpperCase()}`;
+  const subtotal     = enriched.reduce((s, i) => s + i.unit_price * i.quantity, 0);
   const estimated    = Math.max(...enriched.map(i => i.prep_time_minutes || 15));
 
+  const pendingId = await transaction(async (tx) => {
+    const ins = await tx.dbRun(
+      `INSERT INTO web_orders_pending
+         (web_order_id, order_number, source, order_type, table_id, customer_name, customer_phone,
+          items_json, subtotal, grand_total, ordered_at)
+       VALUES (NULL, ?, 'CUSTOMER_QR', ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [orderNumber, type, table_id || null, customer_name?.trim() || null, customer_phone?.trim() || null,
+       JSON.stringify(enriched), subtotal, subtotal]
+    );
+    const insId = ins.lastInsertRowid;
+    let sort = 0;
+    for (const item of enriched) {
+      await tx.dbRun(
+        `INSERT INTO web_order_items
+           (pending_id, web_pid, kind, product_id, variant_id, item_name, variant_name,
+            quantity, unit_price, line_total, modifiers_json, special_note, sort_order)
+         VALUES (?, ?, 'product', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [insId, String(item.id), item.id, item.variant_id, item.name, item.variant_name,
+         item.quantity, item.unit_price, item.unit_price * item.quantity,
+         item.modifier_names.length ? JSON.stringify(item.modifier_names) : null,
+         item.notes, sort++]
+      );
+    }
+    return insId;
+  });
+
+  // Notify every open POS screen — same popup/sound/badge as a website order
+  socketServer.emitWebOrderReceived({
+    pendingId, webOrderId: null, orderNumber, orderType: type,
+    customerName: customer_name?.trim() || '', customerPhone: customer_phone?.trim() || '',
+    tableName: table?.name || null, grandTotal: subtotal, itemCount: enriched.length,
+  });
+
   res.status(201).json({
-    order_id:          result.order.id,
-    is_new_order:      result.isNewOrder,
+    pending_id:        pendingId,
+    status:            'PENDING_APPROVAL',
     order_type:        type,
     table_name:        table?.name || null,
     estimated_minutes: estimated,
-    total:             thisKotTotal,   // cost of this submission only
-    order_total:       finalTotal,     // running bill total for the whole order
+    total:             subtotal,
     items:             enriched.map(i => ({
       name:           i.name,
       variant_name:   i.variant_name,
@@ -292,6 +281,90 @@ router.get('/order/:id', async (req, res) => {
   for (const k of kots) k.items = byKot[k.id] || [];
 
   res.json({ order, kots });
+});
+
+// ── GET /api/customer/table/:tableId/orders ───────────────────────────────────
+// Table ordering is shared (no per-customer login) — return every order currently
+// open, or closed recently, for this table so any device scanning the QR sees the
+// whole table's orders, not just the ones it personally placed.
+router.get('/table/:tableId/orders', async (req, res) => {
+  const orders = await dbAll(
+    `SELECT o.*, t.name AS table_name FROM pos_orders o
+     LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
+     WHERE o.table_id = ? AND o.status = 'OPEN'
+       AND o.created_at >= DATE_SUB(NOW(), INTERVAL 12 HOUR)
+     ORDER BY o.created_at DESC`,
+    [req.params.tableId]
+  );
+  if (!orders.length) return res.json({ orders: [] });
+
+  const orderIds = orders.map(o => o.id);
+  const ph1      = orderIds.map(() => '?').join(',');
+  const kots     = await dbAll(`SELECT * FROM pos_kots WHERE order_id IN (${ph1})`, orderIds);
+  const kotIds   = kots.map(k => k.id);
+  const items    = kotIds.length
+    ? await dbAll(
+        `SELECT * FROM pos_kot_items WHERE kot_id IN (${kotIds.map(() => '?').join(',')}) AND status != 'CANCELLED' ORDER BY id`,
+        kotIds
+      )
+    : [];
+
+  const itemsByKot = {};
+  for (const i of items) (itemsByKot[i.kot_id] ??= []).push(i);
+  const kotsByOrder = {};
+  for (const k of kots) (kotsByOrder[k.order_id] ??= []).push(k);
+
+  const shaped = orders.map(o => ({
+    order_id:   o.id,
+    table_name: o.table_name,
+    order_type: o.order_type,
+    status:     o.status,
+    placed_at:  o.created_at,
+    total:      o.total_amount,
+    items: (kotsByOrder[o.id] || []).flatMap(k => itemsByKot[k.id] || []).map(i => ({
+      name: i.product_name, variant_name: null, qty: i.quantity, price: i.unit_price,
+    })),
+  }));
+
+  // Orders still waiting on POS approval — no pos_orders row yet, so they're
+  // pulled straight from the pending queue and shown with a distinct status.
+  const pending = await dbAll(
+    `SELECT id, order_type, customer_name, items_json, grand_total, ordered_at, status, reject_reason
+     FROM web_orders_pending
+     WHERE table_id = ? AND source = 'CUSTOMER_QR' AND status IN ('PENDING_APPROVAL','REJECTED')
+       AND received_at >= DATE_SUB(NOW(), INTERVAL 12 HOUR)
+     ORDER BY received_at DESC`,
+    [req.params.tableId]
+  );
+  const shapedPending = pending.map(p => {
+    let items = [];
+    try { items = JSON.parse(p.items_json || '[]'); } catch {}
+    return {
+      order_id:      `pending-${p.id}`,
+      pending_id:    p.id,
+      order_type:    p.order_type,
+      status:        p.status === 'REJECTED' ? 'CANCELLED' : 'PENDING_APPROVAL',
+      reject_reason: p.reject_reason,
+      placed_at:     p.ordered_at,
+      total:         p.grand_total,
+      items: items.map(i => ({ name: i.name, variant_name: i.variant_name, qty: i.quantity, price: i.unit_price })),
+    };
+  });
+
+  res.json({ orders: [...shapedPending, ...shaped] });
+});
+
+// ── GET /api/customer/pending/:id — poll fallback for approval status ────────
+router.get('/pending/:id', async (req, res) => {
+  const row = await dbGet(
+    `SELECT id, status, pos_order_id, reject_reason FROM web_orders_pending WHERE id = ? AND source = 'CUSTOMER_QR'`,
+    [req.params.id]
+  );
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  res.json({
+    pending_id: row.id, status: row.status,
+    order_id: row.pos_order_id, reject_reason: row.reject_reason,
+  });
 });
 
 module.exports = router;

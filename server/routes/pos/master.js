@@ -28,7 +28,8 @@ router.get('/products', async (req, res) => {
   const products = await dbAll(
     `SELECT p.id, p.name, p.category_id, p.pos_station_id AS station_id,
             p.pos_price AS price, p.prep_time_minutes, p.is_fast_moving,
-            p.pos_active AS is_active,
+            p.pos_active AS is_active, p.badge,
+            (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id AND v.status = 'active') AS variant_count,
             c.name AS category_name,
             s.name AS station_name, s.color_hex AS station_color,
             EXISTS(

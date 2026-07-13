@@ -228,4 +228,53 @@ router.delete('/rules/:id/purge', async (req, res, next) => {
     } catch (e) { next(e); }
 });
 
+// ── Recommended Products (Customer Menu "you might also like") ──────────────
+// A simple ordered, admin-curated list — not per-product cross-sell. Shown on
+// the customer QR menu whenever an item is added to cart or the cart opens.
+router.get('/recommended-products', async (req, res, next) => {
+    try {
+        const rows = await dbAll(`
+            SELECT rp.id, rp.product_id, rp.sort_order, rp.is_active,
+                   p.name, p.pos_price AS price, ml.filename AS image_filename
+            FROM   recommended_products rp
+            JOIN   products p ON p.id = rp.product_id
+            LEFT JOIN product_images pi_img ON pi_img.product_id = p.id AND pi_img.is_primary = 1
+            LEFT JOIN media_library  ml     ON ml.id = pi_img.media_id
+            ORDER  BY rp.sort_order, rp.id
+        `);
+        res.json(rows);
+    } catch (e) { next(e); }
+});
+
+router.post('/recommended-products', async (req, res, next) => {
+    try {
+        const productId = Number(req.body?.product_id);
+        if (!productId) return res.status(400).json({ error: 'product_id required' });
+        const { max } = await dbGet(`SELECT COALESCE(MAX(sort_order), -1) AS max FROM recommended_products`);
+        await dbRun(
+            `INSERT INTO recommended_products (product_id, sort_order) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE is_active = 1`,
+            [productId, max + 1]
+        );
+        res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
+router.post('/recommended-products/reorder', async (req, res, next) => {
+    try {
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+        for (let i = 0; i < ids.length; i++) {
+            await dbRun(`UPDATE recommended_products SET sort_order=? WHERE id=?`, [i, ids[i]]);
+        }
+        res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
+router.delete('/recommended-products/:id', async (req, res, next) => {
+    try {
+        await dbRun(`DELETE FROM recommended_products WHERE id=?`, [req.params.id]);
+        res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
 module.exports = router;

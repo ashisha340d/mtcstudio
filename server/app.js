@@ -4,8 +4,7 @@ const path = require('path');
 const cors = require('cors');
 const { hostname, networkInterfaces } = require('os');
 
-const APP_ENV = process.env.APP_ENV || 'local';
-require('dotenv').config({ path: path.resolve(__dirname, `.env.${APP_ENV}`) });
+require('dotenv').config();
 
 function envPort(name, fallback) {
   const port = parseInt(process.env[name], 10);
@@ -14,6 +13,8 @@ function envPort(name, fallback) {
 
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = envPort('PORT', 3001);
+
+
 
 // ── CMS routes ────────────────────────────────────────────────
 const categoriesRouter = require('./routes/categories');
@@ -26,6 +27,7 @@ const cakeCatalogueRouter = require('./routes/cakeCatalogue');
 const dashboardRouter = require('./routes/dashboard');
 const crmRouter = require('./routes/crm');
 const automationRouter = require('./routes/automation');
+const weatherRecoRouter = require('./routes/weatherReco');
 const settingsRouter = require('./routes/settings');
 const ocrRouter = require('./routes/ocr');
 
@@ -83,6 +85,7 @@ app.use('/api/cake-catalogue', cakeCatalogueRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/automation', automationRouter);
+app.use('/api/weather-reco', weatherRecoRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/auth', posAuthRouter);
@@ -143,14 +146,16 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
   mainServer.listen(PORT, HOST, () => {
     const ip = getNetworkIP();
     const base = `http://${ip}:${PORT}`;
+
     startAutoSync(60_000);
-    webOrderBridge.start(); // WS client → website's /pos-bridge (web order queue)
+    webOrderBridge.start();
+
     console.log('');
     console.log('  ╔══════════════════════════════════════════════╗');
     console.log('  ║          MTC Studio Server — Ready           ║');
     console.log('  ╚══════════════════════════════════════════════╝');
     console.log('');
-    console.log(`  Env        →  ${APP_ENV}`);
+    console.log('  Env        →  .env');
     console.log(`  IP / Port  →  ${ip}:${PORT}`);
     console.log(`  Bind       →  ${HOST}:${PORT}`);
     console.log(`  Hostname   →  ${hostname()}`);

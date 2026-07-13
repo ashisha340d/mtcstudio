@@ -1,5 +1,6 @@
 .auto-page { padding: 24px; }
-.auto-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.auto-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; }
+.auto-header h1 { flex: 1; }
 .auto-btn { padding: 6px 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
 .auto-btn--primary { background: #9333ea; color: #fff; border-color: #9333ea; }
 .auto-filters { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -17,6 +18,45 @@
   0%   { transform: translateY(16px) scale(.9); opacity: 0; }
   60%  { transform: translateY(-4px) scale(1.03); opacity: 1; }
   100% { transform: translateY(0) scale(1); }
+}
+
+/* ── Recommended Products modal ─────────────────────────────────────── */
+.auto-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+.auto-modal {
+  background: #fff; border-radius: 10px; padding: 20px;
+  width: 460px; max-width: calc(100vw - 32px); max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.auto-modal__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.auto-modal__head h2 { margin: 0; font-size: 18px; }
+.auto-modal__close { border: none; background: none; font-size: 16px; cursor: pointer; color: #666; }
+
+.auto-rec-search { position: relative; margin: 12px 0; }
+.auto-rec-search input {
+  width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+}
+.auto-rec-search__dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+  background: #fff; border: 1px solid #ddd; border-radius: 6px; margin-top: 4px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.15); max-height: 220px; overflow-y: auto;
+}
+.auto-rec-search__dropdown button {
+  display: block; width: 100%; text-align: left; padding: 8px 10px;
+  border: none; background: none; cursor: pointer; font-size: 13px;
+}
+.auto-rec-search__dropdown button:hover { background: #f5f5f5; }
+
+.auto-rec-list { list-style: none; margin: 0; padding: 0; }
+.auto-rec-list__row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee;
+}
+.auto-rec-list__name { flex: 1; font-size: 14px; }
+.auto-rec-list__price { font-size: 13px; color: #666; }
+.auto-rec-list__row button {
+  border: 1px solid #ccc; background: #fff; border-radius: 6px; width: 26px; height: 26px; cursor: pointer;
 }
 .auto-row-clickable { cursor: pointer; }
 .auto-row-clickable:hover { background: #faf5ff; }

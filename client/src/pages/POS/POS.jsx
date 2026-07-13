@@ -49,6 +49,46 @@ const cleanVariantName = (variantName, productName) => {
   return variantName;
 };
 
+function normalizeMenuProduct(product) {
+  const rawPrice = product?.price ?? product?.pos_price ?? product?.min_price ?? product?.max_price ?? product?.selling_price ?? 0;
+  const rawPrep = product?.prep_time_minutes ?? product?.prep_time ?? 10;
+  const rawActive = product?.is_active ?? product?.pos_active ?? 1;
+  const rawVariantCount = product?.variant_count ?? product?.variantCount ?? (Array.isArray(product?.variants) ? product.variants.length : 0) ?? 0;
+  const badgeCodes = String(product?.badge || product?.badges || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const price = Number(rawPrice);
+  const prepTime = Number(rawPrep);
+  const variantCount = Number(rawVariantCount);
+  const isActive = rawActive === 0 || rawActive === '0' || rawActive === false ? 0 : 1;
+
+  return {
+    ...product,
+    id: product?.id ?? product?.product_id,
+    name: product?.name ?? product?.product_name ?? '',
+    price: Number.isFinite(price) ? price : 0,
+    prep_time_minutes: Number.isFinite(prepTime) ? prepTime : 10,
+    is_active: isActive,
+    is_fast_moving: Boolean(Number(product?.is_fast_moving ?? 0)),
+    variant_count: Number.isFinite(variantCount) ? variantCount : 0,
+    badge: badgeCodes.join(','),
+  };
+}
+
+function getProductBadges(product) {
+  const badges = [];
+  if (product?.is_fast_moving) badges.push({ label: '⚡ Fast', tone: 'fast' });
+  if ((product?.variant_count ?? 0) > 1) badges.push({ label: `${product.variant_count} sizes`, tone: 'multi' });
+  const extras = String(product?.badge || product?.badges || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  extras.forEach((code) => badges.push({ label: code, tone: 'tag' }));
+  return badges;
+}
+
 /* ── Panel layout ────────────────────────────────────────────── */
 const PANEL_LAYOUT_KEY = 'posv2_layout';
 const DIVIDER_W = 5;
@@ -629,13 +669,13 @@ function RemoveItemModal({ item, onConfirm, onClose }) {
 /* ── Product Card ────────────────────────────────────────────── */
 function productPriceDisplay(product) {
   const count = product.variant_count ?? 0;
-  if (count === 1) return fmt(product.min_price ?? product.pos_price ?? 0);
+  if (count === 1) return fmt(product.price ?? product.min_price ?? product.pos_price ?? 0);
   if (count > 1) {
-    const lo = product.min_price ?? 0;
-    const hi = product.max_price ?? lo;
+    const lo = product.min_price ?? product.price ?? 0;
+    const hi = product.max_price ?? product.price ?? lo;
     return lo === hi ? fmt(lo) : `${fmt(lo)} – ${fmt(hi)}`;
   }
-  return fmt(product.pos_price ?? 0);
+  return fmt(product.price ?? product.pos_price ?? 0);
 }
 
 function ProductCard({ product, cartQty, onClick }) {
@@ -692,6 +732,24 @@ function ProductCard({ product, cartQty, onClick }) {
       <div style={{ padding: '8px 9px 10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <p style={{ fontSize: 13, fontWeight: 800, color: W.orange, marginTop: 0, marginBottom: 3 }}>{productPriceDisplay(product)}</p>
         <p style={{ fontSize: 12, fontWeight: 600, color: W.text1, lineHeight: 1.25, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{product.name}</p>
+        {getProductBadges(product).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+            {getProductBadges(product).map((badge) => (
+              <span
+                key={`${product.id}-${badge.label}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '2px 6px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                  background: badge.tone === 'fast' ? 'rgba(193,68,14,0.12)' : badge.tone === 'multi' ? 'rgba(45,122,45,0.12)' : 'rgba(29,78,216,0.12)',
+                  color: badge.tone === 'fast' ? W.orange : badge.tone === 'multi' ? W.green : W.blue,
+                }}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </button>
   );
@@ -1103,6 +1161,12 @@ export default function POS() {
       ));
     });
 
+    socket.on('item-updated', ({ itemId, quantity, notes, is_home_pack }) => {
+      setEditableItems(prev => prev.map(i =>
+        i.id === itemId ? { ...i, quantity: quantity ?? i.quantity, notes: notes ?? i.notes, is_home_pack: is_home_pack ?? i.is_home_pack } : i
+      ));
+    });
+
     socket.on('order-cancelled', ({ orderId }) => {
       const mine = liveOrderIdRef.current ?? existingOrderId;
       if (mine && mine === orderId) navigate('/pos');
@@ -1176,7 +1240,7 @@ export default function POS() {
       : `${API}/food-menu/products?categoryId=${activeCat}`;
     fetch(url)
       .then(r => r.json())
-      .then(rows => setProducts(rows.filter(p => p.pos_active)))
+      .then(rows => setProducts((rows || []).map(normalizeMenuProduct).filter(p => p.is_active !== 0)))
       .finally(() => setLoading(false));
   }, [activeCat]);
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { productsApi } from '../../services/api';
-import { getLookupMaster, getMaintenanceStations } from '../../services/posApi';
+import { productsApi, getFoodMenuStations, getFoodMenuBadges } from '../../services/api';
 import { useMsg } from '../../hooks/useApi';
 import MediaPicker from '../../components/MediaPicker/MediaPicker';
 import BadgeMultiSelect from './BadgeMultiSelect';
@@ -114,56 +113,6 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
   );
 }
 
-// ── POS Settings panel (POS price / prep / station / fast / QR menu / max qty) ──
-function PosPanel({ product: p, stations, onUpdate }) {
-  return (
-    <div className="fm-pos-panel">
-      <label>POS Price
-        <input type="number" className="cell" step="0.5" min="0" style={{ width: 80 }}
-          value={p.pos_price ?? 0}
-          onChange={e => onUpdate(p.id, 'pos_price', parseFloat(e.target.value))}
-          onFocus={e => e.target.select()}
-        />
-      </label>
-      <label>Prep (min)
-        <input type="number" className="cell" min="0" style={{ width: 60 }}
-          value={p.prep_time_minutes ?? 10}
-          onChange={e => onUpdate(p.id, 'prep_time_minutes', parseInt(e.target.value))}
-          onFocus={e => e.target.select()}
-        />
-      </label>
-      <label>Station
-        <select className="cell" style={{ width: 140 }}
-          value={p.pos_station_id ?? ''}
-          onChange={e => onUpdate(p.id, 'pos_station_id', e.target.value || null)}
-        >
-          <option value="">— None —</option>
-          {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      </label>
-      <label className="fm-pos-toggle">
-        <input type="checkbox" checked={!!p.is_fast_moving}
-          onChange={e => onUpdate(p.id, 'is_fast_moving', e.target.checked ? 1 : 0)} /> Fast
-      </label>
-      <label className="fm-pos-toggle">
-        <input type="checkbox" checked={p.pos_active === undefined || p.pos_active === null ? true : !!p.pos_active}
-          onChange={e => onUpdate(p.id, 'pos_active', e.target.checked ? 1 : 0)} /> POS Active
-      </label>
-      <label className="fm-pos-toggle" title="Show on customer QR / web menu">
-        <input type="checkbox" checked={!!p.customer_visible}
-          onChange={e => onUpdate(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> QR/Web Menu
-      </label>
-      <label title="Max qty per customer order (blank = unlimited)">Max Qty
-        <input type="number" className="cell" min="1" placeholder="∞" style={{ width: 55 }}
-          value={p.customer_max_qty ?? ''}
-          onChange={e => onUpdate(p.id, 'customer_max_qty', e.target.value === '' ? null : parseInt(e.target.value))}
-          onFocus={e => e.target.select()}
-        />
-      </label>
-    </div>
-  );
-}
-
 function imgSrc(raw) {
   if (!raw) return null;
   const str = typeof raw === 'object' ? raw.filename : raw;
@@ -240,6 +189,121 @@ function CardView({ items, categories, badgeOptions, dirtyProducts, selectedIds,
   );
 }
 
+// ── POS price input — formats to 000.00 on blur, free-typing while focused ──
+function PosPriceInput({ value, onCommit }) {
+  const [text, setText] = useState(() => Number(value ?? 0).toFixed(2));
+  useEffect(() => { setText(Number(value ?? 0).toFixed(2)); }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="cell fm-pos-price-input"
+      value={text}
+      onChange={e => setText(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={() => {
+        const n = parseFloat(text) || 0;
+        onCommit(parseFloat(n.toFixed(2)));
+        setText(n.toFixed(2));
+      }}
+    />
+  );
+}
+
+// ── Collapsible side filter panel ───────────────────────────────────────────
+function FilterPanel({
+  categories, stations, badgeOptions, catFilter, statFilter, stationFilter,
+  liveShopFilter, qrActiveFilter, blankMaxFilter, badgeFilter, onApply, onClose,
+}) {
+  const Pill = ({ active, onClick, children }) => (
+    <button
+      type="button"
+      className={`fm-pill${active ? ' fm-pill-active' : ''}`}
+      onClick={onClick}
+    >{children}</button>
+  );
+
+  return (
+    <div className="fm-filter-panel">
+      <div className="fm-filter-panel-head">
+        <span>Filters</span>
+        <button className="btn btn-sm btn-clear" onClick={onClose} title="Close">✕</button>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Status</div>
+        <div className="fm-pill-row">
+          <Pill active={statFilter === ''} onClick={() => onApply('stat', '')}>All</Pill>
+          <Pill active={statFilter === 'active'} onClick={() => onApply('stat', 'active')}>Active</Pill>
+          <Pill active={statFilter === 'inactive'} onClick={() => onApply('stat', 'inactive')}>Inactive</Pill>
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Live Shop Items</div>
+        <div className="fm-pill-row">
+          <Pill active={liveShopFilter === ''} onClick={() => onApply('liveShop', '')}>All</Pill>
+          <Pill active={liveShopFilter === 'active'} onClick={() => onApply('liveShop', 'active')}>Active</Pill>
+          <Pill active={liveShopFilter === 'inactive'} onClick={() => onApply('liveShop', 'inactive')}>Inactive</Pill>
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">QR / Web</div>
+        <div className="fm-pill-row">
+          <Pill active={qrActiveFilter === ''} onClick={() => onApply('qrActive', '')}>All</Pill>
+          <Pill active={qrActiveFilter === 'active'} onClick={() => onApply('qrActive', 'active')}>Active</Pill>
+          <Pill active={qrActiveFilter === 'inactive'} onClick={() => onApply('qrActive', 'inactive')}>Inactive</Pill>
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Max Allowed</div>
+        <div className="fm-pill-row">
+          <Pill active={blankMaxFilter === ''} onClick={() => onApply('blankMax', '')}>All</Pill>
+          <Pill active={blankMaxFilter === 'blank'} onClick={() => onApply('blankMax', 'blank')}>Blank</Pill>
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Category</div>
+        <div className="fm-pill-row">
+          <Pill active={catFilter === ''} onClick={() => onApply('cat', '')}>All</Pill>
+          {categories.map(c => (
+            <Pill key={c.id} active={String(catFilter) === String(c.id)} onClick={() => onApply('cat', c.id)}>
+              {c.name}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Station</div>
+        <div className="fm-pill-row">
+          <Pill active={stationFilter === ''} onClick={() => onApply('station', '')}>All</Pill>
+          {stations.map(s => (
+            <Pill key={s.id} active={String(stationFilter) === String(s.id)} onClick={() => onApply('station', s.id)}>
+              {s.name}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      <div className="fm-filter-group">
+        <div className="fm-filter-label">Badges</div>
+        <div className="fm-pill-row">
+          <Pill active={badgeFilter === ''} onClick={() => onApply('badge', '')}>All</Pill>
+          {badgeOptions.map(b => (
+            <Pill key={b.code} active={badgeFilter === b.code} onClick={() => onApply('badge', b.code)}>
+              {b.icon} {b.name}
+            </Pill>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function FoodMenu() {
   const [items, setItems] = useState([]);
@@ -267,6 +331,14 @@ export default function FoodMenu() {
   const [viewMode, setViewMode] = useState(() => lsGet('fm_view', 'table'));
   const [expandedIds, setExpandedIds] = useState(() => new Set(lsGet('fm_expanded', [])));
 
+  // Side filter panel
+  const [filterPanelOpen, setFilterPanelOpen] = useState(() => lsGet('fm_filterPanelOpen', false));
+  const [stationFilter, setStationFilter] = useState('');
+  const [liveShopFilter, setLiveShopFilter] = useState(''); // '' | 'active' | 'inactive'
+  const [qrActiveFilter, setQrActiveFilter] = useState(''); // '' | 'active' | 'inactive'
+  const [blankMaxFilter, setBlankMaxFilter] = useState(''); // '' | 'blank'
+  const [badgeFilter, setBadgeFilter] = useState('');
+
   // Transient UI state
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dirtyProducts, setDirtyProducts] = useState(new Set());
@@ -274,6 +346,7 @@ export default function FoodMenu() {
   const [pickerFor, setPickerFor] = useState(null);
   const [importModal, setImportModal] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [importRawCsv, setImportRawCsv] = useState(null);
   const [bulkSel, setBulkSel] = useState('');
   const [dragSrc, setDragSrc] = useState(null);
   const [dragOver, setDragOver] = useState(null);
@@ -295,6 +368,7 @@ export default function FoodMenu() {
   useEffect(() => { lsSet('fm_page', page); }, [page]);
   useEffect(() => { lsSet('fm_view', viewMode); }, [viewMode]);
   useEffect(() => { lsSet('fm_expanded', [...expandedIds]); }, [expandedIds]);
+  useEffect(() => { lsSet('fm_filterPanelOpen', filterPanelOpen); }, [filterPanelOpen]);
 
   // ── Data loading ───────────────────────────────────────────────────────────
   async function load(overrides = {}) {
@@ -302,6 +376,8 @@ export default function FoodMenu() {
     try {
       const params = {
         search, category: catFilter, status: statFilter,
+        station: stationFilter, live_shop: liveShopFilter,
+        qr_active: qrActiveFilter, blank_max: blankMaxFilter, badge: badgeFilter,
         sort, sort_dir: sortDir, page, per_page: 50,
         ...overrides,
       };
@@ -320,18 +396,12 @@ export default function FoodMenu() {
 
   // Load the badge catalogue once — lookup_master rows are managed elsewhere (File Maintenance)
   useEffect(() => {
-    getLookupMaster('PRODUCT_BADGE')
-      .then(rows => setBadgeOptions(
-        (rows || [])
-          .filter(r => r.is_active)
-          .map(r => ({ code: r.code, name: r.name, icon: r.value || '' }))
-      ))
-      .catch(() => {});
+    getFoodMenuBadges().then(setBadgeOptions).catch(e => console.error('badges load failed', e));
   }, []);
 
   // Load POS stations once — pos_stations rows are managed elsewhere (File Maintenance)
   useEffect(() => {
-    getMaintenanceStations().then(setStations).catch(() => {});
+    getFoodMenuStations().then(setStations).catch(e => console.error('stations load failed', e));
   }, []);
 
   // Global Ctrl/Cmd+S
@@ -516,29 +586,50 @@ export default function FoodMenu() {
   function applyFilter(key, val) {
     if (key === 'cat') { setCatFilter(val); load({ category: val, page: 1 }); }
     if (key === 'stat') { setStatFilter(val); load({ status: val, page: 1 }); }
+    if (key === 'station') { setStationFilter(val); load({ station: val, page: 1 }); }
+    if (key === 'liveShop') { setLiveShopFilter(val); load({ live_shop: val, page: 1 }); }
+    if (key === 'qrActive') { setQrActiveFilter(val); load({ qr_active: val, page: 1 }); }
+    if (key === 'blankMax') { setBlankMaxFilter(val); load({ blank_max: val, page: 1 }); }
+    if (key === 'badge') { setBadgeFilter(val); load({ badge: val, page: 1 }); }
     setPage(1);
+  }
+
+  // Filters are ignored server-side once a search term is present — clear
+  // the panel selections on search so the UI doesn't show a stale filter.
+  function doSearch(e) {
+    e.preventDefault();
+    if (search.trim()) {
+      setCatFilter(''); setStatFilter(''); setStationFilter('');
+      setLiveShopFilter(''); setQrActiveFilter(''); setBlankMaxFilter(''); setBadgeFilter('');
+      setPage(1);
+      load({ category: '', status: '', station: '', live_shop: '', qr_active: '', blank_max: '', badge: '', page: 1 });
+    } else {
+      load();
+    }
   }
 
   // ── Import / Export ────────────────────────────────────────────────────────
   function handleImportFile(e) {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      try { setImportPreview(parseCsv(ev.target.result)); setImportModal(true); }
+      try {
+        setImportRawCsv(ev.target.result);
+        setImportPreview(parseCsv(ev.target.result));
+        setImportModal(true);
+      }
       catch { showMsg('Invalid CSV file', false); }
     };
     reader.readAsText(file);
-    e.target.value = '';
   }
 
   async function confirmImport() {
-    const formData = new FormData();
-    formData.append('file', importFile.current.files[0]);
     try {
-      await productsApi.importCsv(formData);
+      await productsApi.importCsv(importRawCsv);
       showMsg('Imported successfully!');
-      setImportModal(false); setImportPreview(null); load();
+      setImportModal(false); setImportPreview(null); setImportRawCsv(null); load();
     } catch (e) { showMsg(e.response?.data?.error || e.message, false); }
   }
 
@@ -681,7 +772,12 @@ export default function FoodMenu() {
       {/* ── Toolbar ── */}
       <div className="toolbar fm-toolbar">
         <div className="fm-tb-left">
-          <form className="fm-search-form" onSubmit={e => { e.preventDefault(); load(); }}>
+          <button
+            className={`btn btn-sm btn-clear${filterPanelOpen ? ' active' : ''}`}
+            onClick={() => setFilterPanelOpen(o => !o)}
+            title="Toggle filter panel"
+          >☰ Filters</button>
+          <form className="fm-search-form" onSubmit={doSearch}>
             <input
               type="text" value={search}
               onChange={e => setSearch(e.target.value)}
@@ -692,22 +788,12 @@ export default function FoodMenu() {
               <button type="button" className="btn btn-clear" onClick={() => { setSearch(''); load({ search: '' }); }}>✕</button>
             )}
           </form>
-          <select value={catFilter} onChange={e => applyFilter('cat', e.target.value)}>
-            <option value="">All Categories</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select value={statFilter} onChange={e => applyFilter('stat', e.target.value)}>
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
         </div>
         <div className="fm-tb-right">
           <div className="fm-view-seg">
             <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} title="Table view">☰</button>
             <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')} title="Card view">⊞</button>
           </div>
-          <span className="fm-kbd-hint" title="Enter: next cell | Shift+Enter: prev cell | ↑↓: prev/next row">⌨️</span>
           <button className="btn btn-sm btn-clear" onClick={() => expandedIds.size > 0 ? collapseAll() : expandAll()} title="Toggle all rows">
             {expandedIds.size > 0 ? '⊖ Collapse All' : '⊕ Expand All'}
           </button>
@@ -745,6 +831,25 @@ export default function FoodMenu() {
         </div>
       )}
 
+      {/* ── Body: side filter panel + main content ── */}
+      <div className="fm-body">
+        {filterPanelOpen && (
+          <FilterPanel
+            categories={categories}
+            stations={stations}
+            badgeOptions={badgeOptions}
+            catFilter={catFilter}
+            statFilter={statFilter}
+            stationFilter={stationFilter}
+            liveShopFilter={liveShopFilter}
+            qrActiveFilter={qrActiveFilter}
+            blankMaxFilter={blankMaxFilter}
+            badgeFilter={badgeFilter}
+            onApply={applyFilter}
+            onClose={() => setFilterPanelOpen(false)}
+          />
+        )}
+        <div className="fm-body-main">
       {/* ── Main content ── */}
       {loading ? (
         <div className="fm-loading">Loading…</div>
@@ -764,10 +869,8 @@ export default function FoodMenu() {
                 <SortTh col="name" label="Name" />
                 <SortTh col="category" label="Category" />
                 <th className="fm-th-badges">Badges</th>
-                <th>🌐 Live Shop</th>
-                <SortTh col="status" label="Status" />
+                <th className="fm-th-livecat">🌐 Live Shop Category</th>
                 <th className="fm-th-exp"></th>
-                <th className="fm-th-act"></th>
               </tr>
             </thead>
             <tbody>
@@ -789,6 +892,7 @@ export default function FoodMenu() {
                       isSel ? 'fm-row-selected' : '',
                       isDragSrc ? 'fm-row-dragging' : '',
                       isDragOv ? 'fm-row-dragover' : '',
+                      p.status !== 'active' ? 'fm-row-inactive' : '',
                     ].filter(Boolean).join(' ')}
                   >
                     {/* Drag handle — only this initiates drag */}
@@ -812,6 +916,21 @@ export default function FoodMenu() {
                           : <span className="fm-no-img">📷</span>}
                         <div className="fm-img-overlay">📷</div>
                       </div>
+                      <button className={`fm-star${p.featured ? ' fm-star-on' : ''}`}
+                        onClick={() => updateProduct(p.id, 'featured', !p.featured)}
+                        title="Toggle featured"
+                      >{p.featured ? '★' : '☆'}</button>
+                      <label className="fm-mini-toggle fm-img-status-toggle" title="Active / Inactive">
+                        <input
+                          type="checkbox"
+                          checked={p.status === 'active'}
+                          onChange={e => {
+                            const next = e.target.checked ? 'active' : 'inactive';
+                            updateProduct(p.id, 'status', next);
+                            showMsg(next === 'active' ? 'Marked Active' : 'Marked Inactive');
+                          }}
+                        /> {p.status === 'active' ? 'Active' : 'Inactive'}
+                      </label>
                     </td>
                     {/* Name / Desc stacked */}
                     <td className="fm-td-name">
@@ -854,10 +973,16 @@ export default function FoodMenu() {
                         <option value="">—</option>
                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
-                      <button className={`fm-star${p.featured ? ' fm-star-on' : ''}`}
-                        onClick={() => updateProduct(p.id, 'featured', !p.featured)}
-                        title="Toggle featured"
-                      >{p.featured ? '★' : '☆'}</button>
+                      <div className="fm-td-mini-row">
+                        <label className="fm-mini-field" title="Kitchen station">Station
+                          <select className="cell" value={p.pos_station_id ?? ''}
+                            onChange={e => updateProduct(p.id, 'pos_station_id', e.target.value || null)}
+                          >
+                            <option value="">—</option>
+                            {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </label>
+                      </div>
                     </td>
 
                     {/* Badges */}
@@ -868,10 +993,24 @@ export default function FoodMenu() {
                         onChange={codes => updateProduct(p.id, 'badge', codes.join(','))}
                         placeholder="Add badges…"
                       />
+                      <div className="fm-td-toggles">
+                        <label className="fm-mini-toggle" title="Fast moving item">
+                          <input type="checkbox" checked={!!p.is_fast_moving}
+                            onChange={e => updateProduct(p.id, 'is_fast_moving', e.target.checked ? 1 : 0)} /> Fast
+                        </label>
+                        <label className="fm-mini-toggle" title="Active on POS">
+                          <input type="checkbox" checked={p.pos_active === undefined || p.pos_active === null ? true : !!p.pos_active}
+                            onChange={e => updateProduct(p.id, 'pos_active', e.target.checked ? 1 : 0)} /> POS Active
+                        </label>
+                        <label className="fm-mini-toggle" title="Show on customer QR / web menu">
+                          <input type="checkbox" checked={!!p.customer_visible}
+                            onChange={e => updateProduct(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> QR/Web Menu
+                        </label>
+                      </div>
                     </td>
 
                     {/* Storefront Category + price (inline for single/none, range for multiple) */}
-                    <td>
+                    <td className="fm-td-livecat">
                       <select
                         ref={el => setRef(`p-${p.id}-4`, el)}
                         className="cell"
@@ -899,37 +1038,40 @@ export default function FoodMenu() {
                           {getPriceRange(p.variants)}
                         </div>
                       )}
-                    </td>
-
-                    {/* Status */}
-                    <td className="fm-td-status">
-                      <select
-                        ref={el => setRef(`p-${p.id}-5`, el)}
-                        className="cell"
-                        value={p.status}
-                        onChange={e => updateProduct(p.id, 'status', e.target.value)}
-                        onKeyDown={makeProductKeyHandler(p.id, 5)}
-                      >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                      </select>
+                      <div className="fm-td-mini-row">
+                        <label className="fm-mini-field" title="POS price">POS
+                          <PosPriceInput value={p.pos_price} onCommit={v => updateProduct(p.id, 'pos_price', v)} />
+                        </label>
+                        <label className="fm-mini-field" title="Prep time (min)">Prep
+                          <input type="number" className="cell fm-prep-input" min="0"
+                            value={p.prep_time_minutes ?? 10}
+                            onChange={e => updateProduct(p.id, 'prep_time_minutes', parseInt(e.target.value))}
+                            onFocus={e => e.target.select()}
+                          />
+                        </label>
+                        <label className="fm-mini-field" title="Max qty per customer order (blank = unlimited)">Max
+                          <input type="number" className="cell fm-max-input" min="1" max="99" maxLength="2" placeholder="∞"
+                            value={p.customer_max_qty ?? ''}
+                            onChange={e => updateProduct(p.id, 'customer_max_qty', e.target.value === '' ? null : parseInt(e.target.value))}
+                            onFocus={e => e.target.select()}
+                          />
+                        </label>
+                      </div>
                     </td>
 
                     {/* Expand toggle */}
                     <td className="fm-td-exp">
-                      <button
-                        className="fm-exp-btn"
-                        onClick={() => toggleExpand(p.id)}
-                        title={isExp ? 'Collapse variants' : 'Expand variants'}
-                      >
-                        {isExp ? '▼' : '▶'}
-                        {p.variants?.length > 0 && <span className="fm-var-count">{p.variants.length}</span>}
-                      </button>
-                    </td>
-
-                    {/* Delete */}
-                    <td className="fm-td-act">
-                      <button className="btn btn-sm btn-delete" onClick={() => deleteProduct(p.id)} title="Delete item">✕</button>
+                      <div className="fm-exp-td-col">
+                        <button
+                          className="fm-exp-btn"
+                          onClick={() => toggleExpand(p.id)}
+                          title={isExp ? 'Collapse variants' : 'Expand variants'}
+                        >
+                          {isExp ? '▼' : '▶'}
+                          {p.variants?.length > 0 && <span className="fm-var-count">{p.variants.length}</span>}
+                        </button>
+                        <button className="btn btn-sm btn-delete fm-img-delete-btn" onClick={() => deleteProduct(p.id)} title="Delete item">✕</button>
+                      </div>
                     </td>
                   </tr>,
 
@@ -937,7 +1079,6 @@ export default function FoodMenu() {
                   isExp && (
                     <tr key={`exp-${p.id}`} className="fm-exp-row">
                       <td colSpan={12} className="fm-exp-td">
-                        <PosPanel product={p} stations={stations} onUpdate={updateProduct} />
                         <VariantGrid
                           product={p}
                           dirtyVariantIds={dirtyVariants[p.id]}
@@ -971,6 +1112,8 @@ export default function FoodMenu() {
           onToggleSel={toggleSel}
         />
       )}
+        </div>
+      </div>
 
       {/* ── Footer / Pagination ── */}
       <div className="pager fm-pager" style={{ flexShrink: 0 }}>
@@ -1019,7 +1162,7 @@ export default function FoodMenu() {
             </div>
             <div className="fm-import-actions">
               <button className="btn btn-primary" onClick={confirmImport}>Confirm Import</button>
-              <button className="btn btn-clear" onClick={() => { setImportModal(false); setImportPreview(null); }}>Cancel</button>
+              <button className="btn btn-clear" onClick={() => { setImportModal(false); setImportPreview(null); setImportRawCsv(null); }}>Cancel</button>
             </div>
           </div>
         </div>

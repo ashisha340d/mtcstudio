@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useParams } from 'react-router';
 import { io } from 'socket.io-client';
 import axios from 'axios';
@@ -14,8 +14,8 @@ const pEmoji  = id  => FOOD_EMOJI[id % FOOD_EMOJI.length];
 const cEmoji  = (c, i) => c.icon || CAT_EMOJI[i % CAT_EMOJI.length];
 const cartKey = (pid, vid, mods = '') => `${pid}_${vid ?? 'base'}${mods ? `_${mods}` : ''}`;
 
-const STATUS_LABEL = { OPEN: '🟡 Preparing', CLOSED: '✅ Served', CANCELLED: '❌ Cancelled' };
-const STATUS_CLS   = { OPEN: 'open', CLOSED: 'closed', CANCELLED: 'cancelled' };
+const STATUS_LABEL = { OPEN: '🟡 Preparing', CLOSED: '✅ Served', CANCELLED: '❌ Cancelled', PENDING_APPROVAL: '⏳ Awaiting approval' };
+const STATUS_CLS   = { OPEN: 'open', CLOSED: 'closed', CANCELLED: 'cancelled', PENDING_APPROVAL: 'open' };
 
 function timeAgo(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -23,27 +23,6 @@ function timeAgo(iso) {
   if (diff < 3600)  return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
   return new Date(iso).toLocaleDateString();
-}
-
-const LS_KEY = (tid) => `mtc_orders_${tid || 'guest'}`;
-function loadSavedOrders(tableId) {
-  try { return JSON.parse(localStorage.getItem(LS_KEY(tableId)) || '[]'); }
-  catch { return []; }
-}
-function saveOrder(tableId, order) {
-  try {
-    const existing = loadSavedOrders(tableId);
-    const idx = existing.findIndex(o => o.order_id === order.order_id);
-    let updated;
-    if (idx >= 0) {
-      // Append KOT to existing record — keep original placed_at, update total
-      updated = [...existing];
-      updated[idx] = { ...existing[idx], ...order, placed_at: existing[idx].placed_at };
-    } else {
-      updated = [order, ...existing].slice(0, 10);
-    }
-    localStorage.setItem(LS_KEY(tableId), JSON.stringify(updated));
-  } catch {}
 }
 
 function Img({ src, alt, emoji, size = 44 }) {
@@ -83,8 +62,10 @@ export default function CustomerMenu() {
 
   // ── Order placement
   const [custName,    setCustName]    = useState('');
+  const [custPhone,   setCustPhone]   = useState('');
   const [placing,     setPlacing]     = useState(false);
   const [orderErr,    setOrderErr]    = useState('');
+  const [pendingOrder, setPendingOrder] = useState(null); // sent, awaiting POS approval
   const [confirmed,   setConfirmed]   = useState(null);
   const [orderReady,  setOrderReady]  = useState(false);
 
@@ -92,6 +73,9 @@ export default function CustomerMenu() {
   const [myOrders,    setMyOrders]    = useState([]);
   const [viewOrder,   setViewOrder]   = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── Recommended products — admin-curated, shown inside the cart only
+  const [recommended, setRecommended] = useState([]);
 
   // ── Toast
   const [toast, setToast] = useState({ msg: '', type: '' });
@@ -116,21 +100,104 @@ export default function CustomerMenu() {
   }, [tableId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setMyOrders(loadSavedOrders(tableId)); }, [tableId]);
-
-  // ── Socket — attach after order confirmed
   useEffect(() => {
-    if (!confirmed) return;
+    API.get('/recommended').then(r => setRecommended(r.data.products || [])).catch(() => {});
+  }, []);
+
+  // ── Table orders are shared (no per-customer login) — always pulled fresh
+  // from the server, never cached, so a reused QR/table never shows a stale
+  // or already-checked-out order.
+  const fetchTableOrders = useCallback(async () => {
+    if (!tableId) return;
+    try {
+      const { data } = await API.get(`/table/${tableId}/orders`);
+      setMyOrders(data.orders);
+    } catch {}
+  }, [tableId]);
+
+  useEffect(() => { fetchTableOrders(); }, [tableId, fetchTableOrders]);
+
+  // ── Scope global body styles to this page only (don't leak into rest of app)
+  useEffect(() => {
+    document.body.classList.add('cm-page');
+    return () => document.body.classList.remove('cm-page');
+  }, []);
+
+  // ── Active order ids — confirmed order + any still-OPEN saved orders for this
+  // table, so the live socket survives reloads/reopens (not just the in-memory
+  // "confirmed" screen from the moment the order was placed).
+  const activeOrderIds = useMemo(() => {
+    const ids = new Set();
+    if (confirmed?.order_id) ids.add(confirmed.order_id);
+    for (const o of myOrders) {
+      const st = o.live?.status || o.status || 'OPEN';
+      if (st === 'OPEN') ids.add(o.order_id);
+    }
+    return [...ids];
+  }, [confirmed, myOrders]);
+  const activeOrderKey = activeOrderIds.join(',');
+
+  // ── Orders sitting in the POS approval queue — this device's own pending
+  // submission plus any other pending order on the table (from server merge).
+  const pendingIds = useMemo(() => {
+    const ids = new Set();
+    if (pendingOrder?.pending_id) ids.add(pendingOrder.pending_id);
+    for (const o of myOrders) {
+      if (o.status === 'PENDING_APPROVAL' && o.pending_id) ids.add(o.pending_id);
+    }
+    return [...ids];
+  }, [pendingOrder, myOrders]);
+  const pendingKey = pendingIds.join(',');
+
+  // Refs so socket handlers always see the latest value without forcing a
+  // reconnect on every render (the effect only re-runs when the id sets change).
+  const pendingOrderRef = useRef(null);
+  useEffect(() => { pendingOrderRef.current = pendingOrder; }, [pendingOrder]);
+
+  // ── Socket — attach whenever there's at least one active or pending order to track
+  useEffect(() => {
+    if (!activeOrderIds.length && !pendingIds.length) return;
     const sock = io(window.location.origin, {
-      query:        { role: 'customer', orderId: String(confirmed.order_id) },
+      query:        { role: 'customer' },
       transports:   ['websocket', 'polling'],
       reconnection: true,
     });
     socketRef.current = sock;
-    sock.on('order-ready',   ()  => { setOrderReady(true); flash('🎉 Your order is ready!', 'green', 10000); });
-    sock.on('order-updated', d   => { if (d.status === 'CLOSED' || d.id === confirmed.order_id) setOrderReady(true); });
+    sock.on('connect', () => {
+      activeOrderIds.forEach(id => sock.emit('join-order', id));
+      pendingIds.forEach(id => sock.emit('join-pending', id));
+    });
+    sock.on('order-ready',   ()  => { setOrderReady(true); flash('🍽️ Your Food Is Prepared, will serve you shortly!', 'green', 10000); });
+    sock.on('order-updated', d   => { if (d.status === 'CLOSED' && activeOrderIds.includes(d.id)) setOrderReady(true); });
+    sock.on('item-updated',  async d => {
+      if (!d.orderId || !activeOrderIds.includes(d.orderId)) return;
+      flash(d.status === 'SERVED' ? `✅ ${d.product_name || 'Item'} served` : '👨‍🍳 Kitchen updated your order');
+      try {
+        const { data } = await API.get(`/order/${d.orderId}`);
+        setViewOrder(v => (v && v.order_id === d.orderId ? { ...v, live: data.order } : v));
+      } catch {}
+    });
+    sock.on('pending-approved', d => {
+      flash('✅ Order approved — kitchen is on it!', 'green', 4000);
+      fetchTableOrders();
+      const pend = pendingOrderRef.current;
+      if (pend?.pending_id === d.pendingId) {
+        setPendingOrder(null);
+        setConfirmed({
+          order_id: d.orderId, is_new_order: true,
+          order_type: pend.order_type, table_name: pend.table_name,
+          estimated_minutes: d.etaMinutes ?? pend.estimated_minutes,
+          total: pend.total, items: pend.items,
+        });
+      }
+    });
+    sock.on('pending-rejected', d => {
+      flash(`❌ Order declined${d.reason ? `: ${d.reason}` : ''}`, 'red', 6000);
+      fetchTableOrders();
+      if (pendingOrderRef.current?.pending_id === d.pendingId) setPendingOrder(null);
+    });
     return () => { sock.disconnect(); socketRef.current = null; };
-  }, [confirmed, flash]);
+  }, [activeOrderKey, pendingKey, flash, tableId, fetchTableOrders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch modifiers when product detail opens
   useEffect(() => {
@@ -144,6 +211,15 @@ export default function CustomerMenu() {
   const cartItems = useMemo(() => Object.values(cart), [cart]);
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.qty, 0), [cartItems]);
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.price * i.qty, 0), [cartItems]);
+  const cartByProduct = useMemo(() => {
+    const m = new Map();
+    for (const i of cartItems) {
+      const rel = m.get(i.productId) || { qty: 0, items: [] };
+      rel.qty += i.qty; rel.items.push(i);
+      m.set(i.productId, rel);
+    }
+    return m;
+  }, [cartItems]);
 
   // ── Filtered products
   const visible = useMemo(() => {
@@ -256,7 +332,8 @@ export default function CustomerMenu() {
       const overallType   = allTakeaway ? 'TAKEAWAY' : 'DINE_IN';
       const { data } = await API.post('/order', {
         table_id:      tableId ? Number(tableId) : undefined,
-        customer_name: custName.trim() || undefined,
+        customer_name:  custName.trim() || undefined,
+        customer_phone: custPhone.trim() || undefined,
         order_type:    overallType,
         items: cartItems.map(i => {
           // In a mixed DINE_IN order, flag individual TAKEAWAY items in notes
@@ -271,10 +348,8 @@ export default function CustomerMenu() {
           };
         }),
       });
-      const record = { ...data, placed_at: new Date().toISOString(), status: 'OPEN' };
-      saveOrder(tableId, record);
-      setMyOrders(loadSavedOrders(tableId));
-      setConfirmed(data);
+      fetchTableOrders();
+      setPendingOrder(data);
       setCart({});
       setCartOpen(false);
     } catch (e) {
@@ -285,6 +360,7 @@ export default function CustomerMenu() {
   }
 
   async function openMyOrder(order) {
+    if (!Number.isFinite(Number(order.order_id))) { setViewOrder(order); return; } // still pending/rejected — no real order yet
     try {
       const { data } = await API.get(`/order/${order.order_id}`);
       setViewOrder({ ...order, live: data.order });
@@ -293,13 +369,48 @@ export default function CustomerMenu() {
     }
   }
 
+  // ── Pending-approval screen — order sent, waiting on POS to accept it ─────────
+  if (pendingOrder) {
+    return (
+      <div className="cm-root">
+        <Toast msg={toast.msg} type={toast.type} />
+        <div className="cm-success">
+          <div className="cm-success__icon cm-success__icon--pending">⏳</div>
+          <h1 className="cm-success__h">Order Sent!</h1>
+          <p className="cm-success__sub">Waiting for the restaurant to confirm your order…</p>
+          <div className="cm-success__card">
+            <div className="cm-success__card-head">
+              <span>Pending Approval</span>
+              <span>{pendingOrder.table_name ? `Table ${pendingOrder.table_name}` : pendingOrder.order_type === 'TAKEAWAY' ? '🥡 Takeaway' : ''}</span>
+            </div>
+            {pendingOrder.items?.map((item, i) => (
+              <div key={i} className="cm-success__row">
+                <span className="cm-success__row-name">
+                  {item.name}
+                  {item.variant_name ? ` · ${item.variant_name}` : ''}
+                  {item.modifier_names?.length ? ` + ${item.modifier_names.join(', ')}` : ''}
+                  {' '}× {item.qty}
+                </span>
+                <span className="cm-success__row-price">{fmt(item.price * item.qty)}</span>
+              </div>
+            ))}
+            <div className="cm-success__total">
+              <span>Total</span><span>{fmt(pendingOrder.total)}</span>
+            </div>
+          </div>
+          <button className="cm-btn-outline" onClick={() => setPendingOrder(null)}>Back to Menu</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Confirmed screen ──────────────────────────────────────────────────────────
   if (confirmed) {
     return (
       <div className="cm-root">
         <Toast msg={toast.msg} type={toast.type} />
         {orderReady && (
-          <div className="cm-ready-banner"><span>🔔</span> Your order is ready!</div>
+          <div className="cm-ready-banner"><span>🔔</span> Your Food Is Prepared, will serve you shortly!</div>
         )}
         <div className="cm-success">
           <div className="cm-success__icon">{confirmed.is_new_order === false ? '🔔' : '✅'}</div>
@@ -399,7 +510,7 @@ export default function CustomerMenu() {
           <div className="cm-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
           <div className="cm-sidebar">
             <div className="cm-sidebar__head">
-              <span className="cm-sidebar__title">🧾 My Orders</span>
+              <span className="cm-sidebar__title">🧾 {tableId ? 'Table Orders' : 'My Orders'}</span>
               <button className="cm-sidebar__close" onClick={() => setSidebarOpen(false)}>✕</button>
             </div>
             {(() => {
@@ -451,7 +562,7 @@ export default function CustomerMenu() {
                 : 'Scan & Order'}
             </div>
           </div>
-          <button className="cm-hamburger" onClick={() => setSidebarOpen(true)} aria-label="My Orders">
+          <button className="cm-hamburger" onClick={() => { setSidebarOpen(true); fetchTableOrders(); }} aria-label="My Orders">
             <span className="cm-hamburger__lines">☰</span>
             {myOrders.length > 0 && <span className="cm-hamburger__dot" />}
           </button>
@@ -495,11 +606,11 @@ export default function CustomerMenu() {
               <div className="cm-grid">
                 {g.items.map(p => (
                   <Card key={p.id} p={p}
-                    cartQty={cartItems.filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0)}
+                    cartQty={cartByProduct.get(p.id)?.qty || 0}
                     onTap={() => openDetail(p)}
                     onAdd={() => quickAdd(p)}
                     onDec={() => {
-                      const rel = cartItems.filter(i => i.productId === p.id);
+                      const rel = cartByProduct.get(p.id)?.items || [];
                       if (rel.length === 1) setItemQty(rel[0].key, rel[0].qty - 1);
                       else openDetail(p);
                     }}
@@ -517,11 +628,11 @@ export default function CustomerMenu() {
               {visible.length
                 ? visible.map(p => (
                     <Card key={p.id} p={p}
-                      cartQty={cartItems.filter(i => i.productId === p.id).reduce((s, i) => s + i.qty, 0)}
+                      cartQty={cartByProduct.get(p.id)?.qty || 0}
                       onTap={() => openDetail(p)}
                       onAdd={() => quickAdd(p)}
                       onDec={() => {
-                        const rel = cartItems.filter(i => i.productId === p.id);
+                        const rel = cartByProduct.get(p.id)?.items || [];
                         if (rel.length === 1) setItemQty(rel[0].key, rel[0].qty - 1);
                         else openDetail(p);
                       }}
@@ -560,6 +671,9 @@ export default function CustomerMenu() {
               <div className="cm-detail__badges">
                 {detail.is_fast_moving && <span className="cm-badge cm-badge--fast">⚡ Fast</span>}
                 {detail.has_variants   && <span className="cm-badge cm-badge--multi">{detail.variants.length} sizes</span>}
+                {detail.badges?.map(b => (
+                  <span key={b.code} className="cm-badge cm-badge--tag">{b.icon ? `${b.icon} ` : ''}{b.name}</span>
+                ))}
               </div>
               <h2 className="cm-detail__name">{detail.name}</h2>
               {detail.description && <p className="cm-detail__desc">{detail.description}</p>}
@@ -591,7 +705,6 @@ export default function CustomerMenu() {
                     <div className={detail.variants.length > 0 ? 'cm-mods-col' : 'cm-mods-standalone'}>
                       {availMods.map(group => (
                         <div key={group.id} className="cm-mods">
-                          <p className="cm-variants__title">{group.name}</p>
                           <div className="cm-mods__grid">
                             {group.items.map(mod => (
                               <button key={mod.id}
@@ -684,14 +797,33 @@ export default function CustomerMenu() {
               </div>
             ))}
 
+            {recommended.filter(p => !cartByProduct.has(p.id)).length > 0 && (
+              <div className="cm-cart-reco">
+                <p className="cm-cart-reco__title">✨ You might also like</p>
+                <div className="cm-cart-reco__row">
+                  {recommended.filter(p => !cartByProduct.has(p.id)).map(p => (
+                    <div key={p.id} className="cm-cart-reco__card">
+                      <Img src={imgSrc(p.image_filename)} alt={p.name} emoji={pEmoji(p.id)} size={30} />
+                      <span className="cm-cart-reco__name">{p.name}</span>
+                      <span className="cm-cart-reco__price">{fmt(p.price)}</span>
+                      <button className="cm-cart-reco__add" onClick={() => quickAdd(p)}>+ Add</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="cm-cart-totals">
               <div className="cm-cart-row"><span>Subtotal</span><span>{fmt(cartTotal)}</span></div>
               <div className="cm-cart-row cm-cart-row--total"><span>Total</span><span>{fmt(cartTotal)}</span></div>
             </div>
 
             <div className="cm-cart-name-wrap">
+              <p className="cm-cart-name-hint">📝 Name & phone are optional — but helps us reach you if there's an issue with your order</p>
               <input placeholder="Your name (optional)"
                 value={custName} onChange={e => setCustName(e.target.value)} maxLength={60} />
+              <input placeholder="Phone number (optional)" type="tel" style={{ marginTop: 8 }}
+                value={custPhone} onChange={e => setCustPhone(e.target.value)} maxLength={20} />
             </div>
 
             {orderErr && <div className="cm-cart-err">⚠️ {orderErr}</div>}
@@ -709,7 +841,9 @@ export default function CustomerMenu() {
           <div className="cm-sheet">
             <div className="cm-sheet__drag" />
             <div className="cm-order-detail__head">
-              <span className="cm-order-detail__title">Order #{viewOrder.order_id}</span>
+              <span className="cm-order-detail__title">
+                {Number.isFinite(Number(viewOrder.order_id)) ? `Order #${viewOrder.order_id}` : 'Order Pending'}
+              </span>
               <button className="cm-order-detail__close" onClick={() => setViewOrder(null)}>✕</button>
             </div>
             {(() => {
@@ -720,10 +854,14 @@ export default function CustomerMenu() {
                   <div className={`cm-order-status-dot cm-order-status-dot--${cls}`} />
                   <div>
                     <div className="cm-order-status-text">
-                      {st === 'OPEN' ? 'Being Prepared' : st === 'CLOSED' ? 'Served' : 'Cancelled'}
+                      {st === 'OPEN' ? 'Being Prepared' : st === 'CLOSED' ? 'Served'
+                        : st === 'PENDING_APPROVAL' ? 'Awaiting Approval' : 'Cancelled'}
                     </div>
-                    {st === 'OPEN'   && <div className="cm-order-status-sub">Kitchen is working on your order</div>}
-                    {st === 'CLOSED' && <div className="cm-order-status-sub">Enjoy your meal! 🍽️</div>}
+                    {st === 'OPEN'             && <div className="cm-order-status-sub">Kitchen is working on your order</div>}
+                    {st === 'CLOSED'           && <div className="cm-order-status-sub">Enjoy your meal! 🍽️</div>}
+                    {st === 'PENDING_APPROVAL' && <div className="cm-order-status-sub">Waiting for the restaurant to confirm</div>}
+                    {st === 'CANCELLED' && viewOrder.reject_reason &&
+                      <div className="cm-order-status-sub">Declined: {viewOrder.reject_reason}</div>}
                   </div>
                 </div>
               );
@@ -751,7 +889,7 @@ export default function CustomerMenu() {
 }
 
 // ── Product card ──────────────────────────────────────────────────────────────
-function Card({ p, cartQty, onTap, onAdd, onDec }) {
+const Card = memo(function Card({ p, cartQty, onTap, onAdd, onDec }) {
   return (
     <article className="cm-card" onClick={onTap}>
       <div className="cm-card__img">
@@ -784,4 +922,4 @@ function Card({ p, cartQty, onTap, onAdd, onDec }) {
       </div>
     </article>
   );
-}
+});

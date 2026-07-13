@@ -30,6 +30,18 @@ const STOREFRONT_CATEGORIES = [
 
 router.get('/storefront-categories', (req, res) => res.json(STOREFRONT_CATEGORIES));
 
+// GET /api/food-menu/stations — for POS station assignment dropdown
+router.get('/stations', async (req, res) => {
+  res.json(await dbAll(`SELECT * FROM pos_stations ORDER BY sort_order, name`));
+});
+
+// GET /api/food-menu/badges — PRODUCT_BADGE lookup rows
+router.get('/badges', async (req, res) => {
+  res.json(await dbAll(
+    `SELECT * FROM lookup_master WHERE lookup_type = 'PRODUCT_BADGE' ORDER BY sort_order, name`
+  ));
+});
+
 // GET /api/food-menu/products?categoryId=1
 router.get('/products', async (req, res) => {
   const { categoryId } = req.query;
@@ -40,7 +52,7 @@ router.get('/products', async (req, res) => {
     `SELECT
        p.id, p.name, p.category_id, p.status, p.featured, p.sort_order,
        p.pos_price, p.prep_time_minutes, p.is_fast_moving, p.pos_station_id, p.pos_active,
-       p.storefront_category,
+       p.badge, p.storefront_category,
        c.name AS category_name,
        s.name AS station_name,
        (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id AND v.status = 'active') AS variant_count,
@@ -67,7 +79,7 @@ router.get('/products', async (req, res) => {
 router.get('/products/:id', async (req, res) => {
   const product = await dbGet(
     `SELECT
-       p.id, p.name, p.category_id, p.status, p.pos_price, p.pos_active,
+       p.id, p.name, p.category_id, p.status, p.pos_price, p.pos_active, p.badge,
        c.name AS category_name,
        (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id AND v.status = 'active') AS variant_count,
        (SELECT pi.filename FROM product_images pi2

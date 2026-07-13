@@ -27,6 +27,7 @@ export default function Automation() {
   const [categories, setCategories] = useState([]);
 
   const [confetti, setConfetti] = useState(false);
+  const [showRecommended, setShowRecommended] = useState(false);
 
   const flash = (msg, err = false) => {
     setToast({ msg, err });
@@ -114,6 +115,7 @@ export default function Automation() {
         <div className="auto-page">
           <div className="auto-header">
             <h1>Automation Rules</h1>
+            <button className="auto-btn" onClick={() => setShowRecommended(true)}>🎯 Recommended Products</button>
             <button className="auto-btn auto-btn--primary" onClick={() => setWizardRule({ ...BLANK_RULE })}>+ New Rule</button>
           </div>
 
@@ -170,8 +172,102 @@ export default function Automation() {
         </div>
       )}
 
+      {showRecommended && (
+        <RecommendedProductsModal products={products} onClose={() => setShowRecommended(false)} flash={flash} />
+      )}
+
       {toast && <div className={`auto-toast ${toast.err ? 'auto-toast--err' : ''}`}>{toast.msg}</div>}
     </>
+  );
+}
+
+// ── Recommended Products — customer menu "you might also like" ─────────────
+// Simple ordered list, shown inside the Customer QR Menu cart sheet.
+function RecommendedProductsModal({ products, onClose, flash }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    automationApi.recommendedList()
+      .then(r => setRows(r.data))
+      .catch(() => flash('Failed to load recommended products', true))
+      .finally(() => setLoading(false));
+  }, [flash]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pickedIds = new Set(rows.map(r => r.product_id));
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? products.filter(p => !pickedIds.has(p.id) && p.customer_visible && p.name.toLowerCase().includes(q)).slice(0, 8)
+    : [];
+
+  async function add(productId) {
+    try {
+      await automationApi.recommendedAdd(productId);
+      setQuery('');
+      load();
+    } catch { flash('Failed to add', true); }
+  }
+  async function remove(id) {
+    try { await automationApi.recommendedRemove(id); load(); }
+    catch { flash('Failed to remove', true); }
+  }
+  async function move(index, dir) {
+    const next = [...rows];
+    const j = index + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[index], next[j]] = [next[j], next[index]];
+    setRows(next);
+    try { await automationApi.recommendedReorder(next.map(r => r.id)); }
+    catch { flash('Reorder failed', true); load(); }
+  }
+
+  return (
+    <div className="auto-modal-overlay" onClick={onClose}>
+      <div className="auto-modal" onClick={e => e.stopPropagation()}>
+        <div className="auto-modal__head">
+          <h2>Recommended Products</h2>
+          <button className="auto-modal__close" onClick={onClose}>✕</button>
+        </div>
+        <p className="auto-hint">Shown to customers inside the cart on the QR menu — pick a few, order matters.</p>
+
+        <div className="auto-rec-search">
+          <input
+            placeholder="Search a product to add…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {matches.length > 0 && (
+            <div className="auto-rec-search__dropdown">
+              {matches.map(p => (
+                <button key={p.id} type="button" onClick={() => add(p.id)}>{p.name}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <p className="auto-hint">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="auto-empty">No recommended products yet — search above to add some.</p>
+        ) : (
+          <ul className="auto-rec-list">
+            {rows.map((r, i) => (
+              <li key={r.id} className="auto-rec-list__row">
+                <span className="auto-rec-list__name">{r.name}</span>
+                <span className="auto-rec-list__price">Rs {Number(r.price || 0).toLocaleString('en-IN')}</span>
+                <button disabled={i === 0} onClick={() => move(i, -1)} title="Move up">↑</button>
+                <button disabled={i === rows.length - 1} onClick={() => move(i, 1)} title="Move down">↓</button>
+                <button className="auto-btn--danger" onClick={() => remove(r.id)} title="Remove">✕</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

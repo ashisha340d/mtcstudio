@@ -54,7 +54,7 @@ export default function POSDashboard() {
   const {
     tables, orders, tableOrderMap, kotsByOrder, ui,
     loadMasterData, loadActiveOrders, notify,
-    webOrderCount, webOrderAlert, clearWebOrderAlert,
+    webOrderCount, webOrdersRequested, clearShowWebOrdersRequest,
   } = usePOS();
   const { user, lock } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +68,12 @@ export default function POSDashboard() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showWebOrders, setShowWebOrders] = useState(false);
+
+  // "Review Now" tapped on the dock while on another /pos/* screen navigates
+  // here, then this flag opens the modal once mounted.
+  useEffect(() => {
+    if (webOrdersRequested) { setShowWebOrders(true); clearShowWebOrdersRequest(); }
+  }, [webOrdersRequested, clearShowWebOrdersRequest]);
 
   useEffect(() => {
     loadMasterData();
@@ -379,32 +385,6 @@ export default function POSDashboard() {
         />
       )}
 
-      {/* New web order popup — stays until dismissed or reviewed */}
-      {webOrderAlert && !showWebOrders && (
-        <div className="modal-overlay" onClick={clearWebOrderAlert}>
-          <div className="modal" style={{ maxWidth: 420, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-            <span className="modal__title">🌐 New Web Order!</span>
-            <p style={{ margin: '10px 0 4px', fontSize: 15 }}>
-              <strong>{webOrderAlert.orderNumber}</strong> · {webOrderAlert.orderType}
-            </p>
-            <p style={{ margin: '0 0 6px', fontSize: 14 }}>
-              {webOrderAlert.customerName || 'Customer'} · 📞 {webOrderAlert.customerPhone || '—'}
-            </p>
-            <p style={{ margin: '0 0 12px', fontSize: 14 }}>
-              {webOrderAlert.itemCount} item(s) · <strong>Rs {Number(webOrderAlert.grandTotal || 0).toLocaleString('en-IN')}</strong>
-            </p>
-            <div className="modal__actions" style={{ justifyContent: 'center' }}>
-              <button className="modal__btn modal__btn--cancel" onClick={clearWebOrderAlert}>Later</button>
-              <button
-                className="modal__btn modal__btn--confirm"
-                onClick={() => { clearWebOrderAlert(); setShowWebOrders(true); }}
-              >
-                Review Now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {ui.notification && (
         <div className={`pos-notification pos-notification--${ui.notification.type}`}>

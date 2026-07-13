@@ -9,6 +9,7 @@ import CakeSlipTab         from './tabs/CakeSlipTab';
 import CakeProductsTab     from './tabs/CakeProductsTab';
 import TableTagsTab        from './tabs/TableTagsTab';
 import KDSSoundSettingsTab from './tabs/KDSSoundSettingsTab';
+import WeatherRecommendsTab from './tabs/WeatherRecommendsTab';
 import './fm.css';
 
 const TABS = [
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'cake-products', label: '🎂 Cake Products'     },
   { key: 'table-tags',   label: '🏷 Table Tags'         },
   { key: 'kds-sound',    label: '🔔 Alert Sounds'       },
+  { key: 'weather',      label: '🌤️ Weather Recommends' },
 ];
 
 export default function FileMaintenance() {
@@ -60,6 +62,7 @@ export default function FileMaintenance() {
       {active === 'table-tags'    && <TableTagsTab />}
       {active === 'cake-products' && <CakeProductsTab />}
       {active === 'kds-sound'     && <KDSSoundSettingsTab />}
+      {active === 'weather'       && <WeatherRecommendsTab />}
     </div>
   );
 }

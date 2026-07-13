@@ -27,7 +27,7 @@ async function uniqueSlug(name, providedSlug, excludeId = null) {
     }
 }
 
-async function getAll({ search, category, statusFilter, featuredFilter, sort, sortDir, page }) {
+async function getAll({ search, category, statusFilter, featuredFilter, station, liveShop, qrActive, blankMax, badge, sort, sortDir, page }) {
     const limit = 100;
     const offset = ((parseInt(page) || 1) - 1) * limit;
     const sortAllowed = ['id', 'name', 'sort_order', 'status', 'created_at'];
@@ -45,6 +45,13 @@ async function getAll({ search, category, statusFilter, featuredFilter, sort, so
         if (category) { conditions.push(`p.category_id = ?`); params.push(category); }
         if (statusFilter) { conditions.push(`p.status = ?`); params.push(statusFilter); }
         if (featuredFilter !== '') { conditions.push(`p.featured = ?`); params.push(parseInt(featuredFilter)); }
+        if (station) { conditions.push(`p.pos_station_id = ?`); params.push(station); }
+        if (liveShop === 'active') { conditions.push(`p.storefront_category IS NOT NULL`); }
+        if (liveShop === 'inactive') { conditions.push(`p.storefront_category IS NULL`); }
+        if (qrActive === 'active') { conditions.push(`p.customer_visible = 1`); }
+        if (qrActive === 'inactive') { conditions.push(`(p.customer_visible = 0 OR p.customer_visible IS NULL)`); }
+        if (blankMax === 'blank') { conditions.push(`p.customer_max_qty IS NULL`); }
+        if (badge) { conditions.push(`FIND_IN_SET(?, p.badge)`); params.push(badge); }
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -225,10 +232,13 @@ async function exportCsv() {
     const rows = await dbAll(
         `SELECT p.id as product_id, p.name as product_name, p.slug, c.name as category_name,
                 p.short_description, p.description, p.featured, p.status as product_status, p.sort_order as product_sort_order,
+                p.pos_price, p.prep_time_minutes, p.is_fast_moving, p.pos_station_id, s.name as station_name,
+                p.pos_active, p.badge, p.storefront_category, p.customer_visible, p.customer_max_qty,
                 v.id as variant_id, v.name as variant_name, v.sku, v.selling_price, v.cost_price,
                 v.stock, v.reorder_level, v.unit, v.barcode, v.status as variant_status, v.sort_order as variant_sort_order
          FROM products p
          LEFT JOIN categories c ON p.category_id = c.id
+         LEFT JOIN pos_stations s ON s.id = p.pos_station_id
          LEFT JOIN product_variants v ON v.product_id = p.id
          ORDER BY p.sort_order ASC, p.id DESC, v.sort_order`
     );
@@ -260,21 +270,34 @@ async function importCsv(csvBuffer) {
                 [productName, r.category_id || null, r.category_id || '']
             );
 
+            const posFields = [
+                r.pos_price || 0, r.prep_time_minutes || null, r.is_fast_moving || 0,
+                r.pos_station_id || null, r.pos_active === '' || r.pos_active === undefined ? 1 : r.pos_active,
+                r.badge || null, r.storefront_category || null, r.customer_visible || 0,
+                r.customer_max_qty === '' || r.customer_max_qty === undefined ? null : r.customer_max_qty,
+            ];
+
             let productId;
             if (existingProduct) {
                 const slug = await uniqueSlug(productName, r.slug, existingProduct.id);
                 await dbRun(
-                    `UPDATE products SET category_id=?,slug=?,short_description=?,description=?,featured=?,status=?,sort_order=? WHERE id=?`,
+                    `UPDATE products SET category_id=?,slug=?,short_description=?,description=?,featured=?,status=?,sort_order=?,
+                            pos_price=?,prep_time_minutes=?,is_fast_moving=?,pos_station_id=?,pos_active=?,badge=?,storefront_category=?,customer_visible=?,customer_max_qty=?
+                     WHERE id=?`,
                     [r.category_id || null, slug, r.short_description || null, r.description || null,
-                     r.featured || 0, r.product_status || r.status || 'active', r.product_sort_order || 0, existingProduct.id]
+                     r.featured || 0, r.product_status || r.status || 'active', r.product_sort_order || 0,
+                     ...posFields, existingProduct.id]
                 );
                 productId = existingProduct.id;
             } else {
                 const slug = await uniqueSlug(productName, r.slug);
                 const res = await dbRun(
-                    `INSERT INTO products (category_id,name,slug,short_description,description,featured,status,sort_order) VALUES (?,?,?,?,?,?,?,?)`,
+                    `INSERT INTO products (category_id,name,slug,short_description,description,featured,status,sort_order,
+                            pos_price,prep_time_minutes,is_fast_moving,pos_station_id,pos_active,badge,storefront_category,customer_visible,customer_max_qty)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                     [r.category_id || null, productName, slug, r.short_description || null,
-                     r.description || null, r.featured || 0, r.product_status || r.status || 'active', r.product_sort_order || 0]
+                     r.description || null, r.featured || 0, r.product_status || r.status || 'active', r.product_sort_order || 0,
+                     ...posFields]
                 );
                 productId = res.lastID;
             }

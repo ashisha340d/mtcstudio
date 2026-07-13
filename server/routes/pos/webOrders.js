@@ -53,7 +53,9 @@ async function buildFullOrder(orderId) {
 router.get('/', async (req, res) => {
   const status = String(req.query.status || 'PENDING_APPROVAL').toUpperCase();
   const rows = await dbAll(
-    `SELECT * FROM web_orders_pending WHERE status = ? ORDER BY received_at DESC LIMIT 100`, [status]);
+    `SELECT w.*, t.name AS table_name FROM web_orders_pending w
+     LEFT JOIN pos_restaurant_tables t ON t.id = w.table_id
+     WHERE w.status = ? ORDER BY w.received_at DESC LIMIT 100`, [status]);
   res.json(await attachItems(rows));
 });
 
@@ -65,7 +67,9 @@ router.get('/counts', async (req, res) => {
 
 // GET /api/pos/web-orders/:id — full details
 router.get('/:id', async (req, res) => {
-  const row = await dbGet(`SELECT * FROM web_orders_pending WHERE id=?`, [req.params.id]);
+  const row = await dbGet(
+    `SELECT w.*, t.name AS table_name FROM web_orders_pending w
+     LEFT JOIN pos_restaurant_tables t ON t.id = w.table_id WHERE w.id=?`, [req.params.id]);
   if (!row) return res.status(404).json({ error: 'Not found' });
   await attachItems([row]);
   res.json(row);
@@ -212,26 +216,42 @@ router.post('/:id/approve', async (req, res) => {
     let order = null, kot = null, maxPrepMin = 0;
     const savedItems = [];
     if (foodItems.length) {
-      const orderType = wo.order_type === 'Delivery' ? 'DELIVERY' : 'TAKEAWAY';
-      const noteBits = [`🌐 Web order ${wo.order_number}`];
+      const isTableOrder = wo.source === 'CUSTOMER_QR' && wo.order_type === 'DINE_IN' && wo.table_id;
+      const orderType = isTableOrder ? 'DINE_IN' : (wo.order_type === 'Delivery' ? 'DELIVERY' : 'TAKEAWAY');
+      const noteBits = wo.source === 'CUSTOMER_QR'
+        ? [`📱 Customer QR order ${wo.order_number}`]
+        : [`🌐 Web order ${wo.order_number}`];
       if (cakeOrder) noteBits.push(`🎂 + cake order ${cakeOrder.order_number}`);
       if (+wo.delivery_charge > 0) noteBits.push(`Delivery charge Rs.${+wo.delivery_charge}`);
       if (+wo.discount > 0) noteBits.push(`Web discount Rs.${+wo.discount} (apply at checkout)`);
-      noteBits.push(`Web total Rs.${+wo.grand_total} · ${wo.payment_method} / ${wo.payment_status}`);
+      if (wo.source !== 'CUSTOMER_QR') noteBits.push(`Web total Rs.${+wo.grand_total} · ${wo.payment_method} / ${wo.payment_status}`);
       if (wo.customer_notes) noteBits.push(`Customer: ${wo.customer_notes}`);
 
-      order = await tx.dbGet(
-        `INSERT INTO pos_orders
-           (order_type, customer_name, customer_phone, customer_address, notes, status, punched_by)
-         VALUES (?,?,?,?,?,'OPEN',?) RETURNING *`,
-        [orderType, wo.customer_name, wo.customer_phone,
-         [wo.customer_address, wo.landmark].filter(Boolean).join(' · ') || null,
-         noteBits.join(' | '), req.posUser.id]
-      );
+      // Dine-in QR orders append to the table's existing OPEN order (same
+      // "one order per table sitting" model the customer app itself uses) —
+      // everything else (web Pickup/Delivery) always starts a fresh order.
+      if (isTableOrder) {
+        order = await tx.dbGet(
+          `SELECT * FROM pos_orders WHERE table_id=? AND status='OPEN' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+          [wo.table_id]
+        );
+      }
 
+      if (!order) {
+        order = await tx.dbGet(
+          `INSERT INTO pos_orders
+             (order_type, table_id, customer_name, customer_phone, customer_address, notes, status, punched_by)
+           VALUES (?,?,?,?,?,?,'OPEN',?) RETURNING *`,
+          [orderType, isTableOrder ? wo.table_id : null, wo.customer_name, wo.customer_phone,
+           [wo.customer_address, wo.landmark].filter(Boolean).join(' · ') || null,
+           noteBits.join(' | '), req.posUser.id]
+        );
+      }
+
+      const { mx } = await tx.dbGet(`SELECT COALESCE(MAX(kot_number),0) AS mx FROM pos_kots WHERE order_id=?`, [order.id]);
       kot = await tx.dbGet(
-        `INSERT INTO pos_kots (order_id, kot_number, punched_by) VALUES (?,1,?) RETURNING *`,
-        [order.id, req.posUser.id]
+        `INSERT INTO pos_kots (order_id, kot_number, punched_by) VALUES (?,?,?) RETURNING *`,
+        [order.id, mx + 1, req.posUser.id]
       );
 
       for (const it of foodItems) {
@@ -289,10 +309,18 @@ router.post('/:id/approve', async (req, res) => {
   // Cake production screens pick up the new confirmed booking
   if (cakeOrder) socketServer.emitCakeProductionChanged({ cake_order_id: cakeOrder.id, kind: 'status' });
 
-  // Tell the website the customer's order was accepted — etaMinutes = slowest
-  // item's prep time; the website adds its own buffer for the ETA display.
-  webOrderBridge.sendStatus(wo.web_order_id, 'APPROVED',
-    { posOrderId: order ? order.id : cakeOrder.id, etaMinutes: maxPrepMin || null });
+  if (wo.source === 'CUSTOMER_QR') {
+    // Tell the customer's own phone — it switches from "waiting for approval"
+    // to live order tracking (joins order-${orderId} for KDS/serve updates).
+    socketServer.emitPendingApproved(pendingId, {
+      pendingId, orderId: order ? order.id : null, etaMinutes: maxPrepMin || null,
+    });
+  } else {
+    // Tell the website the customer's order was accepted — etaMinutes = slowest
+    // item's prep time; the website adds its own buffer for the ETA display.
+    webOrderBridge.sendStatus(wo.web_order_id, 'APPROVED',
+      { posOrderId: order ? order.id : cakeOrder.id, etaMinutes: maxPrepMin || null });
+  }
   // Stationless items are auto-SERVED at insert — if that's the whole order,
   // this pushes READY immediately (KDS will never touch it)
   if (order) webOrderBridge.notifyKotItemProgress(order.id);
@@ -328,7 +356,8 @@ router.post('/:id/reject', async (req, res) => {
   if (result.error) return res.status(result.code).json({ error: result.error });
 
   log(`rejected ${result.wo.order_number} (pending #${pendingId}) by ${req.posUser.employee_id}${reason ? ` — ${reason}` : ''}`);
-  webOrderBridge.sendStatus(result.wo.web_order_id, 'REJECTED', { reason });
+  if (result.wo.source === 'CUSTOMER_QR') socketServer.emitPendingRejected(pendingId, { pendingId, reason });
+  else webOrderBridge.sendStatus(result.wo.web_order_id, 'REJECTED', { reason });
   res.json({ ok: true });
 });
 

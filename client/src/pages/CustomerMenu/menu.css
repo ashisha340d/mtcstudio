@@ -3,9 +3,9 @@
    Yellow Cab theme — mobile-first
 ═══════════════════════════════════════════════════════════════ */
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.cm-root, .cm-root *, .cm-root *::before, .cm-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
+.cm-root {
   --y:       #FFD100;
   --y-dark:  #E6BB00;
   --y-light: #FFFBE6;
@@ -30,12 +30,10 @@
   --sh-l:    0 8px 28px rgba(0,0,0,.15);
 }
 
-html {
+body.cm-page {
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
   touch-action: manipulation;
-}
-body {
   background: var(--bg);
   overscroll-behavior-y: none;
   min-height: 100dvh;
@@ -415,6 +413,7 @@ body {
 }
 .cm-badge--fast  { background: var(--y); color: var(--on-y); }
 .cm-badge--multi { background: rgba(0,0,0,.55); color: #fff; }
+.cm-badge--tag   { background: var(--green-l); color: var(--green); }
 
 .cm-card__body {
   padding: 9px 10px 4px;
@@ -807,6 +806,24 @@ body {
 .cm-item-btn:active { transform: scale(.92); }
 .cm-item-qty { font-size: 15px; font-weight: 800; min-width: 20px; text-align: center; }
 
+/* ── Cart recommendations ("you might also like") ────────────────────── */
+.cm-cart-reco { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--y-light); }
+.cm-cart-reco__title { font-size: 12px; font-weight: 800; color: var(--sub); margin-bottom: 8px; }
+.cm-cart-reco__row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.cm-cart-reco__card {
+  flex-shrink: 0; width: 96px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center;
+}
+.cm-cart-reco__card .img-fallback { font-size: 26px; }
+.cm-cart-reco__card img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; }
+.cm-cart-reco__name { font-size: 11px; font-weight: 700; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cm-cart-reco__price { font-size: 11px; font-weight: 800; color: var(--on-y); }
+.cm-cart-reco__add {
+  width: 100%; margin-top: 2px; padding: 4px 0; border: 1.5px solid var(--y-dark);
+  background: var(--y); color: var(--on-y); border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;
+}
+
 .cm-cart-totals { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .cm-cart-row {
   display: flex; justify-content: space-between;
@@ -819,6 +836,7 @@ body {
 }
 
 .cm-cart-name-wrap { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.cm-cart-name-hint { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
 .cm-cart-name-wrap input {
   width: 100%; padding: 11px 14px;
   border: 1.5px solid var(--border); border-radius: var(--r-sm);
@@ -900,6 +918,8 @@ body {
   animation: popIn .45s cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+.cm-success__icon--pending { background: var(--y-light); animation: pendingPulse 1.6s ease-in-out infinite; }
+@keyframes pendingPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .8; } }
 .cm-success__h   { font-size: 26px; font-weight: 900; letter-spacing: -.5px; margin-bottom: 5px; }
 .cm-success__sub { font-size: 14px; color: var(--sub); margin-bottom: 22px; }
 

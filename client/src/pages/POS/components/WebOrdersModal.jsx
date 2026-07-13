@@ -17,7 +17,7 @@ const TABS = [
  * the existing workflows) or rejects them.
  */
 export default function WebOrdersModal({ onClose, onApproved }) {
-  const { notify, refreshWebOrderCount, webOrderAlert } = usePOS();
+  const { notify, refreshWebOrderCount, webOrderQueue, dismissWebOrder } = usePOS();
 
   const [tab, setTab] = useState('PENDING_APPROVAL');
   const [rows, setRows] = useState([]);
@@ -42,7 +42,7 @@ export default function WebOrdersModal({ onClose, onApproved }) {
 
   useEffect(() => { load(); }, [load]);
   // A new order arriving while the modal is open refreshes the pending list live
-  useEffect(() => { if (webOrderAlert && tab === 'PENDING_APPROVAL') load(); }, [webOrderAlert]); // eslint-disable-line
+  useEffect(() => { if (webOrderQueue.length && tab === 'PENDING_APPROVAL') load(); }, [webOrderQueue]); // eslint-disable-line
 
   async function handleApprove(row) {
     setBusyId(row.id);
@@ -50,6 +50,7 @@ export default function WebOrdersModal({ onClose, onApproved }) {
     try {
       const r = await posApi.approveWebOrder(row.id);
       notify?.('success', `🌐 ${row.order_number} approved → POS order #${r.posOrderId}, KOT sent to kitchen`);
+      dismissWebOrder(row.id);
       await load();
       refreshWebOrderCount();
       onApproved?.();
@@ -66,6 +67,7 @@ export default function WebOrdersModal({ onClose, onApproved }) {
     try {
       await posApi.rejectWebOrder(row.id, reason);
       notify?.('error', `${row.order_number} rejected`);
+      dismissWebOrder(row.id);
       setRejectId(null);
       setReason('');
       await load();
@@ -125,12 +127,18 @@ export default function WebOrdersModal({ onClose, onApproved }) {
                     style={{ width: '100%', border: 'none', marginBottom: 0 }}
                     onClick={() => setOpenId(isOpen ? null : o.id)}
                   >
-                    <span className="merge-row__icon">{o.order_type === 'Delivery' ? '🚴' : '🛍'}</span>
+                    <span className="merge-row__icon">
+                      {o.source === 'CUSTOMER_QR' ? '📱' : o.order_type === 'Delivery' ? '🚴' : '🛍'}
+                    </span>
                     <span className="merge-row__title">
-                      {o.order_number} · {o.customer_name || 'Customer'}
+                      {o.order_number} · {o.source === 'CUSTOMER_QR'
+                        ? (o.table_name ? `Table ${o.table_name}` : (o.customer_name || 'Customer'))
+                        : (o.customer_name || 'Customer')}
                       <span className="merge-row__sub">
-                        {o.order_type} · 📞 {o.customer_phone || '—'} · {timeOf(o.ordered_at || o.received_at)}
-                        {' · '}{o.payment_method} / {o.payment_status}
+                        {o.order_type} · {o.source === 'CUSTOMER_QR'
+                          ? (o.customer_phone ? <>📞 {o.customer_phone}</> : 'QR order')
+                          : <>📞 {o.customer_phone || '—'}</>} · {timeOf(o.ordered_at || o.received_at)}
+                        {o.source !== 'CUSTOMER_QR' && <> · {o.payment_method} / {o.payment_status}</>}
                         {o.status !== 'PENDING_APPROVAL' ? ` · ${o.status}` : ''}
                       </span>
                     </span>

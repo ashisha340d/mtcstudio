@@ -296,6 +296,7 @@ export default function WaiterApp() {
         ? `🍽️ ${product_name} ready for ${who} — already checked out, please deliver!`
         : `✅ ${product_name} ready — ${who}`, 'success');
     });
+    socket.on('item-updated',       reload);
     socket.on('reconnect',          () => { reload(); drainOfflineQueue(); });
     socket.on('waiter-call', payload => {
       setCalls(prev => [...prev.filter(c => c.table_id !== payload.table_id), payload]);

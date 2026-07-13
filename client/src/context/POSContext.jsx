@@ -107,6 +107,38 @@ const A = {
 let tempIdCounter = 0;
 const nextTempId = () => `tmp_${++tempIdCounter}`;
 
+function normalizeProduct(product) {
+  const rawPrice = product?.price ?? product?.pos_price ?? product?.min_price ?? product?.max_price ?? product?.selling_price ?? 0;
+  const rawPrep = product?.prep_time_minutes ?? product?.prep_time ?? 10;
+  const rawActive = product?.is_active ?? product?.pos_active ?? 1;
+  const rawVariantCount = product?.variant_count ?? product?.variantCount ?? (Array.isArray(product?.variants) ? product.variants.length : 0) ?? 0;
+  const badgeCodes = String(product?.badge || product?.badges || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const price = Number(rawPrice);
+  const prepTime = Number(rawPrep);
+  const variantCount = Number(rawVariantCount);
+  const isActive = rawActive === 0 || rawActive === '0' || rawActive === false ? 0 : 1;
+
+  return {
+    ...product,
+    id: product?.id ?? product?.product_id,
+    name: product?.name ?? product?.product_name ?? '',
+    price: Number.isFinite(price) ? price : 0,
+    prep_time_minutes: Number.isFinite(prepTime) ? prepTime : 10,
+    is_active: isActive,
+    is_fast_moving: Boolean(Number(product?.is_fast_moving ?? 0)),
+    variant_count: Number.isFinite(variantCount) ? variantCount : 0,
+    badge: badgeCodes.join(','),
+  };
+}
+
+function normalizeProducts(products) {
+  return (products || []).map(normalizeProduct);
+}
+
 function calcCartTotal(items) {
   return items.reduce((sum, i) => sum + i.price * i.qty, 0);
 }
@@ -317,7 +349,11 @@ export function POSProvider({ children, apiService, activeUser = null }) {
 
   // ── Pending Web Orders (approval queue) ───────────────────
   const [webOrderCount, setWebOrderCount] = useState(0);
-  const [webOrderAlert, setWebOrderAlert] = useState(null); // last pushed order → popup
+  const [webOrderQueue, setWebOrderQueue] = useState([]); // arrived orders → docked notification stack
+  // The dock renders on every /pos/* screen; "Review Now" from a non-dashboard
+  // screen navigates to the dashboard first, then this flag tells it to open
+  // the Web Orders modal once it mounts.
+  const [webOrdersRequested, setWebOrdersRequested] = useState(false);
 
   const refreshWebOrderCount = useCallback(async () => {
     try {
@@ -327,6 +363,29 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   }, [apiService]);
 
   useEffect(() => { refreshWebOrderCount(); }, [refreshWebOrderCount]);
+
+  // Whenever the POS app is opened, pull whatever's already sitting in the
+  // approval queue (arrived while POS was closed / before this session) into
+  // the dock — not just orders that arrive live over the socket from here on.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await apiService.getWebOrders('PENDING_APPROVAL');
+        setWebOrderQueue(q => {
+          const byId = new Map(q.map(o => [o._dockId, o]));
+          for (const r of rows) {
+            if (byId.has(r.id)) continue;
+            byId.set(r.id, {
+              _dockId: r.id, pendingId: r.id, orderNumber: r.order_number, orderType: r.order_type,
+              customerName: r.customer_name, customerPhone: r.customer_phone, tableName: r.table_name,
+              grandTotal: r.grand_total, itemCount: (r.items || []).length,
+            });
+          }
+          return [...byId.values()];
+        });
+      } catch { /* endpoint unavailable — dock just stays empty until a live push */ }
+    })();
+  }, [apiService]);
 
   useEffect(() => {
     const unlock = () => { alertPlayerRef.current.unlock(); webOrderPlayerRef.current.unlock(); };
@@ -347,7 +406,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
         apiService.getCategories(),
         apiService.getStations(),
       ]);
-      dispatch({ type: A.LOAD_MASTER, payload: { tables, products, categories, stations } });
+      dispatch({ type: A.LOAD_MASTER, payload: { tables, products: normalizeProducts(products), categories, stations } });
     } catch (err) {
       dispatch({ type: A.SET_ERROR, payload: err.message });
     }
@@ -702,7 +761,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     // New pending web order pushed from the website — popup + sound + badge
     socket.on('web-order-received', (payload) => {
       webOrderPlayerRef.current.play();
-      setWebOrderAlert(payload);
+      setWebOrderQueue(q => [...q, { ...payload, _dockId: payload.pendingId ?? `${Date.now()}-${Math.random()}` }]);
       setWebOrderCount(c => c + 1);
     });
 
@@ -774,9 +833,12 @@ export function POSProvider({ children, apiService, activeUser = null }) {
 
     // Web Orders (approval queue)
     webOrderCount,
-    webOrderAlert,
-    clearWebOrderAlert: () => setWebOrderAlert(null),
+    webOrderQueue,
+    dismissWebOrder: (dockId) => setWebOrderQueue(q => q.filter(o => o._dockId !== dockId)),
     refreshWebOrderCount,
+    webOrdersRequested,
+    requestShowWebOrders: () => setWebOrdersRequested(true),
+    clearShowWebOrdersRequest: () => setWebOrdersRequested(false),
   };
 
   return <POSContext.Provider value={value}>{children}</POSContext.Provider>;

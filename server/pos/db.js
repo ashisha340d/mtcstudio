@@ -497,6 +497,24 @@ async function ensureSchema() {
   await dbRun(`ALTER TABLE web_order_items ADD COLUMN IF NOT EXISTS cake_json LONGTEXT`);
   await dbRun(`ALTER TABLE web_orders_pending ADD COLUMN IF NOT EXISTS cake_order_id INT`);
 
+  // In-house Customer QR orders (source='CUSTOMER_QR') reuse this same pending
+  // queue — table_id carries which dine-in table to append the approved KOT to,
+  // and web_order_id has no website counterpart so it must allow NULL.
+  await dbRun(`ALTER TABLE web_orders_pending MODIFY COLUMN web_order_id INT NULL`);
+  await dbRun(`ALTER TABLE web_orders_pending ADD COLUMN IF NOT EXISTS table_id INT`);
+
+  // Recommended Products — a simple admin-curated list (Automation module)
+  // shown to customers "you might also like" style when they add an item or
+  // open the cart. Global, not per-product cross-sell — one ordered list.
+  await dbRun(`CREATE TABLE IF NOT EXISTS recommended_products (
+    id         INT PRIMARY KEY AUTO_INCREMENT,
+    product_id INT NOT NULL UNIQUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active  INT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
   // ── Column additions on shared tables ─────────────────────────
   await dbRun(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS icon TEXT`);
 
