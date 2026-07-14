@@ -27,7 +27,7 @@ async function uniqueSlug(name, providedSlug, excludeId = null) {
     }
 }
 
-async function getAll({ search, category, statusFilter, featuredFilter, station, liveShop, qrActive, blankMax, badge, sort, sortDir, page }) {
+async function getAll({ search, category, statusFilter, featuredFilter, station, liveShop, storefrontCat, qrActive, blankMax, badge, fastFilter, sort, sortDir, page }) {
     const limit = 100;
     const offset = ((parseInt(page) || 1) - 1) * limit;
     const sortAllowed = ['id', 'name', 'sort_order', 'status', 'created_at'];
@@ -48,10 +48,12 @@ async function getAll({ search, category, statusFilter, featuredFilter, station,
         if (station) { conditions.push(`p.pos_station_id = ?`); params.push(station); }
         if (liveShop === 'active') { conditions.push(`p.storefront_category IS NOT NULL`); }
         if (liveShop === 'inactive') { conditions.push(`p.storefront_category IS NULL`); }
+        if (storefrontCat) { conditions.push(`p.storefront_category = ?`); params.push(storefrontCat); }
         if (qrActive === 'active') { conditions.push(`p.customer_visible = 1`); }
         if (qrActive === 'inactive') { conditions.push(`(p.customer_visible = 0 OR p.customer_visible IS NULL)`); }
         if (blankMax === 'blank') { conditions.push(`p.customer_max_qty IS NULL`); }
         if (badge) { conditions.push(`FIND_IN_SET(?, p.badge)`); params.push(badge); }
+        if (fastFilter === 'fast') { conditions.push(`p.is_fast_moving = 1`); }
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -132,7 +134,7 @@ async function create(body) {
          b.pos_active !== undefined ? (b.pos_active ? 1 : 0) : 1, b.customer_visible ? 1 : 0,
          b.customer_max_qty ? parseInt(b.customer_max_qty) : null]
     );
-    return { product_id: result.lastID };
+    return { product_id: result.insertId };
 }
 
 async function update(id, body) {
@@ -160,7 +162,7 @@ async function addVariant(productId, body) {
         [productId, b.name || 'Regular', b.sku || null, b.selling_price || 0, b.cost_price || 0,
          b.stock || 0, b.reorder_level || 0, b.unit || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0]
     );
-    return result.lastID;
+    return result.insertId;
 }
 
 async function updateVariant(productId, variantId, body) {
@@ -299,7 +301,7 @@ async function importCsv(csvBuffer) {
                      r.description || null, r.featured || 0, r.product_status || r.status || 'active', r.product_sort_order || 0,
                      ...posFields]
                 );
-                productId = res.lastID;
+                productId = res.insertId;
             }
 
             const vvals = [variantName, productId, r.selling_price || 0, r.cost_price || 0, r.stock || 0,

@@ -21,7 +21,7 @@ async function create({ name, slug, description, sort_order, status }) {
         `INSERT INTO categories (name, slug, description, sort_order, status) VALUES (?, ?, ?, ?, ?)`,
         [name, slug || null, description || null, sort_order || 0, status || 'active']
     );
-    return dbGet(`SELECT * FROM categories WHERE id = ?`, [result.lastID]);
+    return dbGet(`SELECT * FROM categories WHERE id = ?`, [result.insertId]);
 }
 
 async function update(id, { name, slug, description, sort_order, status }) {

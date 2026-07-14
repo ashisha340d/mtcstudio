@@ -3,13 +3,11 @@ import { useLocation, useNavigate, Routes, Route } from 'react-router';
 
 // ── Page components ────────────────────────────────────────────
 import Dashboard from '../pages/Dashboard/Dashboard';
-import Categories from '../pages/Categories/Categories';
 import FoodMenu from '../pages/FoodMenu/FoodMenu';
 import Media from '../pages/Media/Media';
 import Blogs from '../pages/Blogs/Blogs';
 import BlogNew from '../pages/Blogs/BlogNew';
 import BlogEdit from '../pages/Blogs/BlogEdit';
-import LiveShelf from '../pages/LiveShelf/LiveShelf';
 import CakeCatalogue from '../pages/CakeCatalogue/CakeCatalogue';
 import FileMaintenance from '../pages/FileMaintenance/FileMaintenance';
 import CRM from '../pages/CRM/CRM';
@@ -40,11 +38,9 @@ function BlogsApp() {
 const ALL_APPS = [
   // Dashboard is NOT in this list — it lives at '/' but the desktop OS never
   // opens it as a window. It remains accessible via App.jsx routing.
-  { key: 'categories', label: 'Categories', icon: '📂', path: '/categories', accent: '#2563eb', desc: 'Product categories', component: Categories },
-  { key: 'food-menu', label: 'Food Menu', icon: '🍽', path: '/food-menu', accent: '#c1440e', desc: 'Products & variants', component: FoodMenu },
+  { key: 'food-menu', label: 'Food Menu', icon: '🍽', path: '/food-menu', accent: '#c1440e', desc: 'Products · Live Shelf · Categories', component: FoodMenu },
   { key: 'file-maintenance', label: 'File Maintenance', icon: '🔧', path: '/file-maintenance', accent: '#6366f1', desc: 'Tables · Users · Stations', component: FileMaintenance },
   { key: 'media', label: 'Media', icon: '🖼', path: '/media', accent: '#7c3aed', desc: 'Images & assets', component: Media },
-  { key: 'liveshelf', label: 'Live Shelf', icon: '📡', path: '/liveshelf', accent: '#16a34a', desc: "Today's available items", component: LiveShelf },
   { key: 'cake-catalogue', label: 'Cake Catalogue', icon: '🍰', path: '/cake-catalogue', accent: '#e91e8c', desc: 'Website cake catalogue', component: CakeCatalogue },
   { key: 'blogs', label: 'Blogs', icon: '✍', path: '/blogs', accent: '#d97706', desc: 'Articles & content', component: BlogsApp },
   { key: 'crm', label: 'CRM', icon: '👥', path: '/crm', accent: '#0891b2', desc: 'Customers & loyalty', component: CRM },
@@ -60,14 +56,12 @@ const ALL_APPS = [
 
 /* Menu bar dropdown children */
 const FILES_CHILDREN = [
-  { key: 'categories', label: 'Categories', icon: '📂' },
   { key: 'food-menu', label: 'Food Menu', icon: '🍽' },
   { key: 'file-maintenance', label: 'File Maintenance', icon: '🔧' },
 ];
 
 const CMS_CHILDREN = [
   { key: 'media', label: 'Media', icon: '🖼' },
-  { key: 'liveshelf', label: 'Live Shelf', icon: '📡' },
   { key: 'cake-catalogue', label: 'Cake Catalogue', icon: '🍰' },
   { key: 'blogs', label: 'Blog', icon: '✍' },
 ];
@@ -77,23 +71,21 @@ const CMS_CHILDREN = [
 
   Column 0 — FILES (x=16)          Column 1 — CMS (x=120)        Column 2 — Apps (x=224)
   ─────────────────────────         ──────────────────────         ─────────────────────────
-  Categories                        Media                          CRM
-  Food Menu                         Menu Sections                  POS
-  File Maintenance                  Menu Generator                 KDS Display
-                                    Live Shelf                     Cake Orders
-                                    Blog                           Sales Report
+  Food Menu                         Media                          CRM
+  File Maintenance                  Cake Catalogue                 POS
+                                    Blog                           KDS Display
+                                                                   Cake Orders
+                                                                   Sales Report
                                                                    System Monitor
 */
 const GROUP_DEFS = {
   // FILES group — col 0
-  'categories': { col: 0, row: 0 },
-  'food-menu': { col: 0, row: 1 },
-  'file-maintenance': { col: 0, row: 2 },
+  'food-menu': { col: 0, row: 0 },
+  'file-maintenance': { col: 0, row: 1 },
   // CMS group — col 1
   'media': { col: 1, row: 0 },
-  'liveshelf': { col: 1, row: 2 },
-  'cake-catalogue': { col: 1, row: 3 },
-  'blogs': { col: 1, row: 4 },
+  'cake-catalogue': { col: 1, row: 1 },
+  'blogs': { col: 1, row: 2 },
   // Apps — col 2 (no Dashboard)
   'crm': { col: 2, row: 0 },
   'automation': { col: 2, row: 1 },
@@ -131,8 +123,8 @@ function loadShortcuts() {
   } catch { }
   // Default: all apps visible, in logical order
   return [
-    'categories', 'food-menu', 'file-maintenance',
-    'media', 'liveshelf', 'cake-catalogue', 'blogs',
+    'food-menu', 'file-maintenance',
+    'media', 'cake-catalogue', 'blogs',
     'crm', 'automation', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor',
   ];
 }
@@ -379,8 +371,8 @@ function ShortcutsPanel({ shortcuts, onToggle, onArrange, onClose }) {
         {/* App list — grouped */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
           {[
-            { header: '📂  Files', keys: ['categories', 'food-menu', 'file-maintenance'] },
-            { header: '🌐  CMS', keys: ['media', 'liveshelf', 'cake-catalogue', 'blogs'] },
+            { header: '📂  Files', keys: ['food-menu', 'file-maintenance'] },
+            { header: '🌐  CMS', keys: ['media', 'cake-catalogue', 'blogs'] },
             { header: '⚡  Apps', keys: ['crm', 'automation', 'pos', 'kds', 'cake-orders', 'system-monitor'] },
           ].map(group => (
             <div key={group.header}>
@@ -902,7 +894,7 @@ export default function AdminLayout() {
         {/* Separator */}
         <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.12)', margin: '0 6px' }} />
 
-        {/* Files ▾ dropdown — Categories, Food Menu, File Maintenance */}
+        {/* Files ▾ dropdown — Food Menu, File Maintenance */}
         <div style={{ position: 'relative' }}>
           <button
             className="os-menubar__nav-item"
@@ -922,7 +914,7 @@ export default function AdminLayout() {
           )}
         </div>
 
-        {/* CMS ▾ dropdown — Media, Menu Sections, Menu Generator, Live Shelf, Blog */}
+        {/* CMS ▾ dropdown — Media, Cake Catalogue, Blog */}
         <div style={{ position: 'relative' }}>
           <button
             className="os-menubar__nav-item"
@@ -974,10 +966,10 @@ export default function AdminLayout() {
       <div className="desktop-area">
 
         {/* Desktop group labels */}
-        {visibleKeys.some(k => ['categories', 'food-menu', 'file-maintenance'].includes(k)) && (
+        {visibleKeys.some(k => ['food-menu', 'file-maintenance'].includes(k)) && (
           <DesktopGroupLabel label="Files" x={COL_X[0] + 4} y={12} />
         )}
-        {visibleKeys.some(k => ['media', 'liveshelf', 'cake-catalogue', 'blogs'].includes(k)) && (
+        {visibleKeys.some(k => ['media', 'cake-catalogue', 'blogs'].includes(k)) && (
           <DesktopGroupLabel label="CMS" x={COL_X[1] + 4} y={12} />
         )}
         {visibleKeys.some(k => ['crm', 'pos', 'kds', 'cake-orders'].includes(k)) && (

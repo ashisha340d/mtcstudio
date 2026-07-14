@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { liveshelfApi } from '../../services/api';
 import MediaPicker from '../../components/MediaPicker/MediaPicker';
-import './LiveShelf.css';
+import './LiveShelfView.css';
 
 const STATUS_COLORS = { available: '#16a34a', low_stock: '#ea580c', sold_out: '#dc2626' };
 const STATUS_BG     = { available: '#f0fdf4', low_stock: '#fff7ed', sold_out: '#fef2f2' };
@@ -272,18 +272,15 @@ function ItemCard({ item, onSaveSync, onRemove, dragHandlers, isDragging, isDrag
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function LiveShelf() {
+export default function LiveShelfView() {
   const [items,    setItems]    = useState([]);
   const [cats,     setCats]     = useState([]);
   const [search,   setSearch]   = useState('');
   const [category, setCategory] = useState('');
   const [loading,  setLoading]  = useState(true);
   const [toast,    setToast]    = useState(null);
-  const [syncing,  setSyncing]  = useState(false);
   const [dragSrcId,  setDragSrcId]  = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
-  // Map of id → { stock, notes, imageId } for cards with unsaved changes
-  const dirtyMap = useRef({});
 
   async function load(s = search, c = category) {
     setLoading(true);
@@ -332,44 +329,6 @@ export default function LiveShelf() {
       setItems(prev => prev.filter(it => it.id !== id));
       flash('Removed from storefront');
     } catch (e) { flash(e.response?.data?.error || e.message, false); }
-  }
-
-  async function syncAll() {
-    setSyncing(true);
-    try {
-      // Step 1 — save all cards with unsaved changes
-      const dirtyEntries = Object.entries(dirtyMap.current);
-      if (dirtyEntries.length > 0) {
-        flash(`Saving ${dirtyEntries.length} unsaved card(s)…`);
-        await Promise.all(dirtyEntries.map(([id, data]) => {
-          const item = items.find(i => String(i.id) === String(id));
-          if (!item) return Promise.resolve();
-          return liveshelfApi.update(item.id, {
-            quantity: data.stock,
-            notes:    data.notes,
-            product_id: item.product_id,
-            image_id: data.imageId,
-          }).then(() => {
-            setItems(prev => prev.map(it => it.id === item.id
-              ? { ...it, stock: data.stock, notes: data.notes, image_id: data.imageId, sync_status: 0 }
-              : it
-            ));
-          });
-        }));
-        dirtyMap.current = {};
-      }
-
-      // Step 2 — sync all to website
-      const res = await liveshelfApi.sync();
-      const { synced, deleted } = res.data;
-      setItems(prev => prev.map(it => ({ ...it, sync_status: 1 })));
-      const parts = [];
-      if (dirtyEntries.length > 0) parts.push(`${dirtyEntries.length} saved`);
-      if (synced  > 0) parts.push(`${synced} synced`);
-      if (deleted > 0) parts.push(`${deleted} removed from remote`);
-      flash(parts.length ? parts.join(' · ') : 'Already up to date');
-    } catch (e) { flash(e.response?.data?.error || e.message, false); }
-    finally { setSyncing(false); }
   }
 
   // ── Drag & Drop ────────────────────────────────────────────────────────────
@@ -456,11 +415,8 @@ export default function LiveShelf() {
 
         <div className="ls-toolbar-right">
           {pendingSync > 0 && (
-            <span className="ls-pending-badge">{pendingSync} pending</span>
+            <span className="ls-pending-badge" title="Use ⇅ Sync All in Food Menu toolbar">{pendingSync} pending</span>
           )}
-          <button onClick={syncAll} disabled={syncing} className={`btn-sync${syncing ? ' btn-sync-disabled' : ''}`}>
-            {syncing ? 'Syncing…' : '⬆ Sync All to Website'}
-          </button>
         </div>
 
         {toast && (
@@ -504,10 +460,6 @@ export default function LiveShelf() {
                     dragHandlers={makeDragHandlers(item)}
                     isDragging={dragSrcId  === item.id}
                     isDragOver={dragOverId === item.id && dragSrcId !== item.id}
-                    onDirtyChange={(id, data) => {
-                      if (data) dirtyMap.current[id] = data;
-                      else delete dirtyMap.current[id];
-                    }}
                   />
                 ))}
               </div>

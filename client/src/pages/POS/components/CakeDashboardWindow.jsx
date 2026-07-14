@@ -216,9 +216,10 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
 }
 
 // ── Cake Dash Card ────────────────────────────────────────────────────
-function CakeDashCard({ order, onPay, onRefresh }) {
+function CakeDashCard({ order, onPay, onRefresh, onOpen = null }) {
   const navigate = useNavigate();
   const [printing, setPrinting] = useState(false);
+  const openOrder = () => (onOpen ? onOpen(order.id) : navigate(`/pos/cake/${order.id}`));
 
   async function printSlip(e) {
     e.stopPropagation();
@@ -238,7 +239,7 @@ function CakeDashCard({ order, onPay, onRefresh }) {
     <div
       className="tc"
       style={{ minHeight: 210, cursor: 'pointer' }}
-      onClick={() => navigate(`/pos/cake/${order.id}`)}
+      onClick={openOrder}
     >
       {/* Order # + Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -327,27 +328,33 @@ function CakeDashCard({ order, onPay, onRefresh }) {
   );
 }
 
+// In-memory cache — later mounts paint instantly, refresh happens silently
+let cakeCache = null; // { today, delivery }
+
 // ── Main: Cake Dashboard Window ───────────────────────────────────────
-export default function CakeDashboardWindow() {
+export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken = 0 }) {
   const [tab, setTab] = useState('unpaid');
-  const [todayOrders, setTodayOrders] = useState([]);
-  const [deliveryOrders, setDeliveryOrders] = useState([]);
+  const [todayOrders, setTodayOrders] = useState(() => cakeCache?.today ?? []);
+  const [deliveryOrders, setDeliveryOrders] = useState(() => cakeCache?.delivery ?? []);
   const [loading, setLoading] = useState(false);
   const [payTarget, setPayTarget] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!cakeCache) setLoading(true);
     try {
       const [todayR, delivR] = await Promise.all([
         fetch(`${API}/pos/cake-orders?filter=today`, { headers: H }),
         fetch(`${API}/pos/cake-orders?filter=delivery_today`, { headers: H }),
       ]);
-      setTodayOrders(todayR.ok ? await todayR.json() : []);
-      setDeliveryOrders(delivR.ok ? await delivR.json() : []);
+      const today = todayR.ok ? await todayR.json() : [];
+      const delivery = delivR.ok ? await delivR.json() : [];
+      cakeCache = { today, delivery };
+      setTodayOrders(today);
+      setDeliveryOrders(delivery);
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshToken]);
 
   // Derive per-tab lists
   const unpaidOrders = todayOrders.filter(
@@ -375,6 +382,9 @@ export default function CakeDashboardWindow() {
     setPayTarget(null);
     load();
   }
+
+  // No cake orders today — hide the window entirely
+  if (!loading && totalOrders.length === 0) return null;
 
   return (
     <>
@@ -449,6 +459,7 @@ export default function CakeDashboardWindow() {
                   order={o}
                   onPay={setPayTarget}
                   onRefresh={load}
+                  onOpen={onOpenOrder}
                 />
               ))}
             </div>

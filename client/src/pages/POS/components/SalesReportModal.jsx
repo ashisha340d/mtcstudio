@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
-import SalesReport from '../../SalesReport/SalesReport';
+import { useRef, useState, lazy, Suspense } from 'react';
+
+// Lazy — keeps the heavy report page (and its chart deps) out of the POS chunk
+const SalesReport = lazy(() => import('../../SalesReport/SalesReport'));
 
 const SIZE_KEY = 'salesReportModal.size';
 const MIN_SIZE = { width: 640, height: 400 };
@@ -59,7 +61,9 @@ export default function SalesReportModal({ onClose }) {
           ✕
         </button>
         <div style={{ height: '100%' }}>
-          <SalesReport gridLines={true} />
+          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#9c8870' }}>Loading report…</div>}>
+            <SalesReport gridLines={true} />
+          </Suspense>
         </div>
         <div
           onMouseDown={startResize}

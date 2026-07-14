@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import './BadgeMultiSelect.css';
 
 /**
- * Searchable multi-select tag input for Product Badges.
+ * Multi-select for Product Badges — compact chip cell; clicking it opens a
+ * simple centered modal (portaled to <body>) with search + toggle pills.
  *
  * Options come from lookup_master (lookup_type='PRODUCT_BADGE'); the value this
  * component holds/emits is always an array of badge CODES — icon/name are only
@@ -15,21 +17,10 @@ import './BadgeMultiSelect.css';
  *   onChange    (string[]) => void
  *   placeholder string
  */
-export default function BadgeMultiSelect({ options = [], value = [], onChange, placeholder = 'Type to search…' }) {
-  const [input, setInput] = useState('');
+export default function BadgeMultiSelect({ options = [], value = [], onChange, placeholder = 'Click to add…' }) {
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  const boxRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function onDocMouseDown(e) {
-      if (!boxRef.current?.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, []);
+  const [q, setQ] = useState('');
+  const searchRef = useRef(null);
 
   const byCode = useMemo(() => {
     const m = new Map();
@@ -37,47 +28,31 @@ export default function BadgeMultiSelect({ options = [], value = [], onChange, p
     return m;
   }, [options]);
 
-  const q = input.trim().toLowerCase();
+  useEffect(() => {
+    if (!open) return;
+    searchRef.current?.focus();
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const query = q.trim().toLowerCase();
   const filtered = useMemo(() => options.filter(o =>
-    !value.includes(o.code) &&
-    (o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q))
-  ), [options, value, q]);
+    o.name.toLowerCase().includes(query) || o.code.toLowerCase().includes(query)
+  ), [options, query]);
 
-  // Keep the highlighted row in range whenever the filtered list changes
-  useEffect(() => { setHighlight(0); }, [q, open]);
-
-  function addBadge(code) {
-    if (!code || value.includes(code)) return; // prevent duplicates
-    onChange([...value, code]);
-    setInput('');
-    setHighlight(0);
-    inputRef.current?.focus();
+  function toggleBadge(code) {
+    onChange(value.includes(code) ? value.filter(c => c !== code) : [...value, code]);
   }
 
   function removeBadge(code) { onChange(value.filter(c => c !== code)); }
 
-  function onKeyDown(e) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setOpen(true);
-      setHighlight(h => Math.min(h + 1, Math.max(filtered.length - 1, 0)));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlight(h => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (open && filtered[highlight]) addBadge(filtered[highlight].code);
-    } else if (e.key === 'Backspace' && !input && value.length) {
-      removeBadge(value[value.length - 1]);
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-      setInput('');
-    }
-  }
+  function close() { setOpen(false); setQ(''); }
 
   return (
-    <div className="bms-wrap" ref={boxRef}>
-      <div className={`bms-box${open ? ' bms-box--open' : ''}`} onClick={() => inputRef.current?.focus()}>
+    <div className="bms-wrap">
+      <div className="bms-box" onClick={() => setOpen(true)} role="button" tabIndex={0}
+           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}>
         {value.map(code => {
           const b = byCode.get(code);
           if (!b) return null; // unknown/stale code — ignore gracefully
@@ -88,47 +63,53 @@ export default function BadgeMultiSelect({ options = [], value = [], onChange, p
               <button
                 type="button"
                 className="bms-chip__x"
-                onMouseDown={e => e.stopPropagation()}
                 onClick={e => { e.stopPropagation(); removeBadge(code); }}
                 aria-label={`Remove ${b.name}`}
               >×</button>
             </span>
           );
         })}
-
-        <input
-          ref={inputRef}
-          className="bms-input"
-          value={input}
-          placeholder={value.length ? '' : placeholder}
-          onChange={e => { setInput(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-        />
+        {!value.length && <span className="bms-placeholder">{placeholder}</span>}
       </div>
 
-      {open && filtered.length > 0 && (
-        <div className="bms-dropdown">
-          {filtered.map((o, i) => (
-            <button
-              type="button"
-              key={o.code}
-              className={`bms-option${i === highlight ? ' bms-option--hl' : ''}`}
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => addBadge(o.code)}
-              onMouseEnter={() => setHighlight(i)}
-            >
-              {o.icon && <span className="bms-option__ico">{o.icon}</span>}
-              {o.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {open && q && filtered.length === 0 && (
-        <div className="bms-dropdown">
-          <div className="bms-option bms-option--empty">No matching badges</div>
-        </div>
+      {open && createPortal(
+        <div className="bms-overlay" onClick={close}>
+          <div className="bms-modal" onClick={e => e.stopPropagation()}>
+            <div className="bms-modal__head">
+              <span className="bms-modal__title">Select Badges</span>
+              <button type="button" className="bms-modal__close" onClick={close} aria-label="Close">×</button>
+            </div>
+            <input
+              ref={searchRef}
+              className="bms-modal__search"
+              value={q}
+              placeholder="Search badges…"
+              onChange={e => setQ(e.target.value)}
+            />
+            <div className="bms-modal__grid">
+              {filtered.map(o => {
+                const sel = value.includes(o.code);
+                return (
+                  <button
+                    type="button"
+                    key={o.code}
+                    className={`bms-opt${sel ? ' bms-opt--sel' : ''}`}
+                    onClick={() => toggleBadge(o.code)}
+                  >
+                    {o.icon && <span className="bms-opt__ico">{o.icon}</span>}
+                    <span className="bms-opt__name">{o.name}</span>
+                    {sel && <span className="bms-opt__check">✓</span>}
+                  </button>
+                );
+              })}
+              {!filtered.length && <div className="bms-opt--empty">No matching badges</div>}
+            </div>
+            <div className="bms-modal__foot">
+              <button type="button" className="bms-modal__done" onClick={close}>Done</button>
+            </div>
+          </div>
+        </div>,
+        document.querySelector('.desktop-root') || document.body
       )}
     </div>
   );

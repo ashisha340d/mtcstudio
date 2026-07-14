@@ -49,6 +49,7 @@ const posWaiterRouter = require('./routes/pos/waiter');
 const posReportsRouter = require('./routes/pos/reports');
 const posTransactionsRouter = require('./routes/pos/transactions');
 const posWebOrdersRouter = require('./routes/pos/webOrders');
+const posScheduledRouter = require('./routes/pos/scheduled');
 const webOrderBridge = require('./services/webOrderBridge');
 
 const { errorHandler } = require('./middleware/errorHandler');
@@ -103,6 +104,7 @@ app.use('/api/pos/waiter', posWaiterRouter);
 app.use('/api/pos/reports', posReportsRouter);
 app.use('/api/pos/transactions', posTransactionsRouter);
 app.use('/api/pos/web-orders', posWebOrdersRouter);
+app.use('/api/pos/scheduled', posScheduledRouter);
 
 // ── Cake Production PWA (own build, own path, own manifest/SW scope) ──
 // Registered before the generic SPA fallback below so /cake-app/* is never

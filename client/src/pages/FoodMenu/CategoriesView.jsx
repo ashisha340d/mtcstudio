@@ -4,7 +4,7 @@ import { useMsg } from '../../hooks/useApi';
 
 const COLS = ['name', 'slug', 'description', 'sort_order', 'status'];
 
-export default function Categories() {
+export default function CategoriesView() {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('sort_order');
@@ -250,7 +250,7 @@ export default function Categories() {
           )}
         </form>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
           <button className="btn btn-add" onClick={addRow}>+ Add Category</button>
           <button
             className="btn btn-save"

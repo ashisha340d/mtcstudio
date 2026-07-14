@@ -139,6 +139,26 @@ function normalizeProducts(products) {
   return (products || []).map(normalizeProduct);
 }
 
+/* ── In-memory session caches (die on reload) — dashboards paint
+     instantly from the last known state while fresh data loads. ── */
+let masterCache = null;   // { tables, products, categories, stations }
+let activeCache = null;   // { orders, kots }
+
+/* Warm both caches before the POS UI mounts (e.g. during boot splash). */
+export async function prefetchPOSData(apiService) {
+  try {
+    const [tables, products, categories, stations, active] = await Promise.all([
+      apiService.getTables(),
+      apiService.getProducts(),
+      apiService.getCategories(),
+      apiService.getStations(),
+      apiService.getActiveOrders(),
+    ]);
+    masterCache = { tables, products: normalizeProducts(products), categories, stations };
+    activeCache = { orders: active.orders, kots: active.kots };
+  } catch { /* best-effort warm-up */ }
+}
+
 function calcCartTotal(items) {
   return items.reduce((sum, i) => sum + i.price * i.qty, 0);
 }
@@ -399,6 +419,8 @@ export function POSProvider({ children, apiService, activeUser = null }) {
 
   // ── Master data load ──────────────────────────────────────
   const loadMasterData = useCallback(async () => {
+    // Paint from cache instantly, then revalidate in the background
+    if (masterCache) dispatch({ type: A.LOAD_MASTER, payload: masterCache });
     try {
       const [tables, products, categories, stations] = await Promise.all([
         apiService.getTables(),
@@ -406,17 +428,21 @@ export function POSProvider({ children, apiService, activeUser = null }) {
         apiService.getCategories(),
         apiService.getStations(),
       ]);
-      dispatch({ type: A.LOAD_MASTER, payload: { tables, products: normalizeProducts(products), categories, stations } });
+      masterCache = { tables, products: normalizeProducts(products), categories, stations };
+      dispatch({ type: A.LOAD_MASTER, payload: masterCache });
     } catch (err) {
       dispatch({ type: A.SET_ERROR, payload: err.message });
     }
   }, [apiService]);
 
   const loadActiveOrders = useCallback(async () => {
+    const hadCache = !!activeCache;
+    if (hadCache) dispatch({ type: A.ORDERS_LOADED, payload: activeCache });
     try {
-      dispatch({ type: A.SET_LOADING, payload: true });
+      if (!hadCache) dispatch({ type: A.SET_LOADING, payload: true });
       const { orders, kots } = await apiService.getActiveOrders();
-      dispatch({ type: A.ORDERS_LOADED, payload: { orders, kots } });
+      activeCache = { orders, kots };
+      dispatch({ type: A.ORDERS_LOADED, payload: activeCache });
     } catch (err) {
       dispatch({ type: A.SET_ERROR, payload: err.message });
     } finally {
@@ -584,6 +610,16 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     } finally {
       dispatch({ type: A.SET_LOADING, payload: false });
     }
+  }, [apiService]);
+
+  /**
+   * Patch arbitrary order fields (order_caption, customer_name, customer_phone…)
+   * and merge the result straight into state — no full reload needed.
+   */
+  const updateOrderFields = useCallback(async (orderId, payload) => {
+    const updated = await apiService.updateOrder(orderId, payload);
+    dispatch({ type: A.ORDER_UPDATED, payload: { id: orderId, ...updated } });
+    return updated;
   }, [apiService]);
 
   /**
@@ -810,6 +846,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     checkout,
     mergeOrders,
     shiftOrder,
+    updateOrderFields,
     cancelOrder,
     revertOrderTransaction,
     revertCakeTransaction,

@@ -9,7 +9,7 @@ async function list(req, res, next) {
 
 async function apiList(req, res, next) {
     try {
-        const media = await svc.getList({ search: req.query.search || '', unassigned: req.query.unassigned === '1', section: req.query.section || '' });
+        const media = await svc.getList({ search: req.query.search || '', unassigned: req.query.unassigned === '1', section: req.query.section || '', page: req.query.page, perPage: req.query.perPage });
         res.json(media);
     } catch (e) { next(e); }
 }

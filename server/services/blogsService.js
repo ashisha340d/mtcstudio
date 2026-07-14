@@ -91,7 +91,7 @@ async function create({ topic, title, slug, youtube_url, author_name, comment_te
         [topic || null, title, finalSlug, featId, content_html || null, youtube_url || null,
          author_name || null, authId, comment_text || null, status || 'draft', pub]
     );
-    return result.lastID;
+    return result.insertId;
 }
 
 async function update(id, body, files) {

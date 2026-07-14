@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePOS } from '../../../context/POSContext';
 import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
+import CustomerPickerModal from './CustomerPickerModal';
+import DeliveryPartnerModal from './OrderTypeModal';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return '0m';
@@ -17,8 +19,22 @@ const TYPE_META = {
   QUICK_SALE: { label: 'Quick Sale', cls: 'quick', icon: '⚡' },
 };
 
+const LONG_PRESS_MS = 550;
+
 export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
-  const { kotsByOrder } = usePOS();
+  const { kotsByOrder, updateOrderFields } = usePOS();
+
+  // Tick every minute so the elapsed-time timer advances
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState('');
+  const [showAssign, setShowAssign] = useState(false);
+  const pressTimer = useRef(null);
 
   const derived = useMemo(() => {
     const kots = kotsByOrder[order.id] || [];
@@ -30,10 +46,13 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
       total,
       served,
     };
-  }, [order, kotsByOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, kotsByOrder, tick]);
 
   const meta = TYPE_META[order.order_type] || { label: order.order_type, cls: 'quick', icon: '📋' };
   const isDraft = order.status === 'SAVED';
+  const captionLabel = order.order_caption || `${meta.label} #${index + 1}`;
+  const isDelivery = order.order_type === 'DELIVERY';
 
   function onPrintSlip(e) {
     e.stopPropagation();
@@ -42,25 +61,76 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
     printReceipt({ order, items, payments: [] });
   }
 
+  function startPress(e) {
+    e.stopPropagation();
+    pressTimer.current = setTimeout(() => {
+      setCaptionDraft(order.order_caption || '');
+      setEditingCaption(true);
+    }, LONG_PRESS_MS);
+  }
+  function cancelPress() {
+    clearTimeout(pressTimer.current);
+  }
+
+  function commitCaption() {
+    setEditingCaption(false);
+    const trimmed = captionDraft.trim();
+    if (trimmed !== (order.order_caption || '')) {
+      updateOrderFields(order.id, { order_caption: trimmed || null });
+    }
+  }
+
   return (
     <div className={`oc oc--${meta.cls}${isDraft ? ' oc--draft' : ''}`} onClick={() => onClick(order)}>
+      <button
+        className="oc__assign-btn"
+        title={order.customer_phone ? 'Change customer' : 'Add customer'}
+        onClick={(e) => { e.stopPropagation(); setShowAssign(true); }}
+      >
+        {order.customer_phone ? '✎' : '＋'}
+      </button>
+      {order.order_notes && (
+        <span className="oc__notes-icon" title={order.order_notes}>✉︎</span>
+      )}
+
       <div className="oc__header">
         <span className="oc__icon">{meta.icon}</span>
-        <div>
-          <div className="oc__type">
-            {meta.label} #{index + 1}
-            {isDraft && <span className="oc__draft-badge">DRAFT</span>}
-          </div>
+        <div className="oc__header-text">
+          {editingCaption ? (
+            <input
+              className="oc__caption-input"
+              autoFocus
+              value={captionDraft}
+              onChange={(e) => setCaptionDraft(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={commitCaption}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') setEditingCaption(false);
+              }}
+            />
+          ) : (
+            <div
+              className="oc__type"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={startPress}
+              onMouseUp={cancelPress}
+              onMouseLeave={cancelPress}
+              onTouchStart={startPress}
+              onTouchEnd={cancelPress}
+            >
+              {captionLabel}
+              {isDraft && <span className="oc__draft-badge">DRAFT</span>}
+            </div>
+          )}
           <div className="oc__timer">{fmtDuration(derived.occupiedMs)} ago</div>
         </div>
       </div>
 
-      {(order.customer_name || order.customer_phone) && (
-        <div className="oc__customer">
-          {order.customer_name && <span className="oc__cust-name">{order.customer_name}</span>}
-          {order.customer_phone && <span className="oc__cust-phone">{order.customer_phone}</span>}
-        </div>
-      )}
+      <div className="oc__customer">
+        <span className="oc__cust-name">{order.customer_name || '—'}</span>
+        <span className="oc__cust-phone">{order.customer_phone || '—'}</span>
+      </div>
 
       <div className="oc__amount">
         ₹{(order.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -85,7 +155,6 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
             flex: 1, padding: '6px 8px', borderRadius: 7,
             border: '1px solid #c4b49c', background: 'rgba(255,255,255,0.65)',
             color: '#6b5640', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-            opacity: printing ? 0.6 : 1,
           }}
 
         >
@@ -114,6 +183,28 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
         </div>
       )
       }
+
+      {showAssign && (
+        isDelivery ? (
+          <DeliveryPartnerModal
+            initialName={order.customer_name || ''}
+            initialPhone={order.customer_phone || ''}
+            initialNotes={order.order_notes || ''}
+            confirmLabel="Save"
+            onConfirm={({ customerName, customerPhone, orderNotes }) => {
+              updateOrderFields(order.id, { customer_name: customerName, customer_phone: customerPhone, order_notes: orderNotes });
+              setShowAssign(false);
+            }}
+            onClose={() => setShowAssign(false)}
+          />
+        ) : (
+          <CustomerPickerModal
+            title={order.customer_phone ? '✎ Change Customer' : '＋ Add Customer'}
+            onSelect={(c) => updateOrderFields(order.id, { customer_name: c.name, customer_phone: c.phone })}
+            onClose={() => setShowAssign(false)}
+          />
+        )
+      )}
     </div >
   );
 }

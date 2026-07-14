@@ -41,6 +41,9 @@ export const createOrder = (payload) =>
 export const updateOrderStatus = (orderId, status) =>
   http.patch(`/pos/orders/${orderId}/status`, { status }).then(r => r.data);
 
+export const updateOrder = (orderId, payload) =>
+  http.patch(`/pos/orders/${orderId}`, payload).then(r => r.data);
+
 export const cancelOrder = ({ orderId, reason }) =>
   http.post(`/pos/orders/${orderId}/cancel`, { reason }).then(r => r.data);
 
@@ -162,6 +165,25 @@ export const approveWebOrder = (id) =>
 export const rejectWebOrder = (id, reason) =>
   http.post(`/pos/web-orders/${id}/reject`, { reason }).then(r => r.data);
 
+// ── Scheduled & Draft Orders ─────────────────────────────────
+export const getScheduledOrders = () =>
+  http.get('/pos/scheduled').then(r => r.data);
+
+export const getStoreHours = (date) =>
+  http.get('/pos/scheduled/hours', { params: { date } }).then(r => r.data);
+
+export const createScheduledOrder = (payload) =>
+  http.post('/pos/scheduled', payload).then(r => r.data);
+
+export const updateScheduledOrder = (id, payload) =>
+  http.patch(`/pos/scheduled/${id}`, payload).then(r => r.data);
+
+export const convertScheduledOrder = (id) =>
+  http.post(`/pos/scheduled/${id}/convert`).then(r => r.data);
+
+export const cancelScheduledOrder = (id) =>
+  http.post(`/pos/scheduled/${id}/cancel`).then(r => r.data);
+
 // ── Lookup Master ─────────────────────────────────────────────
 // Generic lookup_master reader (cream/shape/sponge/theme/dietary/table-tag/
 // product-badge types all live in the same table). Pass a lookup_type to
@@ -181,7 +203,7 @@ const posApi = {
   // Master
   getTables, getProducts, getCategories, getStations, getMaintenanceStations,
   // Orders
-  getActiveOrders, createOrder, updateOrderStatus, cancelOrder, checkout, mergeOrders, shiftOrder, serveAllKots,
+  getActiveOrders, createOrder, updateOrder, updateOrderStatus, cancelOrder, checkout, mergeOrders, shiftOrder, serveAllKots,
   getTodayKOTs, getServedKOTs,
   // KOTs
   getActiveKOTs, getTodayKOTs, createKOT, markItemServed, unserveItem, updateItemStatus,
@@ -198,6 +220,9 @@ const posApi = {
   getTodayTransactions, revertOrderTransaction, revertCakeTransaction,
   // Web Orders
   getWebOrders, getWebOrder, getWebOrderCounts, approveWebOrder, rejectWebOrder,
+  // Scheduled & Draft Orders
+  getScheduledOrders, getStoreHours, createScheduledOrder, updateScheduledOrder,
+  convertScheduledOrder, cancelScheduledOrder,
   // Lookup Master
   getLookupMaster, getMaintenanceStations,
 };

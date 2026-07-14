@@ -296,6 +296,30 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_author_image (author_image)`);
     await dbRun(`DROP TABLE IF EXISTS media_tags`); // superseded by live-computed usage (see mediaService.js)
 
+    // --- FK constraints (added 2026-07: composition CASCADE, history/business RESTRICT) ---
+    await dbRun(`ALTER TABLE pos_kot_items MODIFY product_id INT NULL`); // history rows keep name/price snapshot
+    await dbRun(`ALTER TABLE product_variants ADD FOREIGN KEY IF NOT EXISTS fk_pv_product (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE product_images ADD FOREIGN KEY IF NOT EXISTS fk_pi_product (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE product_images ADD FOREIGN KEY IF NOT EXISTS fk_pi_media (media_id) REFERENCES media_library(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE pos_modifiers ADD FOREIGN KEY IF NOT EXISTS fk_pm_product (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE product_modifier_assignments ADD FOREIGN KEY IF NOT EXISTS fk_pma_product (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE product_modifier_assignments ADD FOREIGN KEY IF NOT EXISTS fk_pma_modifier (modifier_id) REFERENCES shared_modifiers(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE weather_recommendations ADD FOREIGN KEY IF NOT EXISTS fk_wr_product (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+    await dbRun(`ALTER TABLE pos_kot_items ADD FOREIGN KEY IF NOT EXISTS fk_ki_product (product_id) REFERENCES products(id) ON DELETE RESTRICT`);
+    await dbRun(`ALTER TABLE web_order_items ADD FOREIGN KEY IF NOT EXISTS fk_woi_product (product_id) REFERENCES products(id) ON DELETE RESTRICT`);
+    await dbRun(`ALTER TABLE cake_order_items ADD FOREIGN KEY IF NOT EXISTS fk_coi_product (product_id) REFERENCES products(id) ON DELETE RESTRICT`);
+    await dbRun(`ALTER TABLE cake_order_accessories ADD FOREIGN KEY IF NOT EXISTS fk_coa_product (product_id) REFERENCES products(id) ON DELETE RESTRICT`);
+    await dbRun(`ALTER TABLE cake_catalogue ADD FOREIGN KEY IF NOT EXISTS fk_cc_product (product_id) REFERENCES products(id) ON DELETE RESTRICT`);
+    await dbRun(`ALTER TABLE products ADD FOREIGN KEY IF NOT EXISTS fk_p_category (category_id) REFERENCES categories(id) ON DELETE RESTRICT`);
+    // customer masters: block delete while transactional data exists (tables may not exist on fresh install)
+    for (const sql of [
+        `ALTER TABLE cake_orders ADD FOREIGN KEY IF NOT EXISTS fk_co_customer (crm_customer_id) REFERENCES pos_customers(id) ON DELETE RESTRICT`,
+        `ALTER TABLE loyalty_ledger ADD FOREIGN KEY IF NOT EXISTS fk_ll_customer (customer_id) REFERENCES web_customer(customer_id) ON DELETE RESTRICT`,
+        `ALTER TABLE web_orders ADD FOREIGN KEY IF NOT EXISTS fk_wo_customer (customer_id) REFERENCES web_customer(customer_id) ON DELETE RESTRICT`,
+    ]) {
+        try { await dbRun(sql); } catch { /* table owned by website app; skip if absent */ }
+    }
+
     // --- Weather Recommendations (File Maintenance → Weather Recommends; synced to website) ---
     await dbRun(`CREATE TABLE IF NOT EXISTS weather_recommendations (
         id         INT PRIMARY KEY AUTO_INCREMENT,

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import StatusTimeline from './components/StatusTimeline';
+import CustomerPickerModal from '../POS/components/CustomerPickerModal';
 import '../POS/pos.css';
 import './cake.css';
 
@@ -33,10 +34,13 @@ function Field({ label, children, half, quarter }) {
     </div>
   );
 }
-function Section({ icon, title, children }) {
+function Section({ icon, title, action, children }) {
   return (
     <div className="cake-section">
-      <div className="cake-section-title"><span>{icon}</span> {title}</div>
+      <div className="cake-section-title">
+        <span>{icon}</span> {title}
+        {action && <span className="ck-sec-action">{action}</span>}
+      </div>
       {children}
     </div>
   );
@@ -189,8 +193,100 @@ function ModifierGroup({ label, lookups, value, onChange }) {
   );
 }
 
+// ── Flavour picker — 3-column pill modal over the form ────────
+function FlavourPickerModal({ products, onPick, onClose, title = '🎂 Pick Flavour', showVariant = false }) {
+  const [search, setSearch] = useState('');
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? products.filter(p => `${p.product_name} ${p.variant_name || ''}`.toLowerCase().includes(q))
+    : products;
+
+  return (
+    <div className="ck-flav-overlay" onClick={onClose}>
+      <div className="ck-flav-modal" onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+        <div className="ck-flav-head">
+          <span>{title}</span>
+          <button className="ck-flav-close" onClick={onClose}>✕</button>
+        </div>
+        <input
+          className="cake-input"
+          autoFocus
+          placeholder="🔍 Search flavour…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ marginBottom: 10 }}
+        />
+        <div className="ck-flav-grid">
+          {filtered.map(p => (
+            <button
+              key={`${p.product_id}-${p.variant_id}`}
+              className="ck-flav-pill"
+              onClick={() => { onPick(p); onClose(); }}
+            >
+              <span className="ck-flav-pill-name">{productLabel(p, showVariant)}</span>
+              <span className="ck-flav-pill-rate">₹{Number(p.rate || 0).toLocaleString('en-IN')}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="ck-flav-empty">No flavours found</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Advance payment modal — split across methods ──────────────
+const PAY_METHODS = [['CASH', '💵 Cash'], ['CARD', '💳 Card'], ['QR', '📱 QR'], ['WALLET', '👛 Wallet']];
+
+function AdvancePaymentModal({ amounts, grandTotal, onConfirm, onClose }) {
+  const [local, setLocal] = useState(amounts);
+  const total = Object.values(local).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+
+  return (
+    <div className="ck-flav-overlay" onClick={onClose}>
+      <div className="ck-flav-modal" style={{ width: 360 }} onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+        <div className="ck-flav-head">
+          <span>💳 Advance Payment</span>
+          <button className="ck-flav-close" onClick={onClose}>✕</button>
+        </div>
+        {PAY_METHODS.map(([m, label], i) => (
+          <div key={m} className="ck-pay-row">
+            <span className="ck-pay-label">{label}</span>
+            <input
+              className="cake-input cake-input--num"
+              type="number" min="0" step="0.01" placeholder="0.00"
+              autoFocus={i === 0}
+              value={local[m]}
+              onFocus={e => e.target.select()}
+              onKeyDown={e => { if (e.key === 'Enter' && total > 0) { onConfirm(local); onClose(); } }}
+              onChange={e => setLocal(prev => ({ ...prev, [m]: e.target.value }))}
+            />
+          </div>
+        ))}
+        <div className="ck-price-row" style={{ marginTop: 8 }}>
+          <span>Total Entered</span><span style={{ fontWeight: 800 }}>{Rs(total)}</span>
+        </div>
+        <div className="ck-price-row">
+          <span>Order Total</span><span>{Rs(grandTotal)}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button className="cake-btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
+          <button className="cake-btn-primary" style={{ flex: 2 }}
+            onClick={() => { onConfirm(local); onClose(); }}>
+            Confirm {Rs(total)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Cake item row ─────────────────────────────────────────────
 function CakeItemRow({ item, products, onChange, onRemove }) {
+  const [showFlav, setShowFlav] = useState(false);
   function set(key, val) { onChange({ ...item, [key]: val }); }
   const amount = (parseFloat(item.rate) || 0) * (parseInt(item.qty) || 1);
 
@@ -205,22 +301,27 @@ function CakeItemRow({ item, products, onChange, onRemove }) {
 
   return (
     <tr className="ck-line-row">
-      <td style={{ minWidth: 200 }}>
-        <ProductPicker products={products} value={pickerVal} onChange={onProductSelect} placeholder="Select cake product…" />
+      <td style={{ minWidth: 140 }}>
+        <button className={`ck-flavour-btn${pickerVal ? '' : ' ck-flavour-btn--empty'}`} onClick={() => setShowFlav(true)}>
+          {pickerVal ? productLabel(pickerVal) : '🎂 Pick flavour…'}
+        </button>
+        {showFlav && (
+          <FlavourPickerModal products={products} onPick={onProductSelect} onClose={() => setShowFlav(false)} />
+        )}
       </td>
-      <td style={{ width: 90 }}>
+      <td style={{ width: 70 }}>
 
         <input className="cake-input cake-input--sm" value={item.size || ''} onChange={e => set('size', e.target.value)} placeholder="1 KG…" />
       </td>
-      <td style={{ width: 70 }}>
+      <td style={{ width: 50 }}>
         <input className="cake-input cake-input--sm" type="number" min="1" value={item.qty || 1}
           onChange={e => set('qty', parseInt(e.target.value) || 1)} />
       </td>
-      <td style={{ width: 100 }}>
+      <td style={{ width: 80 }}>
         <input className="cake-input cake-input--sm cake-input--num" type="number" min="0" step="0.01"
           value={item.rate ?? ''} onChange={e => set('rate', e.target.value)} placeholder="0.00" />
       </td>
-      <td style={{ width: 100 }} className="ck-line-amount">{Rs(amount)}</td>
+      <td style={{ width: 80 }} className="ck-line-amount">{Rs(amount)}</td>
       <td style={{ width: 36 }}>
         <button className="ck-rm-btn" onClick={onRemove}>×</button>
       </td>
@@ -230,6 +331,7 @@ function CakeItemRow({ item, products, onChange, onRemove }) {
 
 // ── Accessory row ─────────────────────────────────────────────
 function AccessoryRow({ item, products, onChange, onRemove }) {
+  const [showPick, setShowPick] = useState(false);
   function set(key, val) { onChange({ ...item, [key]: val }); }
   const amount = (parseFloat(item.rate) || 0) * (parseInt(item.qty) || 1);
 
@@ -244,18 +346,24 @@ function AccessoryRow({ item, products, onChange, onRemove }) {
 
   return (
     <tr className="ck-line-row">
-      <td style={{ minWidth: 200 }}>
-        <ProductPicker products={products} value={pickerVal} onChange={onProductSelect} placeholder="Select accessory…" showVariant />
+      <td style={{ minWidth: 140 }}>
+        <button className={`ck-flavour-btn${pickerVal ? '' : ' ck-flavour-btn--empty'}`} onClick={() => setShowPick(true)}>
+          {pickerVal ? productLabel(pickerVal, true) : '🎁 Pick accessory…'}
+        </button>
+        {showPick && (
+          <FlavourPickerModal products={products} onPick={onProductSelect} onClose={() => setShowPick(false)}
+            title="🎁 Pick Accessory" showVariant />
+        )}
       </td>
-      <td style={{ width: 70 }}>
+      <td style={{ width: 50 }}>
         <input className="cake-input cake-input--sm" type="number" min="1" value={item.qty || 1}
           onChange={e => set('qty', parseInt(e.target.value) || 1)} />
       </td>
-      <td style={{ width: 100 }}>
+      <td style={{ width: 80 }}>
         <input className="cake-input cake-input--sm cake-input--num" type="number" min="0" step="0.01"
           value={item.rate ?? ''} onChange={e => set('rate', e.target.value)} placeholder="0.00" />
       </td>
-      <td style={{ width: 100 }} className="ck-line-amount">{Rs(amount)}</td>
+      <td style={{ width: 80 }} className="ck-line-amount">{Rs(amount)}</td>
       <td style={{ width: 36 }}>
         <button className="ck-rm-btn" onClick={onRemove}>×</button>
       </td>
@@ -271,30 +379,60 @@ function isNepaliNumber(phone) {
 const newItem = () => ({ _key: Math.random(), product_id: null, product_name: '', variant_id: null, variant_name: '', size: '', unit: 'PCS', qty: 1, rate: '' });
 const newAcc = () => ({ _key: Math.random(), product_id: null, product_name: '', variant_id: null, variant_name: '', unit: 'PCS', qty: 1, rate: '' });
 
+// ── Shell: full page (route mode) or draggable/resizable window ──
+function WindowShell({ windowed, rect, startMove, startResize, title, onCloseWin, onKeyDown, children }) {
+  if (!windowed) return <div className="cake-root" onKeyDown={onKeyDown}>{children}</div>;
+  return (
+    <div className="ckw-overlay">
+      <div
+        className="ckw-window"
+        style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+        onKeyDown={onKeyDown}
+      >
+        <div className="ckw-chrome" onMouseDown={startMove}>
+          <div className="desktop-chrome__dots">
+            <button className="win-dot win-dot--close ckw-dot-btn" onClick={onCloseWin} title="Close" />
+            <div className="win-dot win-dot--min" />
+            <div className="win-dot win-dot--max" />
+          </div>
+          <span className="ckw-chrome-title">{title}</span>
+        </div>
+        <div className="ckw-body">{children}</div>
+        <div className="ckw-resize" onMouseDown={startResize} title="Drag to resize">◢</div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Main form
 // ═══════════════════════════════════════════════════════════════
-export default function CakeOrderForm() {
-  const { id } = useParams();
+export default function CakeOrderForm({ id: propId = null, onClose = null }) {
+  const params = useParams();
   const navigate = useNavigate();
+  const windowed = !!onClose;                       // rendered as window over dashboard
+  const [curId, setCurId] = useState(propId ?? params.id ?? null);
+  const id = curId;
   const isNew = !id;
+
+  function exit() { windowed ? onClose() : navigate('/pos'); }
 
   // Mode: minimal | advanced
   const [mode, setMode] = useState(() => localStorage.getItem('cake_entry_mode') || 'minimal');
   function setModeAndPersist(m) { setMode(m); localStorage.setItem('cake_entry_mode', m); }
 
-  // Double-ESC → POS dashboard
+  // Double-ESC → close / POS dashboard
   const lastEscRef = useRef(0);
   useEffect(() => {
     function onKey(e) {
       if (e.key !== 'Escape') return;
       const now = Date.now();
-      if (now - lastEscRef.current < 420) navigate('/pos');
+      if (now - lastEscRef.current < 420) exit();
       lastEscRef.current = now;
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, windowed]); // eslint-disable-line
 
   // ── Remote data ────────────────────────────────────────────
   const [lookups, setLookups] = useState({});
@@ -319,6 +457,7 @@ export default function CakeOrderForm() {
   const [crmId, setCrmId] = useState(null);
   const [crmHint, setCrmHint] = useState('');
   const [custName, setCustName] = useState('');
+  const [showCustPicker, setShowCustPicker] = useState(false);
 
   // ── Delivery ────────────────────────────────────────────────
   const [delivDate, setDelivDate] = useState('');
@@ -347,6 +486,7 @@ export default function CakeOrderForm() {
   const [discount, setDiscount] = useState('0');
   // Advance can be split across methods; follow-ups are collected via POS Dashboard
   const [advAmounts, setAdvAmounts] = useState({ CASH: '', CARD: '', QR: '', WALLET: '' });
+  const [showPayModal, setShowPayModal] = useState(false);
   const [followupPaid, setFollowupPaid] = useState(0);
   const [payHistory, setPayHistory] = useState([]);
   // Totals returned from server after save; locally estimated otherwise
@@ -528,7 +668,10 @@ export default function CakeOrderForm() {
       const saved = await r.json();
       setServerTotals({ cake_total: saved.cake_total, modifier_total: saved.modifier_total, accessory_total: saved.accessory_total, grand_total: saved.grand_total, advance_paid: saved.advance_paid, balance_due: saved.balance_due });
       setPayHistory(saved.payments ?? []);
-      if (isNew) navigate(`/pos/cake/${saved.id}`, { replace: true });
+      if (isNew) {
+        if (windowed) setCurId(saved.id);
+        else navigate(`/pos/cake/${saved.id}`, { replace: true });
+      }
     } finally { setSaving(false); }
   }
 
@@ -603,7 +746,7 @@ export default function CakeOrderForm() {
   async function handleDelete() {
     if (!id || !confirm('Delete this cake order?')) return;
     const r = await fetch(`${API}/pos/cake-orders/${id}`, { method: 'DELETE', headers: H });
-    if (r.ok) navigate('/pos', { replace: true });
+    if (r.ok) { windowed ? onClose() : navigate('/pos', { replace: true }); }
   }
 
   // ── Display totals (prefer server after first save) ──────────
@@ -634,7 +777,103 @@ export default function CakeOrderForm() {
     if (typeof next.select === 'function' && next.tagName === 'INPUT') next.select();
   }
 
-  if (loading) return <div className="cake-root"><div className="cake-loading">Loading…</div></div>;
+  /* ── Window rect (windowed mode) — drag + resize, persisted ── */
+  const [rect, setRect] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('cake_win_rect'));
+      if (s?.w >= 720) return s;
+    } catch { }
+    const w = Math.min(1180, window.innerWidth - 60);
+    const h = Math.min(780, window.innerHeight - 50);
+    return { x: Math.max(10, (window.innerWidth - w) / 2), y: Math.max(10, (window.innerHeight - h) / 2), w, h };
+  });
+  const rectRef = useRef(rect);
+  rectRef.current = rect;
+  const dragRef = useRef(null);
+
+  useEffect(() => {
+    if (!windowed) return;
+    const onMove = (e) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+      if (d.mode === 'move') {
+        setRect(r => ({
+          ...r,
+          x: Math.max(-r.w + 140, Math.min(window.innerWidth - 140, d.start.x + dx)),
+          y: Math.max(0, Math.min(window.innerHeight - 60, d.start.y + dy)),
+        }));
+      } else {
+        setRect(r => ({
+          ...r,
+          w: Math.max(720, Math.min(window.innerWidth, d.start.w + dx)),
+          h: Math.max(480, Math.min(window.innerHeight, d.start.h + dy)),
+        }));
+      }
+    };
+    const onUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      document.body.style.userSelect = '';
+      try { localStorage.setItem('cake_win_rect', JSON.stringify(rectRef.current)); } catch { }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [windowed]);
+
+  const startMove = (e) => {
+    if (e.target.closest('button')) return; // dots stay clickable
+    dragRef.current = { mode: 'move', sx: e.clientX, sy: e.clientY, start: rectRef.current };
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  };
+  const startResize = (e) => {
+    dragRef.current = { mode: 'resize', sx: e.clientX, sy: e.clientY, start: rectRef.current };
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  /* ── Column split (left/right) — draggable, persisted ── */
+  const bodyRef = useRef(null);
+  const [leftPct, setLeftPct] = useState(() => {
+    const v = parseFloat(localStorage.getItem('cake_split_pct'));
+    return Number.isFinite(v) && v >= 25 && v <= 75 ? v : 46;
+  });
+  const splitDrag = useRef(false);
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!splitDrag.current || !bodyRef.current) return;
+      const r = bodyRef.current.getBoundingClientRect();
+      setLeftPct(Math.min(75, Math.max(25, ((e.clientX - r.left) / r.width) * 100)));
+    };
+    const onUp = () => {
+      if (!splitDrag.current) return;
+      splitDrag.current = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      setLeftPct(p => { try { localStorage.setItem('cake_split_pct', String(p)); } catch { } return p; });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+  const startSplitDrag = (e) => {
+    splitDrag.current = true;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  };
+
+  const shellProps = {
+    windowed, rect, startMove, startResize,
+    onCloseWin: exit,
+    onKeyDown: handleEnterNext,
+    title: isNew ? '🎂 New Cake Order' : `🎂 ${orderNum}${custName ? ' · ' + custName : ''}`,
+  };
+
+  if (loading) return <WindowShell {...shellProps}><div className="cake-loading">Loading…</div></WindowShell>;
 
   const isAdvanced = mode === 'advanced';
 
@@ -644,12 +883,12 @@ export default function CakeOrderForm() {
   const detailCount = [designNotes, dietaryNotes, allergyNotes, assignedBaker, internalNotes].filter(s => s?.trim()).length + images.length;
 
   return (
-    <div className="cake-root" onKeyDown={handleEnterNext}>
+    <WindowShell {...shellProps}>
 
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="cake-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button className="cake-back-btn" onClick={() => navigate('/pos')}>← POS</button>
+          {!windowed && <button className="cake-back-btn" onClick={() => navigate('/pos')}>← POS</button>}
           <div>
             <h1 className="cake-title">
               {isNew ? '🎂 New Cake Order' : `🎂 ${custName || orderNum}`}
@@ -684,12 +923,13 @@ export default function CakeOrderForm() {
         </div>
       </div>
 
-      <div className="cake-form-body">
+      <div className="cake-form-body" ref={bodyRef}>
         {/* ── LEFT ─────────────────────────────────────────── */}
-        <div className="cake-form-left">
+        <div className="cake-form-left" style={{ flex: `0 0 ${leftPct}%` }}>
 
           {/* ① Customer + Delivery — merged, compact */}
           <Section icon="👤" title="Customer & Delivery">
+            <button className="ck-pick-cust" onClick={() => setShowCustPicker(true)}>👥 Pick Customer</button>
             <div className="ck-row">
               <Field label="Phone" half>
                 <Input value={phone} onChange={onPhoneChange} type="tel" placeholder="98XXXXXXXX" />
@@ -711,19 +951,17 @@ export default function CakeOrderForm() {
             </div>
           </Section>
 
-          {/* ② Cake Items + Message — always open */}
-          <Section icon="🎂" title="Cake">
+          {/* ② Cake Detail — flavour + message + accessories, one panel */}
+          <Section icon="🎂" title="Cake Detail"
+            action={<button className="ck-add-row" onClick={() => { setItems(prev => [...prev, newItem()]); setServerTotals(null); }}>+ Add Row</button>}>
             {errors.items && <div className="cake-error" style={{ marginBottom: 6 }}>{errors.items}</div>}
-            <button className="ck-add-row" style={{ marginBottom: 6 }} onClick={() => { setItems(prev => [...prev, newItem()]); setServerTotals(null); }}>+ Add Row</button>
-
-
-
             <div className="ck-line-table-wrap">
               <table className="ck-line-table">
                 <thead>
-                  <tr><th>Product</th><th>Note Size</th><th>lbl</th><th>Rate Per Pound ₹</th><th>Amt</th><th></th></tr>
+                  <tr className="ck-band">
+                    <th>Flavour</th><th>Note Size</th><th>Lbl</th><th>Rate Per Pound ₹</th><th>Amt</th><th></th>
+                  </tr>
                 </thead>
-
                 <tbody>
                   {items.map((it, i) => (
                     <CakeItemRow key={it._key} item={it} products={baseProducts} onChange={v => { setItems(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }} onRemove={() => { setItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev); setServerTotals(null); }} />
@@ -731,14 +969,46 @@ export default function CakeOrderForm() {
                 </tbody>
               </table>
             </div>
-            {/* Message on cake — merged here */}
-            <div style={{ marginTop: 10 }}>
+
+            {/* Message on cake */}
+            <div style={{ marginTop: 12 }}>
               <Label>Message on Cake</Label>
               <Input value={message} onChange={setMessage} placeholder="e.g. Happy Birthday Aarav!" />
             </div>
+
+            {/* Accessories — merged here */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '14px 0 8px' }}>
+              <button className="ck-add-row" onClick={() => { setAccessories(prev => [...prev, newAcc()]); setServerTotals(null); }}>+ Add Accessory</button>
+            </div>
+            <div className="ck-line-table-wrap">
+              <table className="ck-line-table">
+                <thead>
+                  <tr className="ck-band">
+                    <th>🎁 Accessories{accCount > 0 ? ` · ${accCount}` : ''}</th><th>Qty</th><th>Rate ₹</th><th>Amount</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accessories.map((ac, i) => (
+                    <AccessoryRow key={ac._key} item={ac} products={accProducts}
+                      onChange={v => { setAccessories(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }}
+                      onRemove={() => { setAccessories(prev => prev.filter((_, j) => j !== i)); setServerTotals(null); }} />
+                  ))}
+                  {accessories.length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: '10px 8px', color: '#9c8870', fontSize: 11, textAlign: 'center' }}>No accessories yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </Section>
 
-          {/* ③ Modifiers — collapsible */}
+        </div>
+
+        <div className="ck-split-divider" onMouseDown={startSplitDrag} title="Drag to resize" />
+
+        {/* ── RIGHT PANEL ───────────────────────────────────── */}
+        <div className="cake-form-right" style={{ flex: 1, minWidth: 0 }}>
+
+          {/* ① Modifiers — collapsible */}
           <CollapsibleSection icon="🏷" title="Modifiers" sectionKey="modifiers" defaultOpen={true}
             badge={modCount > 0 ? `${modCount} selected` : null}>
             <div className="ck-mods">
@@ -754,30 +1024,7 @@ export default function CakeOrderForm() {
             </div>
           </CollapsibleSection>
 
-          {/* ④ Accessories — collapsible */}
-          <CollapsibleSection icon="🎁" title="Accessories" sectionKey="accessories" defaultOpen={false}
-            badge={accCount > 0 ? `${accCount} item${accCount > 1 ? 's' : ''}` : null}>
-            <button className="ck-add-row" style={{ marginBottom: 6 }} onClick={() => { setAccessories(prev => [...prev, newAcc()]); setServerTotals(null); }}>+ Add Accessory</button>
-            <div className="ck-line-table-wrap">
-              <table className="ck-line-table">
-                <thead>
-                  <tr><th>Product</th><th>Qty</th><th>Rate ₹</th><th>Amt</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {accessories.map((ac, i) => (
-                    <AccessoryRow key={ac._key} item={ac} products={accProducts}
-                      onChange={v => { setAccessories(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }}
-                      onRemove={() => { setAccessories(prev => prev.filter((_, j) => j !== i)); setServerTotals(null); }} />
-                  ))}
-                  {accessories.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: '8px', color: '#9c8870', fontSize: 11, textAlign: 'center' }}>No accessories — click + Add Accessory</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CollapsibleSection>
-
-          {/* ⑤ Details — collapsible, advanced only */}
+          {/* ② Details — collapsible, advanced only */}
           {isAdvanced && (
             <CollapsibleSection icon="📝" title="Details" sectionKey="details" defaultOpen={false}
               badge={detailCount > 0 ? `${detailCount} filled` : null}>
@@ -817,38 +1064,25 @@ export default function CakeOrderForm() {
               </div>
             </CollapsibleSection>
           )}
-        </div>
 
-        {/* ── RIGHT PANEL ──────────────────────────────────── */}
-        <div className="cake-form-right">
-
-          {/* Pricing */}
+          {/* Pricing — compact rows; advance split entered via Pick modal */}
           <Section icon="💰" title="Pricing">
             <div className="ck-price-row"><span>Cake Total</span><span>{Rs(totals.cake_total)}</span></div>
             {totals.modifier_total > 0 && <div className="ck-price-row"><span>Modifiers</span><span>+{Rs(totals.modifier_total)}</span></div>}
             {totals.accessory_total > 0 && <div className="ck-price-row"><span>Accessories</span><span>+{Rs(totals.accessory_total)}</span></div>}
-            <Field label="Discount (₹)">
-              <input className="cake-input cake-input--num" type="number" min="0" step="0.01"
+            <div className="ck-price-row">
+              <span>Discount</span>
+              <input className="ck-price-input" type="number" min="0" step="0.01" placeholder="0"
                 value={discount} onChange={e => { setDiscount(e.target.value); setServerTotals(null); }} />
-            </Field>
-            <div className="ck-price-row ck-price-grand"><span>Grand Total</span><span>{Rs(totals.grand_total)}</span></div>
+            </div>
+            <div className="ck-price-row ck-price-grand"><span>Total</span><span>{Rs(totals.grand_total)}</span></div>
 
-            <Label>Advance Paid (₹) — split across methods</Label>
-            {[['CASH', '💵 Cash'], ['CARD', '💳 Card'], ['QR', '📱 QR'], ['WALLET', '👛 Wallet']].map(([m, label]) => (
-              <div key={m} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ width: 78, fontSize: 11, fontWeight: 700, color: '#6b5640' }}>{label}</span>
-                <input
-                  className="cake-input cake-input--num"
-                  style={{ flex: 1 }}
-                  type="number" min="0" step="0.01"
-                  placeholder="0.00"
-                  value={advAmounts[m]}
-                  onChange={e => { setAdvAmounts(prev => ({ ...prev, [m]: e.target.value })); setServerTotals(null); }}
-                />
-              </div>
-            ))}
-            <div className="ck-price-row" style={{ marginTop: 6 }}>
-              <span>Advance Total</span><span>{Rs(advSum)}</span>
+            <div className="ck-price-row">
+              <span>Advance</span>
+              <span className="ck-price-adv">
+                <span>{Rs(advSum)}</span>
+                <button className="ck-pick-btn" onClick={() => setShowPayModal(true)}>💳 Pick</button>
+              </span>
             </div>
             {followupPaid > 0 && (
               <div className="ck-price-row"><span>Follow-up Received</span><span>{Rs(followupPaid)}</span></div>
@@ -904,6 +1138,26 @@ export default function CakeOrderForm() {
           )}
         </div>
       </div>
-    </div>
+
+      {showCustPicker && (
+        <CustomerPickerModal
+          onClose={() => setShowCustPicker(false)}
+          onSelect={(c) => {
+            setPhone(c.phone ?? '');
+            setCustName(c.name ?? '');
+            setCrmId(c.id ?? null);
+            setCrmHint(c.name ? `✓ ${c.name}` : '');
+          }}
+        />
+      )}
+      {showPayModal && (
+        <AdvancePaymentModal
+          amounts={advAmounts}
+          grandTotal={totals.grand_total}
+          onClose={() => setShowPayModal(false)}
+          onConfirm={(vals) => { setAdvAmounts(vals); setServerTotals(null); }}
+        />
+      )}
+    </WindowShell>
   );
 }

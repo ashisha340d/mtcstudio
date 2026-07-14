@@ -14,10 +14,8 @@ const POS_MODULES = [
 
 const MODULES = [
   { key: 'products',     label: 'ASDASDASDASDASDASD',        desc: 'Manage menu items',                to: '/products'        },
-  { key: 'categories',   label: 'Categories',       desc: 'Manage product categories',        to: '/categories'      },
   { key: 'media',        label: 'Media Library',    desc: 'Manage images & assets',           to: '/media'           },
   { key: 'blogs',        label: 'Blogs',            desc: 'Create blog articles',             to: '/blogs'           },
-  { key: 'liveshelf',    label: 'Live Shelf',       desc: "Today's available items",          to: '/liveshelf'       },
   { key: 'menuGenerator',label: 'Menu Generator',   desc: 'Build & publish menu.html',        to: '/menu-generator'  },
 ];
 

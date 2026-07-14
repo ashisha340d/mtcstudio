@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import { createSocket } from '../../socket';
 import SocketStatus from '../../components/SocketStatus';
-import { nepalNowFull } from '../../utils/dateTime';
+import { nepalNowFull, formatNepalDateTime } from '../../utils/dateTime';
 import { useLocation, useNavigate } from 'react-router';
 import {
   Search, Plus, Minus, Trash2,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CheckoutModal from './components/SplitTenderCheckoutContainer';
+import CustomerPickerModal from './components/CustomerPickerModal';
 import SalesReportModal from './components/SalesReportModal';
 import { printReceipt } from './components/ThermalReceipt';
 import './pos.css';
@@ -96,6 +97,14 @@ const DEFAULT_WIDTHS = { kot: 480, cat: 140, products: 0 };
 const DEFAULT_ORDER = ['kot', 'cat', 'products'];
 const MIN_WIDTHS = { kot: 280, cat: 80, products: 200 };
 
+/* Quick Access rail (inside Menu panel) — persisted prefs */
+const QUICK_COLS_KEY = 'posv2_quickCols';
+const QUICK_W_KEY = 'posv2_quickW';
+const QUICK_ON_KEY = 'posv2_quickOn';
+const QUICK_MIN_W = 96;
+const QUICK_MAX_W = 340;
+const quickDefaultW = (cols) => (cols === 2 ? 224 : 118);
+
 function loadLayout() {
   try {
     const s = JSON.parse(localStorage.getItem(PANEL_LAYOUT_KEY));
@@ -103,6 +112,10 @@ function loadLayout() {
   } catch {}
   return null;
 }
+
+/* ── Session caches — paint instantly on re-entry, refresh in background ── */
+let menuCache = null;    // normalized active products (full list)
+let catTblCache = null;  // { cats, tbls }
 
 /* ── Warm palette ────────────────────────────────────────────── */
 const W = {
@@ -240,67 +253,6 @@ function ModalChrome({ onDrag, onClose, title, subtitle }) {
         )}
       </div>
     </div>
-  );
-}
-
-/* ── Customer Modal ─────────────────────────────────────────── */
-function CustomerModal({ name, phone, onSave, onClose, required = false }) {
-  const [n, setN] = useState(name || '');
-  const [p, setP] = useState(phone || '');
-  const [err, setErr] = useState('');
-
-  function handleSave() {
-    if (!n.trim()) { setErr('Customer name is required.'); return; }
-    onSave(n.trim(), p.trim());
-    onClose();
-  }
-
-  return (
-    <ModalShell id="customer" defaultWidth={420} defaultHeight={360} onClose={onClose}>
-      {(startDrag) => (
-        <>
-          <ModalChrome
-            onDrag={startDrag}
-            onClose={onClose}
-            title="Customer Details"
-            subtitle={required ? 'Required before checkout' : 'Link a customer to this order'}
-          />
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: W.text3, marginBottom: 8 }}>
-                Name <span style={{ color: W.red }}>*</span>
-              </div>
-              <input
-                value={n}
-                onChange={e => { setN(e.target.value); setErr(''); }}
-                onKeyDown={e => e.key === 'Enter' && handleSave()}
-                placeholder="Customer name"
-                autoFocus
-                style={{ width: '100%', padding: '11px 13px', borderRadius: 9, border: `1.5px solid ${err ? W.red : W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.text1, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-              />
-              {err && <div style={{ color: W.red, fontSize: 11, marginTop: 4 }}>{err}</div>}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: W.text3, marginBottom: 8 }}>Phone</div>
-              <input
-                value={p}
-                onChange={e => setP(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSave()}
-                placeholder="Phone number (optional)"
-                type="tel"
-                style={{ width: '100%', padding: '11px 13px', borderRadius: 9, border: `1.5px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.text1, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-
-          <div style={{ borderTop: `1px solid ${W.border}`, padding: '12px 20px', display: 'flex', gap: 8, flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${W.borderLight}`, background: 'transparent', color: W.text2, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={handleSave} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: n.trim() ? W.orange : 'rgba(0,0,0,0.08)', color: n.trim() ? '#fff' : W.text3, fontSize: 14, fontWeight: 800, cursor: n.trim() ? 'pointer' : 'not-allowed' }}>Save Customer</button>
-          </div>
-        </>
-      )}
-    </ModalShell>
   );
 }
 
@@ -723,7 +675,7 @@ function ProductCard({ product, cartQty, onClick }) {
       )}
       <div style={{ position: 'relative', width: '100%', background: 'rgba(0,0,0,0.04)', overflow: 'hidden', aspectRatio: '1/1' }}>
         {product.primary_image
-          ? <img src={`/uploads/${product.primary_image}`} style={{ height: '100%', width: '100%', objectFit: 'cover', display: 'block' }} alt={product.name} />
+          ? <img src={`/uploads/${product.primary_image}`} loading="lazy" decoding="async" style={{ height: '100%', width: '100%', objectFit: 'cover', display: 'block' }} alt={product.name} />
           : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ImageIcon style={{ height: 36, width: 36, color: W.text3, opacity: 0.5 }} />
           </div>
@@ -752,6 +704,181 @@ function ProductCard({ product, cartQty, onClick }) {
         )}
       </div>
     </button>
+  );
+}
+
+/* ── Quick Access · mini product card (uniform with ProductCard, no badges) ── */
+function QuickCard({ product, cartQty, onClick }) {
+  return (
+    <button
+      onClick={() => onClick(product)}
+      title={product.name}
+      style={{
+        position: 'relative',
+        display: 'flex', flexDirection: 'column',
+        textAlign: 'left',
+        borderRadius: 9,
+        background: cartQty > 0 ? 'rgba(193,68,14,0.07)' : 'rgba(255,255,255,0.65)',
+        border: cartQty > 0 ? `2px solid ${W.orange}` : `1px solid ${W.borderLight}`,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        padding: 0,
+        boxShadow: cartQty > 0 ? '0 3px 12px rgba(193,68,14,0.18)' : '0 1px 4px rgba(80,50,20,0.09)',
+        transition: 'all 0.15s',
+      }}
+      onMouseEnter={e => {
+        if (cartQty === 0) {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.92)';
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(80,50,20,0.16)';
+          e.currentTarget.style.transform = 'translateY(-1px)';
+        }
+      }}
+      onMouseLeave={e => {
+        if (cartQty === 0) {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.65)';
+          e.currentTarget.style.boxShadow = '0 1px 4px rgba(80,50,20,0.09)';
+          e.currentTarget.style.transform = 'none';
+        }
+      }}
+    >
+      {cartQty > 0 && (
+        <div style={{
+          position: 'absolute', top: 5, right: 5, zIndex: 10,
+          height: 17, minWidth: 17, borderRadius: '50%',
+          background: W.orange, color: '#fff',
+          fontSize: 9, fontWeight: 800,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 4px',
+          boxShadow: '0 2px 6px rgba(193,68,14,0.35)',
+        }}>
+          {cartQty}
+        </div>
+      )}
+      <div style={{ position: 'relative', width: '100%', background: 'rgba(0,0,0,0.04)', overflow: 'hidden', aspectRatio: '1/1' }}>
+        {product.primary_image
+          ? <img src={`/uploads/${product.primary_image}`} loading="lazy" decoding="async" style={{ height: '100%', width: '100%', objectFit: 'cover', display: 'block' }} alt={product.name} />
+          : <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ImageIcon style={{ height: 22, width: 22, color: W.text3, opacity: 0.5 }} />
+          </div>
+        }
+      </div>
+      <div style={{ padding: '5px 7px 7px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: W.orange, margin: '0 0 2px' }}>{productPriceDisplay(product)}</p>
+        <p style={{ fontSize: 10, fontWeight: 600, color: W.text1, lineHeight: 1.25, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{product.name}</p>
+      </div>
+    </button>
+  );
+}
+
+/* ── Quick Access rail — fixed column(s) inside the Menu panel.
+     Stays put across search & category navigation. 1–2 columns,
+     drag-resizable on its inner edge; cols + width persisted. ── */
+function QuickAccessRail({ items, qtyByProduct, onPick, side }) {
+  const [cols, setCols] = useState(() => {
+    try { return Number(localStorage.getItem(QUICK_COLS_KEY)) === 2 ? 2 : 1; } catch { return 1; }
+  });
+  const [width, setWidth] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(QUICK_W_KEY));
+      if (v >= QUICK_MIN_W && v <= QUICK_MAX_W) return v;
+    } catch {}
+    return quickDefaultW(Number(localStorage.getItem(QUICK_COLS_KEY)) === 2 ? 2 : 1);
+  });
+  const [resizing, setResizing] = useState(false);
+  const dragRef = useRef(null);
+
+  useEffect(() => { try { localStorage.setItem(QUICK_COLS_KEY, String(cols)); } catch {} }, [cols]);
+  useEffect(() => { try { localStorage.setItem(QUICK_W_KEY, String(width)); } catch {} }, [width]);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e) => {
+      if (!dragRef.current) return;
+      const delta = e.clientX - dragRef.current.startX;
+      const raw = dragRef.current.startW + (side === 'left' ? delta : -delta);
+      setWidth(Math.max(QUICK_MIN_W, Math.min(QUICK_MAX_W, raw)));
+    };
+    const onUp = () => { dragRef.current = null; setResizing(false); };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [resizing, side]);
+
+  const pickCols = (n) => { setCols(n); setWidth(quickDefaultW(n)); };
+
+  if (!items.length) return null;
+
+  const handleEdge = side === 'left' ? { right: 0 } : { left: 0 };
+  const colBtn = (n, glyph) => (
+    <button
+      key={n}
+      onClick={() => pickCols(n)}
+      title={`${n} column${n > 1 ? 's' : ''}`}
+      style={{
+        height: 16, minWidth: 16, padding: '0 3px',
+        borderRadius: 4, border: `1px solid ${cols === n ? W.orange : W.borderLight}`,
+        background: cols === n ? W.orange : 'rgba(255,255,255,0.55)',
+        color: cols === n ? '#fff' : W.text3,
+        fontSize: 7, fontWeight: 900, letterSpacing: 1,
+        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.12s', lineHeight: 1,
+      }}
+    >{glyph}</button>
+  );
+
+  return (
+    <div style={{
+      position: 'relative', width, flexShrink: 0,
+      display: 'flex', flexDirection: 'column', minHeight: 0,
+      background: 'linear-gradient(180deg, rgba(193,68,14,0.05) 0%, rgba(193,68,14,0.015) 100%)',
+      borderLeft: side === 'right' ? `1px solid ${W.borderLight}` : 'none',
+      borderRight: side === 'left' ? `1px solid ${W.borderLight}` : 'none',
+    }}>
+      {/* Header */}
+      <div style={{
+        flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 4, padding: '7px 8px 6px', borderBottom: `1px solid rgba(193,68,14,0.14)`,
+      }}>
+        <span style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: W.orange, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          ⚡ Quick
+        </span>
+        <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {colBtn(1, '▮')}
+          {colBtn(2, '▮▮')}
+        </span>
+      </div>
+
+      {/* Cards */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: 7,
+        display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap: 6, alignContent: 'start',
+      }}>
+        {items.map(p => (
+          <QuickCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={onPick} />
+        ))}
+      </div>
+
+      {/* Resize handle on the inner edge */}
+      <div
+        onMouseDown={(e) => { dragRef.current = { startX: e.clientX, startW: width }; setResizing(true); e.preventDefault(); }}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, width: 5, ...handleEdge,
+          cursor: 'col-resize', zIndex: 5,
+          background: resizing ? 'rgba(193,68,14,0.35)' : 'transparent',
+          transition: 'background 0.12s',
+        }}
+        onMouseEnter={e => { if (!resizing) e.currentTarget.style.background = 'rgba(193,68,14,0.2)'; }}
+        onMouseLeave={e => { if (!resizing) e.currentTarget.style.background = 'transparent'; }}
+      />
+    </div>
   );
 }
 
@@ -1048,10 +1175,22 @@ export default function POS() {
   const [existingDirty, setExistingDirty] = useState(false);
   const committedItems = useRef((initState.existingItems ?? []).filter(i => i.status !== 'CANCELLED'));
 
-  const _initCart = (initState.draftItems ?? []).map(i => ({ ...i, _id: newId() }));
+  const _schedItems = (() => {
+    try { return initState.scheduledRow?.items_json ? JSON.parse(initState.scheduledRow.items_json) : []; }
+    catch { return []; }
+  })();
+  const _initCart = [...(initState.draftItems ?? []), ..._schedItems].map(i => ({ ...i, _id: newId() }));
 
-  const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(() => catTblCache?.cats ?? []);
+  const [products, setProducts] = useState(() => menuCache ?? []);
+  const [quickOn, setQuickOn] = useState(() => {
+    try { return localStorage.getItem(QUICK_ON_KEY) !== '0'; } catch { return true; }
+  });
+  const toggleQuick = useCallback(() => setQuickOn(v => {
+    const next = !v;
+    try { localStorage.setItem(QUICK_ON_KEY, next ? '1' : '0'); } catch {}
+    return next;
+  }), []);
   const [activeCat, setActiveCat] = useState(() => {
     try {
       const saved = localStorage.getItem('pos_activeCat');
@@ -1062,11 +1201,25 @@ export default function POS() {
   });
   const [search, setSearch] = useState('');
   const [orderType, setOrderType] = useState(initState.orderType ?? 'DINE_IN');
-  const [tables, setTables] = useState([]);
+  const [tables, setTables] = useState(() => catTblCache?.tbls ?? []);
   const [activeTable, setActiveTable] = useState(initState.tableId ? String(initState.tableId) : '');
-  const [customerName, setCustomerName] = useState(initState.customerName ?? '');
-  const [customerPhone, setCustomerPhone] = useState(initState.customerPhone ?? '');
+  /* ── Scheduled / Draft mode — items saved to pos_scheduled_orders,
+     never touching pos_orders/pos_kots until conversion ── */
+  const scheduleMeta = initState.scheduleMeta ?? null; // new scheduled order (from ScheduleOrderModal)
+  const scheduledRow = initState.scheduledRow ?? null; // editing an existing scheduled/draft row
+  const schedMode = !!scheduleMeta || !!scheduledRow || !!initState.draftMode;
+  const kindIsScheduled = !!scheduleMeta || scheduledRow?.kind === 'SCHEDULED';
+
+  const [customerName, setCustomerName] = useState(
+    initState.customerName ?? scheduleMeta?.customerName ?? scheduledRow?.customer_name ?? ''
+  );
+  const [customerPhone, setCustomerPhone] = useState(
+    initState.customerPhone ?? scheduleMeta?.customerPhone ?? scheduledRow?.customer_phone ?? ''
+  );
   const [customerAddress, setCustomerAddress] = useState(initState.customerAddress ?? '');
+  const [orderNotes, setOrderNotes] = useState(
+    initState.orderNotes ?? scheduleMeta?.orderNotes ?? scheduledRow?.order_notes ?? ''
+  );
   const [cart, setCart] = useState(_initCart);
   const [productModal, setProductModal] = useState(null);
   const [custModal, setCustModal] = useState(false);
@@ -1219,12 +1372,16 @@ export default function POS() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [cart.length, editableItems.length]);
 
-  /* ── Load categories + tables ───────────────────────────── */
+  /* ── Load categories + tables (cached paint, background refresh) ── */
   useEffect(() => {
     Promise.all([
       fetch(`${API}/food-menu/categories`).then(r => r.json()),
       fetch(`${API}/pos/tables`, { headers: H }).then(r => r.json()),
-    ]).then(([cats, tbls]) => { setCategories(cats); setTables(tbls); });
+    ]).then(([cats, tbls]) => {
+      catTblCache = { cats, tbls };
+      setCategories(cats);
+      setTables(tbls);
+    }).catch(() => {});
   }, []);
 
   /* ── Persist active category selection ───────────────────── */
@@ -1232,26 +1389,34 @@ export default function POS() {
     try { localStorage.setItem('pos_activeCat', activeCat); } catch { /* best-effort */ }
   }, [activeCat]);
 
-  /* ── Load products ──────────────────────────────────────── */
+  /* ── Load full menu once; category switching filters client-side ── */
   useEffect(() => {
-    setLoading(true);
-    const url = activeCat === ALL_CAT
-      ? `${API}/food-menu/products`
-      : `${API}/food-menu/products?categoryId=${activeCat}`;
-    fetch(url)
+    if (!menuCache) setLoading(true);
+    fetch(`${API}/food-menu/products`)
       .then(r => r.json())
-      .then(rows => setProducts((rows || []).map(normalizeMenuProduct).filter(p => p.is_active !== 0)))
+      .then(rows => {
+        menuCache = (rows || []).map(normalizeMenuProduct).filter(p => p.is_active !== 0);
+        setProducts(menuCache);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [activeCat]);
+  }, []);
 
-  /* ── Deep search ────────────────────────────────────────── */
-  const filtered = search
-    ? products.filter(p => {
+  /* ── Fast-moving items derived from the same list ─────────── */
+  const fastProducts = useMemo(() => products.filter(p => p.is_fast_moving), [products]);
+
+  /* ── Category filter + deep search (all client-side, instant) ── */
+  const filtered = useMemo(() => {
+    if (search) {
       const q = search.toLowerCase();
-      return p.name.toLowerCase().includes(q) ||
-        (p.variant_names || '').toLowerCase().includes(q);
-    })
-    : products;
+      return products.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.variant_names || '').toLowerCase().includes(q)
+      );
+    }
+    if (activeCat === ALL_CAT) return products;
+    return products.filter(p => String(p.category_id) === String(activeCat));
+  }, [products, search, activeCat]);
 
   const qtyByProduct = [...editableItems, ...cart].reduce((acc, i) => {
     if (i.status === 'CANCELLED') return acc;
@@ -1407,6 +1572,42 @@ export default function POS() {
     }));
   }
 
+  /* Selecting an occupied table adopts its open order: sent items load into
+     the KOT panel and liveOrderId points at it, so Send APPENDS a new KOT
+     instead of opening a parallel order on the same table. */
+  function unadoptOrder() {
+    setLiveOrderId(null);
+    setEditableItems([]);
+    committedItems.current = [];
+    pendingCancels.current = [];
+    setExistingDirty(false);
+  }
+
+  async function handleTableSelect(tableId) {
+    setActiveTable(tableId);
+    unadoptOrder();
+    if (!tableId) return;
+    try {
+      const data = await fetch(`${API}/pos/orders/active`, { headers: H }).then(r => r.json());
+      const order = (data.orders ?? []).find(
+        o => String(o.table_id) === String(tableId) && (o.status === 'OPEN' || o.status === 'SAVED')
+      );
+      if (!order) return;
+      setLiveOrderId(order.id);
+      const kots = (data.kots ?? []).filter(k => k.order_id === order.id);
+      const items = kots.flatMap(k => (k.items ?? []).filter(i => i.status !== 'CANCELLED'));
+      setEditableItems(items);
+      committedItems.current = items;
+      if (order.customer_name && !customerName) setCustomerName(order.customer_name);
+      if (order.customer_phone && !customerPhone) setCustomerPhone(order.customer_phone);
+      // Unsent draft items saved on that order → merge into cart
+      try {
+        const draft = order.draft_items ? JSON.parse(order.draft_items) : [];
+        if (draft.length) setCart(prev => [...draft.map(i => ({ ...i, _id: newId() })), ...prev]);
+      } catch { /* malformed draft — skip */ }
+    } catch { /* offline — proceed as fresh order */ }
+  }
+
   async function refreshOrderItems(orderId) {
     try {
       const data = await fetch(`${API}/pos/orders/active`, { headers: H }).then(r => r.json());
@@ -1427,6 +1628,7 @@ export default function POS() {
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
         customer_address: customerAddress || null,
+        order_notes: orderNotes || null,
         status,
       }),
     }).then(r => r.json());
@@ -1483,19 +1685,41 @@ export default function POS() {
     } catch (e) { console.error(e); setSaving(false); }
   }
 
-  async function handleSaveAsDraft() {
+  /* Save into pos_scheduled_orders — scheduled_for/notify only sent on create;
+     edits leave the stored trigger time untouched (avoids tz round-trips). */
+  async function handleSaveScheduled() {
     if (!cart.length) { navigate('/pos'); return; }
     setSaving(true);
     try {
-      const orderId = await ensureOrder('SAVED');
-      await fetch(`${API}/pos/kots`, {
-        method: 'POST', headers: H,
-        body: JSON.stringify({ order_id: orderId, items: buildKotItems() }),
-      });
-      setCart([]);
-      await refreshOrderItems(orderId);
-      setSaving(false);
-    } catch (e) { console.error(e); setSaving(false); }
+      const items = cart.map(({ _id, ...rest }) => rest);
+      if (scheduledRow) {
+        await fetch(`${API}/pos/scheduled/${scheduledRow.id}`, {
+          method: 'PATCH', headers: H,
+          body: JSON.stringify({
+            customer_name: customerName || null,
+            customer_phone: customerPhone || null,
+            order_notes: orderNotes || null,
+            items, total_amount: grandTotal,
+          }),
+        });
+      } else {
+        await fetch(`${API}/pos/scheduled`, {
+          method: 'POST', headers: H,
+          body: JSON.stringify({
+            kind: scheduleMeta ? 'SCHEDULED' : 'DRAFT',
+            order_type: orderType,
+            customer_name: customerName || null,
+            customer_phone: customerPhone || null,
+            order_notes: orderNotes || null,
+            scheduled_for: scheduleMeta?.scheduledFor ?? null,
+            notify_before_min: scheduleMeta?.notifyBeforeMin ?? 30,
+            items, total_amount: grandTotal,
+          }),
+        });
+      }
+      navigate('/pos');
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
   }
 
   function handleCheckout() { isCheckingOutRef.current = true; setCheckoutModal(true); }
@@ -1530,6 +1754,14 @@ export default function POS() {
   function handleCustomerSave(n, p) {
     setCustomerName(n);
     setCustomerPhone(p);
+    // Order already exists in DB — persist immediately, not just local state
+    const orderId = liveOrderIdRef.current ?? existingOrderId;
+    if (orderId) {
+      fetch(`${API}/pos/orders/${orderId}`, {
+        method: 'PATCH', headers: H,
+        body: JSON.stringify({ customer_name: n || null, customer_phone: p || null }),
+      }).catch(() => {});
+    }
   }
 
   /* ── Panel render helpers ────────────────────────────────────── */
@@ -1552,14 +1784,21 @@ export default function POS() {
           </div>
           <span style={{ fontSize: 10, fontWeight: 800, color: W.blue, letterSpacing: '0.02em', flexShrink: 0 }}>{todayStr}</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 0 rgba(255,255,255,0.45)', flex: 1, textAlign: 'right' }}>
-            {existingOrderId ? 'Edit Order' : 'New Order'} — {orderLabel}
+            {schedMode
+              ? `${scheduledRow ? 'Edit' : 'New'} ${kindIsScheduled ? 'Scheduled Order' : 'Draft'}`
+              : existingOrderId ? 'Edit Order' : 'New Order'} — {orderLabel}
           </span>
         </div>
 
         <div style={{ display: 'flex', gap: 5 }}>
           {ORDER_TYPES.map(t => (
             <button key={t.key}
-              onClick={() => !existingOrderId && setOrderType(t.key)}
+              onClick={() => {
+                if (existingOrderId || kindIsScheduled) return;
+                setOrderType(t.key);
+                // Leaving DINE_IN drops any adopted table order
+                if (t.key !== 'DINE_IN' && activeTable) { setActiveTable(''); unadoptOrder(); }
+              }}
               style={{
                 flex: 1, padding: '5px 4px',
                 border: `1.5px solid ${orderType === t.key ? W.orange : W.borderLight}`,
@@ -1576,10 +1815,17 @@ export default function POS() {
           ))}
         </div>
 
+        {kindIsScheduled && (
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: '#4c5fd5', background: 'rgba(76,95,213,0.08)', border: '1px solid rgba(76,95,213,0.25)', borderRadius: 7, padding: '6px 10px' }}>
+            ⏰ {scheduleMeta?.scheduledFor ?? formatNepalDateTime(scheduledRow?.scheduled_for)}
+            {' · '}KOT {scheduleMeta?.notifyBeforeMin ?? scheduledRow?.notify_before_min ?? 30} min before
+          </div>
+        )}
+
         {orderType === 'DINE_IN' && !initState.tableId && tables.length > 0 && (
           <select
             value={activeTable}
-            onChange={e => setActiveTable(e.target.value)}
+            onChange={e => handleTableSelect(e.target.value)}
             disabled={!!existingOrderId}
             style={{ width: '100%', height: 34, borderRadius: 7, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.7)', padding: '0 10px', fontSize: 12, color: W.text1, marginTop: 8, outline: 'none', cursor: existingOrderId ? 'not-allowed' : 'pointer' }}
           >
@@ -1667,6 +1913,22 @@ export default function POS() {
 
       {/* Action buttons */}
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderTop: `1px solid ${W.border}`, flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
+        {schedMode ? (
+          <button
+            onClick={handleSaveScheduled}
+            disabled={saving}
+            style={{
+              flex: 1, height: 48,
+              borderRadius: 10, border: 'none',
+              background: kindIsScheduled ? '#4c5fd5' : W.orange, color: '#fff',
+              fontSize: 14, fontWeight: 800,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              boxShadow: kindIsScheduled ? '0 3px 12px rgba(76,95,213,0.3)' : '0 3px 12px rgba(193,68,14,0.25)',
+              transition: 'all 0.15s', letterSpacing: '0.03em',
+            }}
+          >{saving ? 'Saving…' : kindIsScheduled ? '⏰ Save Scheduled Order' : '📝 Save Draft'}</button>
+        ) : (
+        <>
         <button
           onClick={liveOrderId ? handleCheckout : () => { }}
           style={{
@@ -1698,6 +1960,8 @@ export default function POS() {
             transition: 'all 0.15s', letterSpacing: '0.03em',
           }}
         >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
+        </>
+        )}
       </div>
     </div>
   );
@@ -1753,7 +2017,22 @@ export default function POS() {
     </div>
   );
 
-  const renderProductsPanel = (panelId, panelStyle, onCtx) => (
+  const renderProductsPanel = (panelId, panelStyle, onCtx) => {
+    // Quick rail hugs the side facing the Category panel so the eye travels
+    // Categories → Quick → Grid in one sweep, wherever the panels sit.
+    const catIdx = panelOrder.indexOf('cat');
+    const prodIdx = panelOrder.indexOf('products');
+    const quickSide = catIdx !== -1 && catIdx > prodIdx ? 'right' : 'left';
+    const quickRail = quickOn ? (
+      <QuickAccessRail
+        items={fastProducts}
+        qtyByProduct={qtyByProduct}
+        onPick={handleProductClick}
+        side={quickSide}
+      />
+    ) : null;
+
+    return (
     <div key={panelId} style={{ ...panelStyle, background: W.windowBg }}>
       {/* Chrome + search */}
       <div
@@ -1761,10 +2040,25 @@ export default function POS() {
         style={{ flexShrink: 0, borderBottom: `1px solid ${W.border}`, background: W.chrome }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: `1px solid rgba(0,0,0,0.1)` }}>
-          <div style={{ display: 'flex', gap: 5 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)' }} />
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
+            <button
+              onClick={toggleQuick}
+              title={quickOn ? 'Hide Quick Access rail' : 'Show Quick Access rail'}
+              style={{
+                marginLeft: 6, height: 17, padding: '0 7px',
+                borderRadius: 20, cursor: 'pointer',
+                fontSize: 9, fontWeight: 800, lineHeight: 1,
+                display: 'flex', alignItems: 'center', gap: 3,
+                border: `1px solid ${quickOn ? W.orange : 'rgba(0,0,0,0.18)'}`,
+                background: quickOn ? W.orange : 'rgba(255,255,255,0.35)',
+                color: quickOn ? '#fff' : '#4a3828',
+                boxShadow: quickOn ? '0 1px 5px rgba(193,68,14,0.35)' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >⚡</button>
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1, textAlign: 'center', textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>
             Menu
@@ -1803,21 +2097,26 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Product grid */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-        {loading
-          ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>Loading…</div>
-          : filtered.length === 0
-            ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
-            : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
-              {filtered.map(p => (
-                <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
-              ))}
-            </div>
-        }
+      {/* Body: fixed Quick rail + scrolling product grid */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {quickSide === 'left' && quickRail}
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 14px' }}>
+          {loading
+            ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>Loading…</div>
+            : filtered.length === 0
+              ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
+              : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
+                {filtered.map(p => (
+                  <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
+                ))}
+              </div>
+          }
+        </div>
+        {quickSide === 'right' && quickRail}
       </div>
     </div>
-  );
+    );
+  };
 
   /* ─────────────────────── RENDER ──────────────────────────── */
   return (
@@ -1918,10 +2217,9 @@ export default function POS() {
       )}
 
       {custModal && (
-        <CustomerModal
-          name={customerName}
-          phone={customerPhone}
-          onSave={handleCustomerSave}
+        <CustomerPickerModal
+          title={customerName ? '✎ Change Customer' : '＋ Add Customer'}
+          onSelect={(c) => handleCustomerSave(c.name, c.phone)}
           onClose={() => setCustModal(false)}
         />
       )}

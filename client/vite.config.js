@@ -20,6 +20,14 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: '../server/public/client-build',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Stable vendor chunk — app deploys don't bust the framework cache
+            vendor: ['react', 'react-dom', 'react-router'],
+          },
+        },
+      },
     },
 
     server: {

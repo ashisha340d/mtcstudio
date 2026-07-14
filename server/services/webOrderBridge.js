@@ -96,13 +96,13 @@ async function importOrder(o) {
           payment_method, payment_status, payment_reference, ordered_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [webOrderId, o.orderNumber, o.source || 'WEB_ORDERING',
-       o.orderType === 'Delivery' ? 'Delivery' : 'Pickup',
-       c.name || null, c.phone || null, c.address || null, c.landmark || null, c.notes || null,
-       JSON.stringify(o.items),
-       +t.subtotal || 0, +t.discount || 0, +t.tax || 0, +t.deliveryCharge || 0, +t.grandTotal || 0,
-       t.distanceKm == null ? null : +t.distanceKm,
-       pay.method || 'COD', pay.status || 'UNPAID', pay.reference || null,
-       o.createdAt || null]
+        o.orderType === 'Delivery' ? 'Delivery' : 'Pickup',
+        c.name || null, c.phone || null, c.address || null, c.landmark || null, c.notes || null,
+        JSON.stringify(o.items),
+        +t.subtotal || 0, +t.discount || 0, +t.tax || 0, +t.deliveryCharge || 0, +t.grandTotal || 0,
+        t.distanceKm == null ? null : +t.distanceKm,
+        pay.method || 'COD', pay.status || 'UNPAID', pay.reference || null,
+        o.createdAt || null]
     );
     let sort = 0;
     for (const it of resolved) {
@@ -112,10 +112,10 @@ async function importOrder(o) {
             quantity, unit_price, line_total, modifiers_json, special_note, sort_order, cake_json)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [ins.lastInsertRowid, it.pid == null ? null : String(it.pid), it.kind || 'product',
-         it.productId, it.variantId, String(it.name || 'Item'), it.variant || null,
-         Math.max(1, Math.floor(+it.qty || 1)), +it.unitPrice || 0, +it.lineTotal || 0,
-         it.modifiers?.length ? JSON.stringify(it.modifiers) : null, it.note || null, sort++,
-         it.cake ? JSON.stringify(it.cake) : null]
+        it.productId, it.variantId, String(it.name || 'Item'), it.variant || null,
+        Math.max(1, Math.floor(+it.qty || 1)), +it.unitPrice || 0, +it.lineTotal || 0,
+        it.modifiers?.length ? JSON.stringify(it.modifiers) : null, it.note || null, sort++,
+        it.cake ? JSON.stringify(it.cake) : null]
       );
     }
     return ins.lastInsertRowid;
@@ -123,7 +123,7 @@ async function importOrder(o) {
 
   const unmatched = resolved.filter(i => i.kind !== 'cake' && !i.productId).length;
   log(`imported ${o.orderNumber} (web #${webOrderId}) as pending #${pendingId}` +
-      (unmatched ? ` — ${unmatched} item(s) unmatched to POS products` : ''));
+    (unmatched ? ` — ${unmatched} item(s) unmatched to POS products` : ''));
 
   // Notify every open POS screen: popup + sound + badge refresh
   socketServer.emitWebOrderReceived({
@@ -239,7 +239,7 @@ function resetWatchdog() {
   clearTimeout(watchdog);
   watchdog = setTimeout(() => {
     log('watchdog: no traffic — terminating connection');
-    try { ws?.terminate(); } catch {}
+    try { ws?.terminate(); } catch { }
   }, WATCHDOG_MS);
   watchdog.unref?.();
 }
@@ -249,7 +249,7 @@ async function onOpen() {
   log(`connected to ${WS_URL}`);
   resetWatchdog();
   clearInterval(pinger);
-  pinger = setInterval(() => { try { ws?.ping(); } catch {} }, PING_MS);
+  pinger = setInterval(() => { try { ws?.ping(); } catch { } }, PING_MS);
   pinger.unref?.();
 
   // Offline synchronization: ask for everything after our last imported order
@@ -310,7 +310,7 @@ function stop() {
   stopped = true;
   clearTimeout(watchdog);
   clearInterval(pinger);
-  try { ws?.close(); } catch {}
+  try { ws?.close(); } catch { }
 }
 
 module.exports = { start, stop, sendStatus, notifyPosOrderEvent, notifyCakeOrderEvent, notifyKotItemProgress, notifyKotItemsChanged };

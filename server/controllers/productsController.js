@@ -11,9 +11,11 @@ async function list(req, res, next) {
             featuredFilter: q.featured !== undefined ? q.featured : '',
             station: q.station || '',
             liveShop: q.live_shop || '',
+            storefrontCat: q.storefront_cat || '',
             qrActive: q.qr_active || '',
             blankMax: q.blank_max || '',
             badge: q.badge || '',
+            fastFilter: q.fast || '',
             sort: q.sort || 'id',
             sortDir: q.sort_dir || 'desc',
             page: q.page || 1

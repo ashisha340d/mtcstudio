@@ -15,21 +15,35 @@
   width: 280px;
 }
 
-.pin-brand {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.2em;
-  color: #f0f0f0;
-  margin-bottom: 32px;
+.pin-logo {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: 14px;
+  background: #f5a623;
+  box-shadow: 0 0 34px rgba(245, 166, 35, 0.45);
+  margin-bottom: 18px;
+  user-select: none;
 }
 
-.pin-label {
-  font-size: 12px;
+.pin-brand {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #f0f0f0;
+  margin-bottom: 6px;
+}
+
+.pin-tagline {
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: #444;
-  margin-bottom: 24px;
+  color: #4b5b8a;
+  margin-bottom: 28px;
 }
 
 /* Dot row */
@@ -95,7 +109,7 @@
 }
 .pin-key:hover:not(:disabled) { background: #222; border-color: #333; }
 .pin-key:active:not(:disabled) { background: #2a2a2a; transform: scale(0.95); }
-.pin-key--empty  { background: transparent; border-color: transparent; cursor: default; }
+.pin-key--clear  { font-size: 18px; color: #ef4444; }
 .pin-key--del    { font-size: 18px; color: #666; }
 .pin-key:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -104,4 +118,45 @@
   font-size: 18px;
   color: #444;
   letter-spacing: 0.2em;
+}
+
+/* ── Splash / Screensaver ─────────────────────────────── */
+.splash-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: #080808;
+  cursor: pointer;
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+.splash-root--out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-gif {
+  max-width: 70vw;
+  max-height: 70vh;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.splash-hint {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: #3a3a3a;
+  animation: splash-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes splash-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
 }

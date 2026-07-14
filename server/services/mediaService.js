@@ -28,25 +28,46 @@ function withSections(rows) {
     return rows.map(r => ({ ...r, sections: r.sections ? r.sections.split(',') : [] }));
 }
 
-async function query({ search, unassigned, section, limit }) {
+function buildWhere({ search, unassigned, section }) {
     const where = [], params = [];
     if (search) { where.push(`(m.filename LIKE ? OR m.title LIKE ? OR m.alt_text LIKE ?)`); params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
     if (section && SECTION_FILTER_SQL[section]) where.push(SECTION_FILTER_SQL[section]);
     if (unassigned) where.push(`pi.id IS NULL`);
+    return { where, params };
+}
+
+async function query({ search, unassigned, section, limit, offset }) {
+    const { where, params } = buildWhere({ search, unassigned, section });
     let sql = `SELECT m.*, ${SECTIONS_AGG} FROM media_library m`;
     if (unassigned) sql += ` LEFT JOIN product_images pi ON pi.media_id=m.id AND pi.is_primary=1`;
     if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
     sql += ` ORDER BY m.created_at DESC`;
     if (limit) { sql += ` LIMIT ${Number(limit)}`; }
+    if (offset) { sql += ` OFFSET ${Number(offset)}`; }
     return withSections(await dbAll(sql, params));
+}
+
+async function countMedia({ search, unassigned, section }) {
+    const { where, params } = buildWhere({ search, unassigned, section });
+    let sql = `SELECT COUNT(*) AS c FROM media_library m`;
+    if (unassigned) sql += ` LEFT JOIN product_images pi ON pi.media_id=m.id AND pi.is_primary=1`;
+    if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
+    const row = await dbGet(sql, params);
+    return row.c;
 }
 
 async function getAll({ search, unassigned, section }) {
     return query({ search, unassigned, section, limit: 200 });
 }
 
-async function getList({ search, unassigned, section }) {
-    return query({ search, unassigned, section, limit: (search || unassigned || section) ? 200 : 10 });
+async function getList({ search, unassigned, section, page, perPage }) {
+    const p = Math.max(1, Number(page) || 1);
+    const pp = Number(perPage) === 12 ? 12 : 24; // only 12 or 24 allowed
+    const [items, total] = await Promise.all([
+        query({ search, unassigned, section, limit: pp, offset: (p - 1) * pp }),
+        countMedia({ search, unassigned, section }),
+    ]);
+    return { items, total, page: p, perPage: pp, totalPages: Math.max(1, Math.ceil(total / pp)) };
 }
 
 async function saveFileEntry(file) {
@@ -61,7 +82,7 @@ async function saveFileEntry(file) {
         `INSERT INTO media_library (filename,original_name,title,alt_text,file_type,file_size,width,height) VALUES (?,?,?,?,?,?,?,?)`,
         [file.filename, file.originalname, title, title, file.mimetype, file.size, w, h]
     );
-    return { id: result.lastID, filename: file.filename, title };
+    return { id: result.insertId, filename: file.filename, title };
 }
 
 async function update(id, { title, alt_text, caption }) {

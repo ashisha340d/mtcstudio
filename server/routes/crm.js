@@ -9,10 +9,10 @@ router.get('/customers', async (req, res, next) => {
         const st = req.query.status || 'active';
         const rows = await dbAll(
             `SELECT * FROM customers
-             WHERE (phone LIKE ? OR name LIKE ? OR email LIKE ? OR phone2 LIKE ?)
+             WHERE (phone LIKE ? OR name LIKE ? OR email LIKE ? OR phone2 LIKE ? OR address LIKE ?)
                AND (? = 'all' OR status = ?)
              ORDER BY name`,
-            [q, q, q, q, st, st]
+            [q, q, q, q, q, st, st]
         );
         res.json(rows);
     } catch (e) { next(e); }

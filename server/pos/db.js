@@ -434,6 +434,31 @@ async function ensureSchema() {
     sort_order INT NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // ── Scheduled & Draft orders — separate table so pos_orders/pos_kots
+  // logic (reports, KDS, shift close) never sees them until conversion ──
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_scheduled_orders (
+    id                 INT PRIMARY KEY AUTO_INCREMENT,
+    kind               VARCHAR(16) NOT NULL CHECK(kind IN ('SCHEDULED','DRAFT')),
+    order_type         VARCHAR(32) NOT NULL DEFAULT 'DELIVERY',
+    customer_name      TEXT,
+    customer_phone     VARCHAR(32),
+    order_notes        TEXT,
+    order_caption      VARCHAR(64),
+    scheduled_for      DATETIME,
+    notify_before_min  INT NOT NULL DEFAULT 30,
+    items_json         LONGTEXT,
+    total_amount       DOUBLE NOT NULL DEFAULT 0,
+    status             VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+                         CHECK(status IN ('PENDING','CONVERTED','CANCELLED')),
+    converted_order_id INT,
+    created_by         INT,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY(converted_order_id) REFERENCES pos_orders(id),
+    FOREIGN KEY(created_by) REFERENCES pos_users(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pso_status_sched ON pos_scheduled_orders(status, scheduled_for)`);
+
   // ── Pending Web Orders (pushed from the website over the WS bridge) ──
   await dbRun(`CREATE TABLE IF NOT EXISTS web_orders_pending (
     id                INT PRIMARY KEY AUTO_INCREMENT,
@@ -538,6 +563,8 @@ async function ensureSchema() {
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS change_amount DOUBLE NOT NULL DEFAULT 0`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS pax_count INT DEFAULT 0`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS table_tags TEXT`);
+  await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_caption VARCHAR(64)`);
+  await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_notes TEXT`);
   await dbRun(`ALTER TABLE cake_orders ADD COLUMN IF NOT EXISTS advance_method VARCHAR(16) NOT NULL DEFAULT 'CASH'`);
 
   // Pre-populate pos_price from product_variants where still 0

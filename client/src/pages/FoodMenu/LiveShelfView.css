@@ -91,24 +91,6 @@
   border-radius: 20px;
 }
 
-.btn-sync {
-  padding: 8px 16px;
-  background: var(--t-success);
-  color: #fff;
-  border: none;
-  border-radius: 7px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-sync.btn-sync-disabled {
-  background: var(--t-border-strong);
-  color: var(--t-text-muted);
-  cursor: not-allowed;
-}
-
 /* ── Toast ────────────────────────────────────────────────────────────────── */
 .ls-toast {
   padding: 6px 14px;

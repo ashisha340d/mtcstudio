@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePOS } from '../../../context/POSContext';
 import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
@@ -14,6 +14,14 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
   const { tableOrderMap, orders, kotsByOrder, isOrderDelayed } = usePOS();
   const orderId = tableOrderMap[table.id];
   const order = orderId ? orders[orderId] : null;
+
+  // Tick every minute so the elapsed-time timer advances on its own
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
   const derived = useMemo(() => {
     if (!order) return null;
     const kots = kotsByOrder[orderId] || [];
@@ -25,7 +33,7 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
       total,
       served,
     };
-  }, [order, kotsByOrder, orderId]);
+  }, [order, kotsByOrder, orderId, tick]);
 
   const delayed = orderId ? isOrderDelayed(orderId) : false;
   const isDraft = order?.status === 'SAVED';

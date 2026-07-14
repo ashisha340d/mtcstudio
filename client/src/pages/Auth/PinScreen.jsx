@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import './pin.css';
 
-const PAD = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+const PAD = ['1','2','3','4','5','6','7','8','9','C','0','⌫'];
 const PIN_LENGTH = 4;
 
 export default function PinScreen() {
@@ -24,7 +24,7 @@ export default function PinScreen() {
   function press(key) {
     if (loading) return;
     if (key === '⌫') { setPin((p) => p.slice(0, -1)); return; }
-    if (key === '')   return;
+    if (key === 'C')  { setPin(''); return; }
     const next = pin + key;
     setPin(next);
     if (next.length === PIN_LENGTH) submit(next);
@@ -35,6 +35,7 @@ export default function PinScreen() {
     const handler = (e) => {
       if (e.key >= '0' && e.key <= '9') press(e.key);
       if (e.key === 'Backspace')         press('⌫');
+      if (e.key === 'Escape')            press('C');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -45,8 +46,9 @@ export default function PinScreen() {
   return (
     <div className="pin-root">
       <div className="pin-card">
-        <div className="pin-brand">MTC</div>
-        <div className="pin-label">Enter PIN</div>
+        <div className="pin-logo">🍴</div>
+        <div className="pin-brand">MTC POS</div>
+        <div className="pin-tagline">Quick Service Restaurant</div>
 
         {/* Dot indicators */}
         <div className={`pin-dots ${shake ? 'pin-dots--shake' : ''}`}>
@@ -63,9 +65,9 @@ export default function PinScreen() {
           {PAD.map((key, i) => (
             <button
               key={i}
-              className={`pin-key ${key === '' ? 'pin-key--empty' : ''} ${key === '⌫' ? 'pin-key--del' : ''}`}
+              className={`pin-key ${key === 'C' ? 'pin-key--clear' : ''} ${key === '⌫' ? 'pin-key--del' : ''}`}
               onClick={() => press(key)}
-              disabled={loading || key === ''}
+              disabled={loading}
             >{key}</button>
           ))}
         </div>

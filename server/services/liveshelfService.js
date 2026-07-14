@@ -55,7 +55,7 @@ async function create({ category, name, price, quantity, image, notes, sort_orde
         [category, name.trim(), parseFloat(price) || 0, parseInt(quantity) || 0,
          image || null, notes || null, parseInt(sort_order) || 0]
     );
-    return result.lastID;
+    return result.insertId;
 }
 
 async function update(id, { category, name, price, quantity, image, notes, sort_order }) {

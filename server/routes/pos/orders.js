@@ -49,7 +49,7 @@ router.get('/active', async (req, res) => {
 router.post('/', async (req, res) => {
   const {
     order_type, table_id, customer_id, customer_name, customer_phone,
-    customer_address, notes, status = 'OPEN', draft_items,
+    customer_address, notes, order_notes = null, status = 'OPEN', draft_items,
     pax_count = 0, table_tags = null,
   } = req.body;
   if (!order_type) return res.status(400).json({ error: 'order_type required' });
@@ -57,10 +57,10 @@ router.post('/', async (req, res) => {
   const result = await dbGet(
     `INSERT INTO pos_orders
        (order_type, table_id, customer_id, customer_name, customer_phone, customer_address,
-        notes, status, draft_items, punched_by, pax_count, table_tags)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`,
+        notes, order_notes, status, draft_items, punched_by, pax_count, table_tags)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`,
     [order_type, table_id ?? null, customer_id ?? null, customer_name ?? null,
-     customer_phone ?? null, customer_address ?? null, notes ?? null, status,
+     customer_phone ?? null, customer_address ?? null, notes ?? null, order_notes ?? null, status,
      draft_items ? JSON.stringify(draft_items) : null,
      req.posUser.id, pax_count ?? 0, table_tags ?? null]
   );
@@ -75,7 +75,7 @@ router.patch('/:id', async (req, res) => {
   const order = await dbGet(`SELECT * FROM pos_orders WHERE id = ?`, [req.params.id]);
   if (!order) return res.status(404).json({ error: 'Not found' });
 
-  const { pax_count, table_tags } = req.body;
+  const { pax_count, table_tags, order_caption, order_notes } = req.body;
   const fields = [];
   const values = [];
   if (draft_items !== undefined) { fields.push('draft_items = ?'); values.push(draft_items ? JSON.stringify(draft_items) : null); }
@@ -84,6 +84,8 @@ router.patch('/:id', async (req, res) => {
   if (status !== undefined) { fields.push('status = ?'); values.push(status); }
   if (pax_count !== undefined) { fields.push('pax_count = ?'); values.push(pax_count ?? 0); }
   if (table_tags !== undefined) { fields.push('table_tags = ?'); values.push(table_tags ?? null); }
+  if (order_caption !== undefined) { fields.push('order_caption = ?'); values.push(order_caption || null); }
+  if (order_notes !== undefined) { fields.push('order_notes = ?'); values.push(order_notes || null); }
 
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
 
