@@ -12,6 +12,14 @@ const socketServer = require('../../pos/socketServer');
 const router = express.Router();
 router.use(requireSession);
 
+function toImageUrl(raw) {
+  if (!raw) return null;
+  const str = String(raw);
+  if (str.startsWith('http') || str.startsWith('/uploads/')) return str;
+  const filename = str.replace(/\\/g, '/').split('/').pop();
+  return filename ? `/uploads/${filename}` : null;
+}
+
 // ── Multer ────────────────────────────────────────────────────
 let upload;
 try {
@@ -45,8 +53,18 @@ async function nextOrderNumber() {
   return `CAKE-${yr}-${String(r.seq).padStart(4, '0')}`;
 }
 
-async function computeModTotal(tx, shapeId, creamId, spongeId, themeId, dietaryId) {
-  const ids = [shapeId, creamId, spongeId, themeId, dietaryId].filter(Boolean);
+// Modifiers are multi-select — stored as a comma-separated VARCHAR of lookup_master ids
+function csvToIds(v) {
+  return String(v || '').split(',').map(s => parseInt(s)).filter(Number.isInteger);
+}
+function toCsv(v) {
+  const arr = Array.isArray(v) ? v : (v !== undefined && v !== null && v !== '' ? [v] : []);
+  const ids = arr.map(x => parseInt(x)).filter(Number.isInteger);
+  return ids.length ? ids.join(',') : null;
+}
+
+async function computeModTotal(tx, shapeCsv, creamCsv, spongeCsv, themeCsv, dietaryCsv) {
+  const ids = [shapeCsv, creamCsv, spongeCsv, themeCsv, dietaryCsv].flatMap(csvToIds);
   if (!ids.length) return 0;
   const ph = ids.map(() => '?').join(',');
   const row = await tx.dbGet(`SELECT COALESCE(SUM(extra_charge),0) AS t FROM lookup_master WHERE id IN (${ph})`, ids);
@@ -65,25 +83,40 @@ async function recalc(tx, orderId) {
     [cakeTotal, modTotal, accTotal, grand, balance, orderId]);
 }
 
+// Field → key for the multi-select modifier columns (see csvToIds)
+const MOD_FIELDS = [
+  ['shape_id', 'shape'], ['cream_type_id', 'cream'], ['sponge_type_id', 'sponge'],
+  ['theme_id', 'theme'], ['dietary_type_id', 'dietary'],
+];
+
+async function attachModifiers(row) {
+  const allIds = MOD_FIELDS.flatMap(([col]) => csvToIds(row[col]));
+  let byId = {};
+  if (allIds.length) {
+    const ph = allIds.map(() => '?').join(',');
+    const lookupRows = await dbAll(`SELECT id,name,extra_charge FROM lookup_master WHERE id IN (${ph})`, allIds);
+    byId = Object.fromEntries(lookupRows.map(l => [l.id, l]));
+  }
+  for (const [col, key] of MOD_FIELDS) {
+    const ids = csvToIds(row[col]);
+    const picked = ids.map(i => byId[i]).filter(Boolean);
+    row[`${key}_ids`] = ids;
+    row[`${key}_name`] = picked.map(p => p.name).join(', ') || null;
+    row[`${key}_charge`] = picked.reduce((s, p) => s + (p.extra_charge || 0), 0);
+  }
+  return row;
+}
+
 async function getFull(id) {
   const row = await dbGet(
-    `SELECT co.*, u.name AS created_by_name,
-            sh.name AS shape_name,   sh.extra_charge AS shape_charge,
-            cr.name AS cream_name,   cr.extra_charge AS cream_charge,
-            sp.name AS sponge_name,  sp.extra_charge AS sponge_charge,
-            th.name AS theme_name,   th.extra_charge AS theme_charge,
-            di.name AS dietary_name, di.extra_charge AS dietary_charge
+    `SELECT co.*, u.name AS created_by_name
      FROM   cake_orders co
-     LEFT JOIN pos_users    u  ON u.id  = co.created_by
-     LEFT JOIN lookup_master sh ON sh.id = co.shape_id
-     LEFT JOIN lookup_master cr ON cr.id = co.cream_type_id
-     LEFT JOIN lookup_master sp ON sp.id = co.sponge_type_id
-     LEFT JOIN lookup_master th ON th.id = co.theme_id
-     LEFT JOIN lookup_master di ON di.id = co.dietary_type_id
+     LEFT JOIN pos_users u ON u.id = co.created_by
      WHERE co.id=? AND co.deleted_at IS NULL`,
     [id]
   );
   if (!row) return null;
+  await attachModifiers(row);
   const items = await dbAll(`SELECT * FROM cake_order_items       WHERE cake_order_id=? ORDER BY sort_order,id`, [id]);
   const accessories = await dbAll(`SELECT * FROM cake_order_accessories  WHERE cake_order_id=? ORDER BY sort_order,id`, [id]);
   const images = await dbAll(`SELECT * FROM cake_order_images       WHERE cake_order_id=? ORDER BY created_at`, [id]);
@@ -100,7 +133,9 @@ async function getFull(id) {
      FROM pos_payments WHERE cake_order_id=? ORDER BY created_at, id`,
     [id]
   );
-  return { ...row, items, accessories, images, statusHistory: history, payments };
+  // Client uses this to lock the advance "Pick" modal up front (zero advance = never locked)
+  const advance_locked = await hasFrozenPayments(id, 'ADVANCE');
+  return { ...row, items, accessories, images, statusHistory: history, payments, advance_locked };
 }
 
 async function saveLines(tx, orderId, items, accessories) {
@@ -132,7 +167,7 @@ async function saveLines(tx, orderId, items, accessories) {
 
 router.get('/meta', async (_, res) => {
   const rows = await dbAll(
-    `SELECT id,lookup_type,name,extra_charge,sort_order FROM lookup_master WHERE is_active=1 ORDER BY lookup_type,sort_order,name`
+    `SELECT id,lookup_type,name,extra_charge,sort_order,multiselect FROM lookup_master WHERE is_active=1 ORDER BY lookup_type,sort_order,name`
   );
   const lookups = {};
   rows.forEach(r => { (lookups[r.lookup_type] = lookups[r.lookup_type] || []).push(r); });
@@ -182,14 +217,23 @@ router.get('/products', async (req, res) => {
     const rows = await cmsDbAll(
       `SELECT p.id AS product_id, p.name AS product_name,
               p.cake_type AS product_cake_type,
+              p.enable_variant_image,
               pv.id AS variant_id, pv.name AS variant_name,
               pv.cake_type AS variant_cake_type,
-              pv.selling_price AS rate, pv.unit
+              pv.selling_price AS rate, pv.unit,
+              pv.image_url AS variant_image,
+              (SELECT ml.filename FROM product_images pi JOIN media_library ml ON ml.id = pi.media_id
+               WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1) AS product_image
        FROM   products p
        JOIN   product_variants pv ON pv.product_id = p.id
        WHERE  ${where}
        ORDER  BY p.name, pv.sort_order`
     );
+    for (const r of rows) {
+      const raw = (r.enable_variant_image && r.variant_image) ? r.variant_image : r.product_image;
+      r.image_url = toImageUrl(raw);
+      delete r.enable_variant_image; delete r.variant_image; delete r.product_image;
+    }
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -218,15 +262,19 @@ router.get('/', async (req, res) => {
   const params = [];
   if (filter === 'today') { where += ` AND co.order_date=?`; params.push(today); }
   else if (filter === 'delivery_today') { where += ` AND co.delivery_date=?`; params.push(today); }
+  else if (filter === 'pending') { where += ` AND co.balance_due>0 AND co.status NOT IN ('DELIVERED','CANCELLED','REFUNDED')`; }
   if (status) { where += ` AND co.status=?`; params.push(status); }
   if (q) {
     where += ` AND (co.customer_name LIKE ? OR co.phone LIKE ? OR co.order_number LIKE ?)`;
     params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
+  const orderBy = filter === 'pending'
+    ? `ORDER BY (co.delivery_date=CURDATE()) DESC, co.delivery_date ASC, co.created_at DESC`
+    : `ORDER BY co.created_at DESC`;
   const orders = await dbAll(
     `SELECT co.id,co.order_number,co.customer_name,co.phone,co.delivery_date,co.delivery_time,
             co.status,co.grand_total,co.advance_paid,co.balance_due,co.created_at
-     FROM   cake_orders co WHERE ${where} ORDER BY co.created_at DESC`,
+     FROM   cake_orders co WHERE ${where} ${orderBy}`,
     params
   );
   for (const o of orders) {
@@ -259,7 +307,7 @@ router.post('/', async (req, res) => {
     `, [
       order_number, b.crm_customer_id || null, b.phone?.trim() || null, b.customer_name.trim(),
       today, b.delivery_date || null, b.delivery_time || null,
-      b.shape_id || null, b.cream_type_id || null, b.sponge_type_id || null, b.theme_id || null, b.dietary_type_id || null,
+      toCsv(b.shape_id), toCsv(b.cream_type_id), toCsv(b.sponge_type_id), toCsv(b.theme_id), toCsv(b.dietary_type_id),
       b.message_on_cake?.trim() || null, b.design_notes?.trim() || null, b.dietary_notes?.trim() || null,
       b.allergy_notes?.trim() || null, b.internal_notes?.trim() || null, b.assigned_baker?.trim() || null,
       parseFloat(b.discount) || 0, advTotal, advanceMethodLabel(advTenders), 'PENDING', req.posUser.id,
@@ -449,13 +497,28 @@ router.post('/:id/send-sms', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 router.put('/:id', async (req, res) => {
-  const existing = await dbGet(`SELECT id,order_number,production_status,advance_paid FROM cake_orders WHERE id=? AND deleted_at IS NULL`, [req.params.id]);
+  const existing = await dbGet(`SELECT id,order_number,status,production_status,advance_paid FROM cake_orders WHERE id=? AND deleted_at IS NULL`, [req.params.id]);
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (existing.production_status && existing.production_status !== 'New')
-    return res.status(400).json({ error: 'Order can no longer be edited — production has already started' });
+  if (existing.status !== 'PENDING')
+    return res.status(400).json({ error: 'Order sent to bakery — Unsend it to edit' });
   const b = req.body;
   if (!b.customer_name?.trim()) return res.status(400).json({ error: 'customer_name required' });
   const newAdvance = parseFloat(b.advance_paid) || 0;
+
+  // Closed-day lock: existing advance rows outside the open business day are frozen.
+  // Reject before the transaction if the submitted breakdown would change them.
+  const oldAdvRows = await dbAll(`SELECT method, amount FROM pos_payments WHERE cake_order_id=? AND payment_type='ADVANCE'`, [existing.id]);
+  if (oldAdvRows.length) {
+    const fu = await followupTotal({ dbGet }, existing.id);
+    const newTenders = Array.isArray(b.advance_payments)
+      ? normalizeTenders(b.advance_payments)
+      : normalizeTenders(null, b.advance_method, Math.max(0, newAdvance - fu));
+    const o = tenderSums(oldAdvRows);
+    const n = tenderSums(newTenders);
+    const changed = round2(o.cash) !== round2(n.cash) || round2(o.card) !== round2(n.card) || round2(o.qr) !== round2(n.qr);
+    if (changed && await hasFrozenPayments(existing.id, 'ADVANCE'))
+      return res.status(400).json({ error: 'Advance payment is locked — its business day is closed. Edit other fields only, or reopen the day.' });
+  }
 
   await transaction(async (tx) => {
     // Advance tenders are restated on edit; follow-up (REGULAR) rows stay untouched.
@@ -475,7 +538,7 @@ router.put('/:id', async (req, res) => {
     `, [
       b.crm_customer_id || null, b.phone?.trim() || null, b.customer_name.trim(),
       b.delivery_date || null, b.delivery_time || null,
-      b.shape_id || null, b.cream_type_id || null, b.sponge_type_id || null, b.theme_id || null, b.dietary_type_id || null,
+      toCsv(b.shape_id), toCsv(b.cream_type_id), toCsv(b.sponge_type_id), toCsv(b.theme_id), toCsv(b.dietary_type_id),
       b.message_on_cake?.trim() || null, b.design_notes?.trim() || null, b.dietary_notes?.trim() || null,
       b.allergy_notes?.trim() || null, b.internal_notes?.trim() || null, b.assigned_baker?.trim() || null,
       parseFloat(b.discount) || 0, totalPaid, advanceMethodLabel(advTenders),
@@ -491,11 +554,15 @@ router.put('/:id', async (req, res) => {
     await recalc(tx, existing.id);
     // Restate advance payment rows to match the submitted breakdown —
     // debit the till for the rows being replaced so the net effect is new − old
+    // Skip when breakdown unchanged so original payment dates (daily reports) stay intact.
     const oldAdv = await tx.dbAll(`SELECT method, amount FROM pos_payments WHERE cake_order_id=? AND payment_type='ADVANCE'`, [existing.id]);
     const o = tenderSums(oldAdv);
-    await creditTill(tx, -o.cash, -o.card, -o.qr);
-    await tx.dbRun(`DELETE FROM pos_payments WHERE cake_order_id=? AND payment_type='ADVANCE'`, [existing.id]);
-    await insertCakePayments(tx, existing.id, advTenders, 'ADVANCE', 'Advance Payment');
+    const n = tenderSums(advTenders);
+    if (round2(o.cash) !== round2(n.cash) || round2(o.card) !== round2(n.card) || round2(o.qr) !== round2(n.qr)) {
+      await creditTill(tx, -o.cash, -o.card, -o.qr);
+      await tx.dbRun(`DELETE FROM pos_payments WHERE cake_order_id=? AND payment_type='ADVANCE'`, [existing.id]);
+      await insertCakePayments(tx, existing.id, advTenders, 'ADVANCE', 'Advance Payment');
+    }
   });
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: existing.id, action: 'UPDATE' });
   res.json(await getFull(existing.id));
@@ -507,7 +574,7 @@ router.put('/:id', async (req, res) => {
 
 const TRANSITIONS = {
   PENDING: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['CANCELLED', 'DELIVERED'],
+  CONFIRMED: ['PENDING', 'CANCELLED', 'DELIVERED'],
   DELIVERED: ['REFUNDED'],
   CANCELLED: [],
   REFUNDED: [],
@@ -520,6 +587,16 @@ router.patch('/:id/status', async (req, res) => {
   if (!(TRANSITIONS[existing.status] || []).includes(status))
     return res.status(400).json({ error: `Cannot transition ${existing.status} → ${status}` });
 
+  if (status === 'CONFIRMED') {
+    const itemCount = await dbGet(`SELECT COUNT(*) AS n FROM cake_order_items WHERE cake_order_id=?`, [existing.id]);
+    if (!itemCount.n) return res.status(400).json({ error: 'Add at least one cake item before confirming' });
+  }
+
+  if (status === 'PENDING' && existing.status === 'CONFIRMED') { // Unsend
+    if (existing.production_status && existing.production_status !== 'New')
+      return res.status(400).json({ error: 'Bakery has already started this order — cannot unsend' });
+  }
+
   if (status === 'DELIVERED') {
     if (existing.production_status !== 'Ready for Delivery')
       return res.status(400).json({ error: 'Cake is not marked Ready for Delivery yet' });
@@ -530,6 +607,8 @@ router.patch('/:id/status', async (req, res) => {
   await transaction(async (tx) => {
     if (status === 'CONFIRMED') {
       await tx.dbRun(`UPDATE cake_orders SET status=?,production_status='New' WHERE id=?`, [status, existing.id]);
+    } else if (status === 'PENDING') {
+      await tx.dbRun(`UPDATE cake_orders SET status=?,production_status=NULL WHERE id=?`, [status, existing.id]);
     } else {
       await tx.dbRun(`UPDATE cake_orders SET status=? WHERE id=?`, [status, existing.id]);
     }
@@ -569,6 +648,18 @@ function normalizeTenders(payments, legacyMethod, legacyAmount) {
 const tendersTotal = (tenders) => round2(tenders.reduce((s, t) => s + t.amount, 0));
 const advanceMethodLabel = (tenders) =>
   !tenders.length ? 'CASH' : tenders.length > 1 ? 'SPLIT' : (tenders[0].note === 'WALLET' ? 'WALLET' : tenders[0].method);
+
+// True if the order has payment rows taken before the currently OPEN business
+// day started (closed-day history is frozen; no open day = everything frozen).
+// Reopening a day keeps its original opened_at, so its payments unlock.
+async function hasFrozenPayments(orderId, type) {
+  const open = await dbGet(`SELECT opened_at FROM pos_till_sessions WHERE status='OPEN' LIMIT 1`);
+  const cutoff = open ? open.opened_at : '9999-12-31'; // no open day: every row frozen
+  const row = await dbGet(
+    `SELECT 1 AS x FROM pos_payments WHERE cake_order_id=? ${type ? `AND payment_type=?` : ''} AND created_at < ? LIMIT 1`,
+    type ? [orderId, type, cutoff] : [orderId, cutoff]);
+  return !!row;
+}
 
 function tenderSums(tenders) {
   let cash = 0, card = 0, qr = 0;
@@ -645,6 +736,9 @@ router.patch('/:id/payment', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const row = await dbGet(`SELECT id FROM cake_orders WHERE id=? AND deleted_at IS NULL`, [req.params.id]);
   if (!row) return res.status(404).json({ error: 'Not found' });
+  // Any payment (advance or balance) on a closed day = delete would rewrite history
+  if (await hasFrozenPayments(row.id))
+    return res.status(400).json({ error: 'Order has payments on a closed business day — cancel or refund instead of deleting.' });
   await dbRun(`UPDATE cake_orders SET deleted_at=CURRENT_TIMESTAMP WHERE id=?`, [row.id]);
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: row.id, action: 'DELETE' });
   res.json({ success: true });

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router';
 import { usePOS, ORDER_TYPE } from '../../context/POSContext';
 import { useAuth } from '../../context/AuthContext';
@@ -18,7 +18,7 @@ import ScheduledOrderCard from './components/ScheduledOrderCard';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
 // Lazy — shares the route chunk, idle-prefetched below
 const CakeOrderFormWindow = lazy(() => import('../CakeOrders/CakeOrderForm'));
-import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder } from '../../services/posApi';
+import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder, getBusinessDay } from '../../services/posApi';
 import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
 import { nepalNow } from '../../utils/dateTime';
 import './pos.css';
@@ -37,10 +37,10 @@ function Clock() {
 const TOOLBAR_ORDER_KEY = 'pos_toolbar_btn_order';
 const DEFAULT_BTN_ORDER = [
   'takeaway', 'delivery', 'schedule', 'draft', 'cake', 'weborders',
-  'tablemerge', 'shift', 'revert', 'drawer',
+  'tablemerge', 'shift', 'revert', 'drawer', 'closeday',
 ];
 
-function noop() {}
+function noop() { }
 
 const ALL_ORDERS_CARD_ORDER_KEY = 'pos_all_orders_card_order';
 
@@ -107,6 +107,9 @@ export default function POSDashboard() {
   const navigate = useNavigate();
 
   const [checkoutOrderId, setCheckoutOrderId] = useState(null);
+  const [closingOrderIds, setClosingOrderIds] = useState(() => new Set());
+  const [frozenTableOrderIds, setFrozenTableOrderIds] = useState(() => new Set());
+  const [heldOrder, setHeldOrder] = useState(null); // non-table order snapshot kept alive through checkout
   const [orderTypeModal, setOrderTypeModal] = useState(null);
   const [showTableMerge, setShowTableMerge] = useState(false);
   const [showShift, setShowShift] = useState(false);
@@ -119,10 +122,20 @@ export default function POSDashboard() {
   const [cakeWin, setCakeWin] = useState(null);        // null | { id: number|null }
   const [cakeRefresh, setCakeRefresh] = useState(0);   // bump → cake window reloads
 
+  // Day gate — POS cannot proceed without an open business day
+  useEffect(() => {
+    getBusinessDay()
+      .then(d => {
+        const stale = d.session && d.today && String(d.session.business_date).slice(0, 10) < d.today;
+        if (!d.session || d.session.status !== 'OPEN' || stale) navigate('/pos/cash-closing');
+      })
+      .catch(() => { });
+  }, [navigate]);
+
   // Scheduled + draft orders live in their own table — polled, not socket-driven
   const [schedOrders, setSchedOrders] = useState([]);
   const loadScheduled = useCallback(() => {
-    getScheduledOrders().then(setSchedOrders).catch(() => {});
+    getScheduledOrders().then(setSchedOrders).catch(() => { });
   }, []);
   useEffect(() => {
     loadScheduled();
@@ -220,18 +233,18 @@ export default function POSDashboard() {
     return () => (idle ? cancelIdleCallback(id) : clearTimeout(id));
   }, []);
 
-  // F8 → toggle Sales Report
+  // F8 → toggle Sales Report · F2 → Daily Cash Closing
   useEffect(() => {
     const h = (e) => {
-      if (e.key === 'F8') {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-        e.preventDefault();
-        setShowSalesReport(prev => !prev);
-      }
+      if (e.key !== 'F8' && e.key !== 'F2') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      if (e.key === 'F8') setShowSalesReport(prev => !prev);
+      else navigate('/pos/cash-closing');
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, []);
+  }, [navigate]);
 
   // Table click → go to POS entry; pass existing order data if occupied
   const onTableClick = useCallback((table) => {
@@ -301,18 +314,56 @@ export default function POSDashboard() {
     loadScheduled();
   }
 
-  // Direct Checkout button on card → open checkout modal for that existing order
+  // Direct Checkout button on card → open checkout modal for that existing order.
+  // Table orders are frozen (kept looking occupied) until the Payment Complete
+  // modal actually finishes closing — see handleCheckoutSuccess / handleCheckoutClose.
+  // checkoutMetaRef captures orderId/tableId up front because the live socket
+  // ('order-completed' → reload) can wipe the closed order out of `orders`
+  // before the cashier gets around to clicking Done — reading `orders[id]`
+  // at success time would then silently miss the release/fly-out.
+  const checkoutMetaRef = useRef(null);
   function openCheckoutForOrder(orderId) {
     setCheckoutOrderId(orderId);
+    const o = orders[orderId];
+    checkoutMetaRef.current = { orderId, tableId: o?.table_id ?? null };
+    if (o?.table_id) {
+      setFrozenTableOrderIds(prev => new Set(prev).add(orderId));
+    } else if (o) {
+      // Same socket race as tables: the reload after checkout drops the paid
+      // order from state before Done is clicked — keep a snapshot so the
+      // card survives to play its paid animation.
+      setHeldOrder(o);
+    }
   }
 
-  // Checkout success → close modal, refresh, and celebrate if it was a table order
-  function handleCheckoutSuccess() {
-    const order = orders[checkoutOrderId];
-    const table = order?.table_id ? tables.find(t => t.id === order.table_id) : null;
+  function handleCheckoutClose() {
+    if (checkoutOrderId) {
+      setFrozenTableOrderIds(prev => { const n = new Set(prev); n.delete(checkoutOrderId); return n; });
+    }
+    setHeldOrder(null);
     setCheckoutOrderId(null);
-    loadActiveOrders();
-    if (table) notify('success', `🎉 Table ${table.name} Checked Out`);
+  }
+
+  // Checkout success → close modal, refresh, and celebrate if it was a table order.
+  // Table/non-table orders both get a beat to fly to the cash drawer before vanishing.
+  function handleCheckoutSuccess() {
+    const meta = checkoutMetaRef.current;
+    setCheckoutOrderId(null);
+    const table = meta?.tableId ? tables.find(t => t.id === meta.tableId) : null;
+    if (table) {
+      notify('success', `🎉 Table ${table.name} Checked Out`);
+      setFrozenTableOrderIds(prev => { const n = new Set(prev); n.delete(meta.orderId); return n; });
+      loadActiveOrders();
+    } else if (meta?.orderId) {
+      setClosingOrderIds(prev => new Set(prev).add(meta.orderId));
+      setTimeout(() => {
+        setClosingOrderIds(prev => { const n = new Set(prev); n.delete(meta.orderId); return n; });
+        setHeldOrder(null);
+        loadActiveOrders();
+      }, 750);
+    } else {
+      loadActiveOrders();
+    }
   }
 
   // Click an active non-table order card → open it in POS entry (reuse existing order)
@@ -349,11 +400,16 @@ export default function POSDashboard() {
     try { return o.draft_items && JSON.parse(o.draft_items).length > 0; } catch { return false; }
   }
 
-  const nonTableOrders = Object.values(orders).filter(
+  let nonTableOrders = Object.values(orders).filter(
     (o) => o.order_type !== ORDER_TYPE.DINE_IN
-      && (o.status === 'OPEN' || o.status === 'SAVED')
+      && (o.status === 'OPEN' || o.status === 'SAVED' || closingOrderIds.has(o.id))
       && hasContent(o)
   );
+  // Paid order already reloaded away? Keep the held snapshot rendered so it
+  // can still play the fly-to-drawer animation when Done is clicked.
+  if (heldOrder && !nonTableOrders.some(o => o.id === heldOrder.id)) {
+    nonTableOrders = [...nonTableOrders, heldOrder];
+  }
 
   const deliveryOrders = nonTableOrders.filter((o) => o.order_type === ORDER_TYPE.DELIVERY);
   const takeawayOrders = nonTableOrders.filter((o) => o.order_type === ORDER_TYPE.TAKEAWAY);
@@ -381,51 +437,60 @@ export default function POSDashboard() {
   }, [allOrderCards.map(o => o.id).join(',')]); // eslint-disable-line
 
   const TOOLBAR_BTN_DEFS = {
-    takeaway: {
-      className: 'pos-topbar__btn--takeaway', label: '🛍 Takeaway',
-      onClick: () => navigate('/pos/entry', { state: { orderType: ORDER_TYPE.TAKEAWAY } }),
+
+    cake: {
+      className: 'pos-topbar__btn--g1', label: '🎂Cake Orders',
+      onClick: () => setCakeWin({ id: null }), badge: () => cakeOrders.length,
     },
     delivery: {
-      className: 'pos-topbar__btn--delivery', label: '🚴 Delivery Partner',
+      className: 'pos-topbar__btn--g1', label: '🚴Delivery',
       onClick: () => openNonDineIn(ORDER_TYPE.DELIVERY),
     },
-    schedule: {
-      className: 'pos-topbar__btn--delivery', label: '⏰ Schedule Order',
-      onClick: () => setShowSchedule(true),
-      title: 'Schedule a delivery — auto-fires to KOT before its time',
-      badge: () => schedOrders.filter(r => r.kind === 'SCHEDULED').length,
+    takeaway: {
+      className: 'pos-topbar__btn--g1', label: '🛍 Takeaway',
+      onClick: () => navigate('/pos/entry', { state: { orderType: ORDER_TYPE.TAKEAWAY } }),
     },
+
+
     draft: {
-      className: 'pos-topbar__btn--quick', label: '📝 Draft Order',
+      className: 'pos-topbar__btn--g2', label: '📝Draft Order',
       onClick: () => navigate('/pos/entry', { state: { orderType: ORDER_TYPE.TAKEAWAY, draftMode: true } }),
       title: 'Draft order — processed manually later',
       badge: () => schedOrders.filter(r => r.kind === 'DRAFT').length,
     },
-    cake: {
-      className: 'pos-topbar__btn--cake', label: '🎂 Cake Orders',
-      onClick: () => setCakeWin({ id: null }), badge: () => cakeOrders.length,
+
+    schedule: {
+      className: 'pos-topbar__btn--g2', label: '⏰Sched. Order',
+      onClick: () => setShowSchedule(true),
+      title: 'Schedule a delivery — auto-fires to KOT before its time',
+      badge: () => schedOrders.filter(r => r.kind === 'SCHEDULED').length,
     },
     weborders: {
-      className: 'pos-topbar__btn--delivery', label: '🌐 Web Orders',
+      className: 'pos-topbar__btn--g2', label: '🌐Web Orders',
       onClick: () => setShowWebOrders(true), badge: () => webOrderCount,
       title: 'Website orders waiting for approval',
     },
     tablemerge: {
-      className: 'pos-topbar__btn--table-merge', label: '🔄 Table Merge',
+      className: 'pos-topbar__btn--g3', label: '🔄Table Merge',
       onClick: () => setShowTableMerge(true), title: 'Merge orders between tables',
     },
     shift: {
-      className: 'pos-topbar__btn--shift', label: '↔ Shift Order',
+      className: 'pos-topbar__btn--g3', label: '↔ Shift Order',
       onClick: () => setShowShift(true), title: 'Shift order to a different table',
     },
     revert: {
-      className: 'pos-topbar__btn--shift', label: '↩ Revert Transaction',
+      className: 'pos-topbar__btn--g3', label: '↩ Revert Transaction',
       onClick: () => setShowRevert(true), title: 'Revert a mistaken checkout',
       visible: () => user?.role === 'MANAGER' || user?.role === 'ADMIN',
     },
     drawer: {
-      className: 'pos-topbar__btn--quick', label: '💰 Drawer',
-      onClick: () => setShowDrawer(true), title: 'Till, cash in/out, petty cash & drawer count',
+      className: 'pos-topbar__btn--g3', label: '💰 Drawer',
+      onClick: () => setShowDrawer(true), title: 'Cash in / cash out for the open business day',
+    },
+    closeday: {
+      className: 'pos-topbar__btn--g3', label: '🔒 Close Day',
+      onClick: () => navigate('/pos/cash-closing'),
+      title: 'Daily cash closing — open/close the business day (F2)',
     },
   };
 
@@ -450,6 +515,7 @@ export default function POSDashboard() {
                 className={`pos-topbar__btn ${def.className}`}
                 onClick={reorderMode ? undefined : def.onClick}
                 title={def.title}
+                data-cash-target={id === 'drawer' ? 'drawer' : undefined}
                 draggable={reorderMode}
                 onDragStart={reorderMode ? onBtnDragStart(id) : undefined}
                 onDragOver={reorderMode ? onBtnDragOver(id) : undefined}
@@ -489,7 +555,7 @@ export default function POSDashboard() {
         {/* TABLES WINDOW */}
         <DesktopWindow
           title={`🍽  Dine In · Tables`} count={tableCountLabel}>
-          <div className="table-card-grid"> {sortedTables.map((t) => (<TableCard key={t.id} table={t} onClick={onTableClick} onDirectCheckout={openCheckoutForOrder} />))}
+          <div className="table-card-grid"> {sortedTables.map((t) => (<TableCard key={t.id} table={t} onClick={onTableClick} onDirectCheckout={openCheckoutForOrder} frozenOrderIds={frozenTableOrderIds} />))}
             {tables.length === 0 && (<div className="pos-empty-state">No tables configured.</div>)}
           </div>
         </DesktopWindow>
@@ -529,6 +595,7 @@ export default function POSDashboard() {
                     index={i}
                     onClick={cardReorderMode ? noop : onActiveOrderClick}
                     onDirectCheckout={cardReorderMode ? noop : openCheckoutForOrder}
+                    closing={closingOrderIds.has(o.id)}
                   />
                 </div>
               ))}
@@ -553,7 +620,7 @@ export default function POSDashboard() {
       {checkoutOrderId && (
         <CheckoutModal
           orderId={checkoutOrderId}
-          onClose={() => setCheckoutOrderId(null)}
+          onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />
       )}

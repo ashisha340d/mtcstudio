@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePOS } from '../../../context/POSContext';
 import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
+import { flyToCashStack } from './flyToCashStack';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return null;
@@ -10,7 +11,7 @@ function fmtDuration(ms) {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-export default function TableCard({ table, onClick, onDirectCheckout }) {
+export default function TableCard({ table, onClick, onDirectCheckout, frozenOrderIds }) {
   const { tableOrderMap, orders, kotsByOrder, isOrderDelayed } = usePOS();
   const orderId = tableOrderMap[table.id];
   const order = orderId ? orders[orderId] : null;
@@ -38,13 +39,6 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
   const delayed = orderId ? isOrderDelayed(orderId) : false;
   const isDraft = order?.status === 'SAVED';
 
-  function onPrintSlip(e) {
-    e.stopPropagation();
-    const kots = kotsByOrder[orderId] || [];
-    const items = kots.flatMap((k) => k.items || []).filter((i) => i.status !== 'CANCELLED');
-    printReceipt({ order: { ...order, table_name: table.name }, items, payments: [] });
-  }
-
   // Treat order as empty if no active KOT items and no draft cart items
   const hasContent = useMemo(() => {
     if (!order) return false;
@@ -53,10 +47,68 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
     try { return order.draft_items && JSON.parse(order.draft_items).length > 0; } catch { return false; }
   }, [order, kotsByOrder, orderId]);
 
-  // Empty table — desktop icon style
+  // Snapshot the last occupied render (data + on-screen rect) so a paid-off
+  // table wipes out and sends its total to the cash drawer instead of
+  // instantly popping to the empty state. Checkout flips the order to
+  // CLOSED (and drops it from tableOrderMap) well before the cashier
+  // dismisses the Payment Complete modal — while frozenOrderIds still
+  // holds this order's id, keep showing it as occupied so the wipe only
+  // plays once that modal is actually gone.
+  const lastOccupiedRef = useRef(null);
+  const lastRectRef = useRef(null);
+  const lastOrderIdRef = useRef(null);
+  const wasOccupiedRef = useRef(false);
+  if (order && hasContent) {
+    lastOccupiedRef.current = { order, derived, isDraft, delayed };
+    lastOrderIdRef.current = order.id;
+  }
+  const measureRef = (el) => { if (el) lastRectRef.current = el.getBoundingClientRect(); };
+
+  const held = (!order || !hasContent) && frozenOrderIds?.has(lastOrderIdRef.current);
+  const looksOccupied = (order && hasContent) || held;
+
+  const [wiping, setWiping] = useState(false);
+  // useLayoutEffect (not useEffect) so the switch to the wiping snapshot
+  // happens before paint — no one-frame flash of the empty table.
+  useLayoutEffect(() => {
+    if (looksOccupied) { wasOccupiedRef.current = true; return; }
+    if (wasOccupiedRef.current) {
+      wasOccupiedRef.current = false;
+      flyToCashStack(lastRectRef.current, { amount: lastOccupiedRef.current?.order?.total_amount });
+      setWiping(true);
+      const t = setTimeout(() => setWiping(false), 750);
+      return () => clearTimeout(t);
+    }
+  }, [looksOccupied]);
+
+  function onPrintSlip(e) {
+    e.stopPropagation();
+    const kots = kotsByOrder[orderId] || [];
+    const items = kots.flatMap((k) => k.items || []).filter((i) => i.status !== 'CANCELLED');
+    printReceipt({ order: { ...order, table_name: table.name }, items, payments: [] });
+  }
+
+  // Empty table — desktop icon style. While held (payment modal still up)
+  // or mid-wipe, keep rendering the last occupied snapshot instead.
   if (!order || !hasContent) {
+    if (held && lastOccupiedRef.current) {
+      const s = lastOccupiedRef.current;
+      return (
+        <OccupiedCard table={table} onClick={onClick} onPrintSlip={onPrintSlip}
+          onDirectCheckout={onDirectCheckout} order={s.order} derived={s.derived}
+          isDraft={s.isDraft} delayed={s.delayed} measureRef={measureRef} frozen />
+      );
+    }
+    if (wiping && lastOccupiedRef.current) {
+      const s = lastOccupiedRef.current;
+      return (
+        <OccupiedCard table={table} onClick={onClick} onPrintSlip={onPrintSlip}
+          onDirectCheckout={onDirectCheckout} order={s.order} derived={s.derived}
+          isDraft={s.isDraft} delayed={s.delayed} wiping />
+      );
+    }
     return (
-      <div className="tc tc--empty" onClick={() => onClick(table)}>
+      <div className="tc tc--empty tc--empty-in" onClick={() => onClick(table)}>
         <div className="tc__icon-empty">🪑</div>
         <div className="tc__name">{table.name}</div>
         <div className="tc__seats">{table.capacity} seats</div>
@@ -67,9 +119,19 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
 
   // Occupied / Draft table
   return (
+    <OccupiedCard table={table} onClick={onClick} onPrintSlip={onPrintSlip}
+      onDirectCheckout={onDirectCheckout} order={order} derived={derived}
+      isDraft={isDraft} delayed={delayed} measureRef={measureRef} />
+  );
+}
+
+function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, derived, isDraft, delayed, wiping, frozen, measureRef }) {
+  return (
     <div
-      className={`tc ${isDraft ? 'tc--draft' : 'tc--occupied'}${delayed ? ' tc--delayed' : ''}`}
-      onClick={() => onClick(table)}
+      ref={measureRef}
+      className={`tc ${isDraft ? 'tc--draft' : 'tc--occupied'}${delayed ? ' tc--delayed' : ''}${wiping ? ' tc--wiping' : ''}`}
+      style={frozen ? { pointerEvents: 'none', opacity: 0.85 } : undefined}
+      onClick={frozen ? undefined : () => onClick(table)}
     >
       <div className="tc__header">
         <span className="tc__name">{table.name}</span>
@@ -127,6 +189,12 @@ export default function TableCard({ table, onClick, onDirectCheckout }) {
 
           </button>
         </div>
+      )}
+      {wiping && (
+        <>
+          <div className="tc__wipe-sweep" />
+          <div className="tc__paid-stamp"><span>PAID ✓</span></div>
+        </>
       )}
     </div>
   );

@@ -103,7 +103,7 @@ export const mutations = {
   status: (id, status) => enqueueMutation({
     cake_order_id: id, kind: 'status', method: 'PATCH',
     path: `/api/pos/cake-production/${id}/status`, body: { status },
-    optimistic: { status },
+    optimistic: { production_status: status },
   }),
   notes: (id, production_notes) => enqueueMutation({
     cake_order_id: id, kind: 'notes', method: 'PATCH',

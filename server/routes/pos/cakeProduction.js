@@ -27,24 +27,36 @@ function getPerms(row) {
   return { checklist: false, tags: true, notes: true, photosUpload: false }; // New / Acknowledged
 }
 
+// Modifiers are multi-select — stored as a comma-separated VARCHAR of lookup_master ids
+function csvToIds(v) {
+  return String(v || '').split(',').map(s => parseInt(s)).filter(Number.isInteger);
+}
+const MOD_FIELDS = [
+  ['shape_id', 'shape'], ['cream_type_id', 'cream'], ['sponge_type_id', 'sponge'],
+  ['theme_id', 'theme'], ['dietary_type_id', 'dietary'],
+];
+async function attachModifiers(row) {
+  const allIds = MOD_FIELDS.flatMap(([col]) => csvToIds(row[col]));
+  let byId = {};
+  if (allIds.length) {
+    const ph = allIds.map(() => '?').join(',');
+    const lookupRows = await dbAll(`SELECT id,name,extra_charge FROM lookup_master WHERE id IN (${ph})`, allIds);
+    byId = Object.fromEntries(lookupRows.map(l => [l.id, l]));
+  }
+  for (const [col, key] of MOD_FIELDS) {
+    const ids = csvToIds(row[col]);
+    const picked = ids.map(i => byId[i]).filter(Boolean);
+    row[`${key}_ids`] = ids;
+    row[`${key}_name`] = picked.map(p => p.name).join(', ') || null;
+    row[`${key}_charge`] = picked.reduce((s, p) => s + (p.extra_charge || 0), 0);
+  }
+  return row;
+}
+
 async function getFullForSync(id) {
-  const row = await dbGet(
-    `SELECT co.*,
-            sh.name AS shape_name,   sh.extra_charge AS shape_charge,
-            cr.name AS cream_name,   cr.extra_charge AS cream_charge,
-            sp.name AS sponge_name,  sp.extra_charge AS sponge_charge,
-            th.name AS theme_name,   th.extra_charge AS theme_charge,
-            di.name AS dietary_name, di.extra_charge AS dietary_charge
-     FROM   cake_orders co
-     LEFT JOIN lookup_master sh ON sh.id = co.shape_id
-     LEFT JOIN lookup_master cr ON cr.id = co.cream_type_id
-     LEFT JOIN lookup_master sp ON sp.id = co.sponge_type_id
-     LEFT JOIN lookup_master th ON th.id = co.theme_id
-     LEFT JOIN lookup_master di ON di.id = co.dietary_type_id
-     WHERE co.id = ?`,
-    [id]
-  );
+  const row = await dbGet(`SELECT co.* FROM cake_orders co WHERE co.id = ?`, [id]);
   if (!row) return null;
+  await attachModifiers(row);
 
   const items = await dbAll(`SELECT * FROM cake_order_items WHERE cake_order_id=? ORDER BY sort_order,id`, [id]);
   const accessories = await dbAll(`SELECT * FROM cake_order_accessories WHERE cake_order_id=? ORDER BY sort_order,id`, [id]);

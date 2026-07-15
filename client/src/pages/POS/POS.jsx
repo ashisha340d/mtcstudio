@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import { createSocket } from '../../socket';
 import SocketStatus from '../../components/SocketStatus';
 import { nepalNowFull, formatNepalDateTime } from '../../utils/dateTime';
@@ -12,14 +12,12 @@ import { cn } from '@/lib/utils';
 import CheckoutModal from './components/SplitTenderCheckoutContainer';
 import CustomerPickerModal from './components/CustomerPickerModal';
 import SalesReportModal from './components/SalesReportModal';
+import AddProductModal from './components/AddProductModal';
 import { printReceipt } from './components/ThermalReceipt';
+import { API, W, fmt, cleanVariantName } from './posShared';
 import './pos.css';
 
-const API = import.meta.env.VITE_API_URL || '/api';
 const H = { 'Content-Type': 'application/json', 'X-Session-ID': 'dev-session' };
-
-const fmt = (n) =>
-  '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const ORDER_TYPES = [
   { key: 'DINE_IN', label: 'Dine In' },
@@ -40,15 +38,6 @@ const canEdit = () => true;
 let _cartId = 0;
 const newId = () => `ci_${++_cartId}`;
 const ALL_CAT = '__ALL__';
-
-// Effective variant name for display/storage: drop "Regular" and variants
-// that just repeat the product name (otherwise the caption reads "Burger (Burger)").
-const cleanVariantName = (variantName, productName) => {
-  if (!variantName) return null;
-  const v = String(variantName).trim().toLowerCase();
-  if (v === 'regular' || v === String(productName ?? '').trim().toLowerCase()) return null;
-  return variantName;
-};
 
 function normalizeMenuProduct(product) {
   const rawPrice = product?.price ?? product?.pos_price ?? product?.min_price ?? product?.max_price ?? product?.selling_price ?? 0;
@@ -109,456 +98,13 @@ function loadLayout() {
   try {
     const s = JSON.parse(localStorage.getItem(PANEL_LAYOUT_KEY));
     if (s?.order && s?.widths) return s;
-  } catch {}
+  } catch { }
   return null;
 }
 
 /* ── Session caches — paint instantly on re-entry, refresh in background ── */
 let menuCache = null;    // normalized active products (full list)
 let catTblCache = null;  // { cats, tbls }
-
-/* ── Warm palette ────────────────────────────────────────────── */
-const W = {
-  desktopBg: '#ddd5c4',
-  windowBg: '#fdf9f4',
-  windowBg2: '#f5ece0',
-  chrome: 'linear-gradient(180deg, #d2c6b2 0%, #b8a890 100%)',
-  border: '#a89880',
-  borderLight: '#c4b49c',
-  text1: '#2a1f12',
-  text2: '#6b5640',
-  text3: '#9c8870',
-  orange: '#c1440e',
-  green: '#2d7a2d',
-  red: '#c0392b',
-  blue: '#1d4ed8',
-};
-
-/* ── Draggable · Resizable · Persistent Modal Shell ─────────── */
-function ModalShell({ id, defaultWidth = 420, defaultHeight = 500, onClose, children }) {
-  const KEY = `posv2_modal_${id}`;
-  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch { return {}; } };
-
-  const [pos, setPos] = useState(() => {
-    const s = load();
-    return {
-      x: s.x ?? Math.max(20, (window.innerWidth - (s.w ?? defaultWidth)) / 2),
-      y: s.y ?? Math.max(20, (window.innerHeight - (s.h ?? defaultHeight)) / 2),
-    };
-  });
-  const [size, setSize] = useState(() => {
-    const s = load();
-    return { w: s.w ?? defaultWidth, h: s.h ?? defaultHeight };
-  });
-
-  const posRef = useRef(pos);
-  const sizeRef = useRef(size);
-  const drag = useRef(null);
-  const shellRef = useRef(null);
-
-  const persist = () =>
-    localStorage.setItem(KEY, JSON.stringify({ x: posRef.current.x, y: posRef.current.y, w: sizeRef.current.w, h: sizeRef.current.h }));
-
-  const startDrag = (e) => {
-    if (e.button !== 0) return;
-    drag.current = { ox: e.clientX - posRef.current.x, oy: e.clientY - posRef.current.y };
-    e.preventDefault();
-  };
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!drag.current) return;
-      const x = Math.max(0, Math.min(window.innerWidth - 100, e.clientX - drag.current.ox));
-      const y = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - drag.current.oy));
-      posRef.current = { x, y };
-      setPos({ x, y });
-    };
-    const onUp = () => { if (drag.current) persist(); drag.current = null; };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, []); // eslint-disable-line
-
-  useEffect(() => {
-    if (!shellRef.current) return;
-    const ro = new ResizeObserver(() => {
-      if (!shellRef.current) return;
-      const w = shellRef.current.offsetWidth;
-      const h = shellRef.current.offsetHeight;
-      sizeRef.current = { w, h };
-      setSize({ w, h });
-      persist();
-    });
-    ro.observe(shellRef.current);
-    return () => ro.disconnect();
-  }, []); // eslint-disable-line
-
-  return (
-    <div
-      className="modal-overlay"
-      style={{ alignItems: 'flex-start', justifyContent: 'flex-start' }}
-      onClick={onClose}
-    >
-      <div
-        ref={shellRef}
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: 'fixed',
-          left: pos.x, top: pos.y,
-          width: size.w, height: size.h,
-          minWidth: 320, minHeight: 220,
-          resize: 'both', overflow: 'hidden',
-          borderRadius: 14,
-          background: W.windowBg,
-          border: `1px solid ${W.border}`,
-          boxShadow: '0 20px 60px rgba(42,31,18,0.38), 0 1px 0 rgba(255,255,255,0.65) inset',
-          display: 'flex', flexDirection: 'column',
-        }}
-      >
-        {children(startDrag)}
-      </div>
-    </div>
-  );
-}
-
-/* ── Shared window chrome title bar ─────────────────────────── */
-function ModalChrome({ onDrag, onClose, title, subtitle }) {
-  return (
-    <div
-      onMouseDown={onDrag}
-      style={{
-        cursor: 'move',
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '9px 16px',
-        background: W.chrome,
-        borderBottom: `1px solid ${W.border}`,
-        flexShrink: 0, userSelect: 'none',
-      }}
-    >
-      <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-        <button
-          onClick={onClose}
-          style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)', cursor: 'pointer', padding: 0 }}
-        />
-        <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
-        <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
-      </div>
-
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#4a3828', letterSpacing: '0.04em', textShadow: '0 1px 0 rgba(255,255,255,0.45)', textTransform: 'uppercase' }}>
-          {title}
-        </div>
-        {subtitle && (
-          <div style={{ fontSize: 10, color: W.text3, marginTop: 1 }}>{subtitle}</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── Add / Edit Product Modal ────────────────────────────────── */
-function AddProductModal({ product, existingItem, onClose, onConfirm }) {
-  const [variants, setVariants] = useState([]);
-  const [modifiers, setModifiers] = useState([]);
-  const [selVariant, setSelVariant] = useState(
-    existingItem?.variant_id
-      ? { id: existingItem.variant_id, name: existingItem.variant_name, selling_price: existingItem.unit_price }
-      : null
-  );
-  const [selMods, setSelMods] = useState(existingItem?.modifiers ?? []);
-  const [qty, setQty] = useState(existingItem?.quantity ?? 1);
-  const [notes, setNotes] = useState(existingItem?.notes ?? '');
-  const [rateInput, setRateInput] = useState(existingItem ? String(existingItem.unit_price) : '');
-  const [rateFocused, setRateFocused] = useState(false);
-  const [homePack, setHomePack] = useState(
-    !!(existingItem?.is_homepack ?? existingItem?.is_home_pack ?? false)
-  );
-  const [discAmt, setDiscAmt]   = useState(existingItem?.discount_amount ? String(existingItem.discount_amount) : '');
-  const [discType, setDiscType] = useState(existingItem?.discount_type ?? 'PROMO');
-  // One product → one image. Always resolve from the product, never the variant.
-  const [primaryImage, setPrimaryImage] = useState(product.primary_image ?? null);
-  const [loading, setLoading] = useState(true);
-  const isEdit = !!existingItem;
-
-  useEffect(() => {
-    // If the caller couldn't supply the product image, fetch it by product id
-    if (!product.primary_image) {
-      fetch(`${API}/food-menu/products/${product.id}`)
-        .then(r => r.json())
-        .then(p => { if (p?.primary_image) setPrimaryImage(p.primary_image); })
-        .catch(() => {});
-    }
-    Promise.all([
-      fetch(`${API}/food-menu/products/${product.id}/variants`).then(r => r.json()),
-      fetch(`${API}/food-menu/products/${product.id}/modifiers`).then(r => r.json()),
-    ]).then(([v, m]) => {
-      setVariants(v);
-      setModifiers(m);
-      if (isEdit) {
-        if (existingItem?.variant_id) {
-          const found = v.find(vv => vv.id === existingItem.variant_id);
-          if (found) setSelVariant(found);
-        } else if (v.length === 1) {
-          setSelVariant(v[0]);
-        }
-      } else {
-        if (v.length === 1) {
-          setSelVariant(v[0]);
-          setRateInput(r => r || String(v[0].selling_price ?? product.pos_price ?? 0));
-        }
-        setRateInput(r => r || String(product.pos_price ?? 0));
-      }
-      setLoading(false);
-    });
-  }, [product.id, isEdit]);
-
-  const handleVariantSelect = (v) => {
-    setSelVariant(v);
-    setRateInput(String(v.selling_price ?? v.price ?? 0));
-  };
-
-  const basePrice = parseFloat(rateInput) || 0;
-  const modTotal = selMods.reduce((s, m) => s + (m.price ?? 0), 0);
-  const lineGross = (basePrice + modTotal) * qty;
-  const discount = Math.min(Math.max(parseFloat(discAmt) || 0, 0), lineGross);
-  const lineTotal = lineGross - discount;
-
-  const toggleMod = (mod) =>
-    setSelMods(prev => prev.find(m => m.id === mod.id)
-      ? prev.filter(m => m.id !== mod.id)
-      : [...prev, mod]);
-
-  function handleConfirm() {
-    if (!selVariant && variants.length > 1) return;
-    const v = selVariant ?? variants[0] ?? null;
-    onConfirm({
-      product_id: product.id,
-      product_name: product.name,
-      variant_id: v?.id ?? null,
-      variant_name: cleanVariantName(v?.name, product.name),
-      unit_price: basePrice,
-      quantity: qty,
-      modifiers: selMods.map(m => ({ id: m.id, name: m.name, price: m.price ?? 0 })),
-      notes: notes.trim() || null,
-      is_homepack: homePack,
-      image: primaryImage,
-      discount_amount: discount,
-      discount_type: discount > 0 ? discType : null,
-    });
-    onClose();
-  }
-
-  const optionRow = (selected) => ({
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '11px 13px', borderRadius: 9,
-    border: `1.5px solid ${selected ? W.orange : W.borderLight}`,
-    background: selected ? 'rgba(193,68,14,0.08)' : 'rgba(255,255,255,0.65)',
-    cursor: 'pointer', transition: 'all 0.1s', width: '100%',
-  });
-
-  return (
-    <ModalShell id="add-product" defaultWidth={420} defaultHeight={560} onClose={onClose}>
-      {(startDrag) => (
-        <>
-          <div
-            onMouseDown={startDrag}
-            style={{
-              cursor: 'move',
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-              padding: '9px 16px',
-              background: W.chrome,
-              borderBottom: `1px solid ${W.border}`,
-              flexShrink: 0, userSelect: 'none',
-            }}
-          >
-            <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignSelf: 'center' }}>
-              <button onClick={onClose} style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)', cursor: 'pointer', padding: 0 }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
-            </div>
-
-            {primaryImage
-              ? <img src={`/uploads/${primaryImage}`} style={{ height: 52, width: 52, borderRadius: 9, objectFit: 'cover', border: `1px solid ${W.border}`, flexShrink: 0 }} alt="" />
-              : <div style={{ height: 52, width: 52, borderRadius: 9, background: 'rgba(255,255,255,0.4)', border: `1px solid ${W.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <ImageIcon style={{ width: 22, height: 22, color: W.text3 }} />
-              </div>
-            }
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: W.text1, lineHeight: 1.3, textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>{product.name}</div>
-              {product.category_name && <div style={{ fontSize: 10, color: W.text3, marginTop: 1 }}>{product.category_name}</div>}
-              <div style={{ fontSize: 14, fontWeight: 800, color: W.orange, marginTop: 4 }}>{fmt(basePrice || product.pos_price)}</div>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
-            {loading
-              ? <div style={{ textAlign: 'center', color: W.text3, padding: '24px 0' }}>Loading…</div>
-              : variants.length > 1 && (
-                <div style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: W.text3, marginBottom: 9 }}>Select Variant *</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    {variants.map(v => (
-                      <button key={v.id} onClick={() => handleVariantSelect(v)} style={optionRow(selVariant?.id === v.id)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${selVariant?.id === v.id ? W.orange : W.text3}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            {selVariant?.id === v.id && <div style={{ width: 7, height: 7, borderRadius: '50%', background: W.orange }} />}
-                          </div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: W.text1 }}>{v.name}</span>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: W.orange }}>{fmt(v.selling_price ?? v.price)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            }
-
-            {!loading && modifiers.length > 0 && (
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: W.text3, marginBottom: 9 }}>Add-ons</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {modifiers.map(mod => {
-                    const checked = !!selMods.find(m => m.id === mod.id);
-                    return (
-                      <button key={mod.id} onClick={() => toggleMod(mod)} style={optionRow(checked)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${checked ? W.orange : W.text3}`, background: checked ? W.orange : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {checked && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-                          </div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: W.text1 }}>{mod.name}</span>
-                        </div>
-                        {mod.price > 0 && <span style={{ fontSize: 12, color: W.text2 }}>+{fmt(mod.price)}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: W.text3, marginBottom: 8 }}>Special Instructions</div>
-              <textarea
-                rows={2}
-                placeholder="e.g. Less spicy, No onion…"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                style={{ width: '100%', borderRadius: 9, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.text1, fontSize: 13, padding: '9px 11px', resize: 'none', outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            {/* Item Discount */}
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: W.text3, marginBottom: 8 }}>Discount</div>
-              <div style={{ display: 'flex', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
-                {[['PROMO', 'Promo'], ['COMPLIMENTARY', 'Compl.'], ['EMPLOYEE', 'Employee'], ['MANUAL', 'Manual']].map(([key, label]) => (
-                  <button key={key} onClick={() => setDiscType(key)}
-                    style={{
-                      padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800,
-                      textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
-                      border: `1.5px solid ${discType === key ? W.orange : W.borderLight}`,
-                      background: discType === key ? 'rgba(193,68,14,0.1)' : 'rgba(255,255,255,0.65)',
-                      color: discType === key ? W.orange : W.text2,
-                    }}>{label}</button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input
-                  type="number" min="0" placeholder="0"
-                  value={discAmt}
-                  onChange={e => setDiscAmt(e.target.value)}
-                  onFocus={e => e.target.select()}
-                  style={{ width: 90, padding: '7px 9px', borderRadius: 8, border: `1.5px solid ${discount > 0 ? W.orange : W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: discount > 0 ? W.orange : W.text1, fontSize: 14, fontWeight: 800, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
-                />
-                {[10, 20, 50, 100].map(p => (
-                  <button key={p} onClick={() => setDiscAmt(String(Math.round(lineGross * p) / 100))}
-                    style={{ padding: '6px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.65)', color: W.text2, cursor: 'pointer', flexShrink: 0 }}>
-                    {p === 100 ? 'FOC' : `${p}%`}
-                  </button>
-                ))}
-                {discount > 0 && (
-                  <button onClick={() => setDiscAmt('')}
-                    style={{ padding: '6px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, border: 'none', background: 'none', color: W.red, cursor: 'pointer', flexShrink: 0 }}>✕</button>
-                )}
-              </div>
-              {discount > 0 && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: W.green ?? '#2d7a2d', marginTop: 6 }}>
-                  −{fmt(discount)} {discType} → line {fmt(lineTotal)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ borderTop: `1px solid ${W.border}`, padding: '12px 18px', flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>Rate (₹)</div>
-                <input
-                  type={rateFocused ? 'number' : 'text'}
-                  value={rateFocused ? rateInput : Number(rateInput || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  onChange={e => setRateInput(e.target.value)}
-                  onFocus={e => { setRateFocused(true); e.target.select(); }}
-                  onBlur={() => setRateFocused(false)}
-                  style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: `1.5px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.orange, fontSize: 22, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'right' }}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>Qty</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Minus style={{ width: 15, height: 15 }} />
-                  </button>
-                  <span style={{ fontSize: 18, fontWeight: 900, color: W.text1, minWidth: 26, textAlign: 'center' }}>{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Plus style={{ width: 15, height: 15 }} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Take Out / Pack toggle */}
-            <button
-              onClick={() => setHomePack(h => !h)}
-              style={{
-                width: '100%', padding: '11px 13px', borderRadius: 9, marginBottom: 10,
-                display: 'flex', alignItems: 'center', gap: 10,
-                border: `1.5px solid ${homePack ? W.orange : W.borderLight}`,
-                background: homePack ? 'rgba(193,68,14,0.08)' : 'rgba(255,255,255,0.65)',
-                cursor: 'pointer', transition: 'all 0.1s',
-              }}
-            >
-              <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${homePack ? W.orange : W.text3}`, background: homePack ? W.orange : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {homePack && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 800, color: homePack ? W.orange : W.text1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📦 Take Out / Pack</span>
-            </button>
-
-            {isEdit && (
-              <button onClick={() => { onConfirm(null); onClose(); }}
-                style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid rgba(192,57,43,0.4)`, background: 'rgba(192,57,43,0.06)', color: W.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
-                Remove Item
-              </button>
-            )}
-            <button
-              disabled={loading || (!selVariant && variants.length > 1)}
-              onClick={handleConfirm}
-              style={{
-                width: '100%', padding: '13px', borderRadius: 9, border: 'none',
-                background: loading || (!selVariant && variants.length > 1) ? 'rgba(0,0,0,0.08)' : W.orange,
-                color: loading || (!selVariant && variants.length > 1) ? W.text3 : '#fff',
-                fontSize: 14, fontWeight: 800,
-                cursor: loading || (!selVariant && variants.length > 1) ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}
-            >
-              {isEdit ? 'Update Item' : 'Add to Order'}
-              {' — '}{fmt(lineTotal)}
-            </button>
-          </div>
-        </>
-      )}
-    </ModalShell>
-  );
-}
 
 /* ── Remove Sent Item — classify mistake / return / waste ─────── */
 function RemoveItemModal({ item, onConfirm, onClose }) {
@@ -567,7 +113,7 @@ function RemoveItemModal({ item, onConfirm, onClose }) {
   const KINDS = [
     { key: 'CANCEL', icon: '✏️', label: 'Mistake / not needed', hint: 'Wrong punch or changed before preparation' },
     { key: 'RETURN', icon: '↩️', label: 'Returned by customer', hint: 'Prepared & served, then sent back' },
-    { key: 'WASTE',  icon: '🗑️', label: 'Kitchen waste',        hint: 'Preparation flaw, dropped, unusable' },
+    { key: 'WASTE', icon: '🗑️', label: 'Kitchen waste', hint: 'Preparation flaw, dropped, unusable' },
   ];
   const needReason = kind !== 'CANCEL';
   const canConfirm = !needReason || reason.trim();
@@ -781,14 +327,14 @@ function QuickAccessRail({ items, qtyByProduct, onPick, side }) {
     try {
       const v = Number(localStorage.getItem(QUICK_W_KEY));
       if (v >= QUICK_MIN_W && v <= QUICK_MAX_W) return v;
-    } catch {}
+    } catch { }
     return quickDefaultW(Number(localStorage.getItem(QUICK_COLS_KEY)) === 2 ? 2 : 1);
   });
   const [resizing, setResizing] = useState(false);
   const dragRef = useRef(null);
 
-  useEffect(() => { try { localStorage.setItem(QUICK_COLS_KEY, String(cols)); } catch {} }, [cols]);
-  useEffect(() => { try { localStorage.setItem(QUICK_W_KEY, String(width)); } catch {} }, [width]);
+  useEffect(() => { try { localStorage.setItem(QUICK_COLS_KEY, String(cols)); } catch { } }, [cols]);
+  useEffect(() => { try { localStorage.setItem(QUICK_W_KEY, String(width)); } catch { } }, [width]);
 
   useEffect(() => {
     if (!resizing) return;
@@ -1188,7 +734,7 @@ export default function POS() {
   });
   const toggleQuick = useCallback(() => setQuickOn(v => {
     const next = !v;
-    try { localStorage.setItem(QUICK_ON_KEY, next ? '1' : '0'); } catch {}
+    try { localStorage.setItem(QUICK_ON_KEY, next ? '1' : '0'); } catch { }
     return next;
   }), []);
   const [activeCat, setActiveCat] = useState(() => {
@@ -1268,7 +814,7 @@ export default function POS() {
   const savePanelLayout = useCallback(() => {
     try {
       localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify({ order: panelOrder, widths: panelWidths }));
-    } catch {}
+    } catch { }
   }, [panelOrder, panelWidths]);
 
   const resetPanelLayout = useCallback(() => {
@@ -1276,7 +822,7 @@ export default function POS() {
     const productsW = Math.max(MIN_WIDTHS.products, total - DEFAULT_WIDTHS.kot - DEFAULT_WIDTHS.cat - DIVIDER_W * 2);
     setPanelOrder([...DEFAULT_ORDER]);
     setPanelWidths({ ...DEFAULT_WIDTHS, products: productsW });
-    try { localStorage.removeItem(PANEL_LAYOUT_KEY); } catch {}
+    try { localStorage.removeItem(PANEL_LAYOUT_KEY); } catch { }
     setCtxMenu(null);
   }, []);
 
@@ -1381,7 +927,7 @@ export default function POS() {
       catTblCache = { cats, tbls };
       setCategories(cats);
       setTables(tbls);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   /* ── Persist active category selection ───────────────────── */
@@ -1398,7 +944,7 @@ export default function POS() {
         menuCache = (rows || []).map(normalizeMenuProduct).filter(p => p.is_active !== 0);
         setProducts(menuCache);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -1760,7 +1306,7 @@ export default function POS() {
       fetch(`${API}/pos/orders/${orderId}`, {
         method: 'PATCH', headers: H,
         body: JSON.stringify({ customer_name: n || null, customer_phone: p || null }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 
@@ -1928,39 +1474,39 @@ export default function POS() {
             }}
           >{saving ? 'Saving…' : kindIsScheduled ? '⏰ Save Scheduled Order' : '📝 Save Draft'}</button>
         ) : (
-        <>
-        <button
-          onClick={liveOrderId ? handleCheckout : () => { }}
-          style={{
-            flex: 1, height: 48,
-            borderRadius: 10, border: 'none',
-            background: liveOrderId ? W.green : 'rgba(45,122,45,0.15)',
-            color: liveOrderId ? '#fff' : 'rgba(45,122,45,0.5)',
-            fontSize: 14, fontWeight: 800,
-            cursor: liveOrderId ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            boxShadow: liveOrderId ? '0 3px 12px rgba(45,122,45,0.25)' : 'none',
-            transition: 'all 0.15s', letterSpacing: '0.04em',
-          }}
-        >
-          <CreditCard style={{ height: 17, width: 17 }} />
-          Checkout
-        </button>
+          <>
+            <button
+              onClick={liveOrderId ? handleCheckout : () => { }}
+              style={{
+                flex: 1, height: 48,
+                borderRadius: 10, border: 'none',
+                background: liveOrderId ? W.green : 'rgba(45,122,45,0.15)',
+                color: liveOrderId ? '#fff' : 'rgba(45,122,45,0.5)',
+                fontSize: 14, fontWeight: 800,
+                cursor: liveOrderId ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: liveOrderId ? '0 3px 12px rgba(45,122,45,0.25)' : 'none',
+                transition: 'all 0.15s', letterSpacing: '0.04em',
+              }}
+            >
+              <CreditCard style={{ height: 17, width: 17 }} />
+              Checkout
+            </button>
 
-        <button
-          onClick={handleSaveAndSend}
-          disabled={saving}
-          style={{
-            flex: 1, height: 48,
-            borderRadius: 10, border: 'none',
-            background: W.orange, color: '#fff',
-            fontSize: 14, fontWeight: 800,
-            cursor: saving ? 'not-allowed' : 'pointer',
-            boxShadow: '0 3px 12px rgba(193,68,14,0.25)',
-            transition: 'all 0.15s', letterSpacing: '0.03em',
-          }}
-        >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
-        </>
+            <button
+              onClick={handleSaveAndSend}
+              disabled={saving}
+              style={{
+                flex: 1, height: 48,
+                borderRadius: 10, border: 'none',
+                background: W.orange, color: '#fff',
+                fontSize: 14, fontWeight: 800,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                boxShadow: '0 3px 12px rgba(193,68,14,0.25)',
+                transition: 'all 0.15s', letterSpacing: '0.03em',
+              }}
+            >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
+          </>
         )}
       </div>
     </div>
@@ -2033,88 +1579,88 @@ export default function POS() {
     ) : null;
 
     return (
-    <div key={panelId} style={{ ...panelStyle, background: W.windowBg }}>
-      {/* Chrome + search */}
-      <div
-        onContextMenu={onCtx}
-        style={{ flexShrink: 0, borderBottom: `1px solid ${W.border}`, background: W.chrome }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: `1px solid rgba(0,0,0,0.1)` }}>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)' }} />
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
-            <button
-              onClick={toggleQuick}
-              title={quickOn ? 'Hide Quick Access rail' : 'Show Quick Access rail'}
-              style={{
-                marginLeft: 6, height: 17, padding: '0 7px',
-                borderRadius: 20, cursor: 'pointer',
-                fontSize: 9, fontWeight: 800, lineHeight: 1,
-                display: 'flex', alignItems: 'center', gap: 3,
-                border: `1px solid ${quickOn ? W.orange : 'rgba(0,0,0,0.18)'}`,
-                background: quickOn ? W.orange : 'rgba(255,255,255,0.35)',
-                color: quickOn ? '#fff' : '#4a3828',
-                boxShadow: quickOn ? '0 1px 5px rgba(193,68,14,0.35)' : 'none',
-                transition: 'all 0.15s',
-              }}
-            >⚡</button>
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1, textAlign: 'center', textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>
-            Menu
-          </span>
-          <SocketStatus socket={socketRef.current} style={{ flexDirection: 'row', color: W.text3, fontSize: 10 }} />
-        </div>
-
-        <div style={{ padding: '10px 14px' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <Search style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', height: 18, width: 18, color: W.text3 }} />
-              <input
-                ref={searchRef}
-                placeholder="Search dishes… (F2)"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{
-                  paddingLeft: 40, paddingRight: 14, height: 44, width: '100%',
-                  fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
-                  borderRadius: 9, border: `1.5px solid ${W.borderLight}`,
-                  background: 'rgba(255,255,255,0.75)', color: W.text1,
-                  outline: 'none', boxSizing: 'border-box',
-                  transition: 'border-color 0.12s, background 0.12s',
-                }}
-                onFocus={e => { e.target.style.borderColor = W.orange; e.target.style.background = 'rgba(255,255,255,0.95)'; }}
-                onBlur={e => { e.target.style.borderColor = W.borderLight; e.target.style.background = 'rgba(255,255,255,0.75)'; }}
-              />
-            </div>
-            {search && (
+      <div key={panelId} style={{ ...panelStyle, background: W.windowBg }}>
+        {/* Chrome + search */}
+        <div
+          onContextMenu={onCtx}
+          style={{ flexShrink: 0, borderBottom: `1px solid ${W.border}`, background: W.chrome }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: `1px solid rgba(0,0,0,0.1)` }}>
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)' }} />
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
               <button
-                onClick={() => setSearch('')}
-                style={{ fontSize: 12, fontWeight: 700, borderRadius: 8, background: 'rgba(255,255,255,0.6)', border: `1px solid ${W.borderLight}`, color: W.text2, padding: '6px 12px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
-              >Clear</button>
-            )}
+                onClick={toggleQuick}
+                title={quickOn ? 'Hide Quick Access rail' : 'Show Quick Access rail'}
+                style={{
+                  marginLeft: 6, height: 17, padding: '0 7px',
+                  borderRadius: 20, cursor: 'pointer',
+                  fontSize: 9, fontWeight: 800, lineHeight: 1,
+                  display: 'flex', alignItems: 'center', gap: 3,
+                  border: `1px solid ${quickOn ? W.orange : 'rgba(0,0,0,0.18)'}`,
+                  background: quickOn ? W.orange : 'rgba(255,255,255,0.35)',
+                  color: quickOn ? '#fff' : '#4a3828',
+                  boxShadow: quickOn ? '0 1px 5px rgba(193,68,14,0.35)' : 'none',
+                  transition: 'all 0.15s',
+                }}
+              >⚡</button>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1, textAlign: 'center', textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>
+              Menu
+            </span>
+            <SocketStatus socket={socketRef.current} style={{ flexDirection: 'row', color: W.text3, fontSize: 10 }} />
+          </div>
+
+          <div style={{ padding: '10px 14px' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', height: 18, width: 18, color: W.text3 }} />
+                <input
+                  ref={searchRef}
+                  placeholder="Search dishes… (F2)"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{
+                    paddingLeft: 40, paddingRight: 14, height: 44, width: '100%',
+                    fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
+                    borderRadius: 9, border: `1.5px solid ${W.borderLight}`,
+                    background: 'rgba(255,255,255,0.75)', color: W.text1,
+                    outline: 'none', boxSizing: 'border-box',
+                    transition: 'border-color 0.12s, background 0.12s',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = W.orange; e.target.style.background = 'rgba(255,255,255,0.95)'; }}
+                  onBlur={e => { e.target.style.borderColor = W.borderLight; e.target.style.background = 'rgba(255,255,255,0.75)'; }}
+                />
+              </div>
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  style={{ fontSize: 12, fontWeight: 700, borderRadius: 8, background: 'rgba(255,255,255,0.6)', border: `1px solid ${W.borderLight}`, color: W.text2, padding: '6px 12px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
+                >Clear</button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Body: fixed Quick rail + scrolling product grid */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {quickSide === 'left' && quickRail}
-        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 14px' }}>
-          {loading
-            ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>Loading…</div>
-            : filtered.length === 0
-              ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
-              : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
-                {filtered.map(p => (
-                  <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
-                ))}
-              </div>
-          }
+        {/* Body: fixed Quick rail + scrolling product grid */}
+        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+          {quickSide === 'left' && quickRail}
+          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 14px' }}>
+            {loading
+              ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>Loading…</div>
+              : filtered.length === 0
+                ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
+                : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
+                  {filtered.map(p => (
+                    <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
+                  ))}
+                </div>
+            }
+          </div>
+          {quickSide === 'right' && quickRail}
         </div>
-        {quickSide === 'right' && quickRail}
       </div>
-    </div>
     );
   };
 

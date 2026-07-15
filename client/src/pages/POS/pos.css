@@ -124,42 +124,46 @@
 .pos-topbar__btn {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 16px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  justify-content: left;
+
+
+  width: 120px;
+  /* Fixed width */
+  height: 50px;
+  /* Fixed height */
+  padding: 0 4px;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+
+  color: rgba(255, 255, 255, 0.75);
   font-size: 14px;
   font-weight: 600;
+
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  letter-spacing: 0.02em;
+  transition: background .12s, border-color .12s, color .12s;
 }
 
 .pos-topbar__btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
-.pos-topbar__btn--takeaway {
-  color: #67d2e8;
+.pos-topbar__btn:active {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.pos-topbar__btn--delivery {
-  color: #7fa7f0;
+.pos-topbar__btn--g1 {
+  color: #04b612;
 }
 
-.pos-topbar__btn--cake {
-  color: #c084fc;
+.pos-topbar__btn--g2 {
+  color: #13bbee;
 }
 
-.pos-topbar__btn--quick {
-  color: #f8c94c;
-}
-
-.pos-topbar__btn--customer {
-  color: #5eead4;
+.pos-topbar__btn--g3 {
+  color: #dba81a;
 }
 
 .pos-topbar__btn--table-merge {
@@ -282,6 +286,67 @@
   color: #fff;
 }
 
+.cash-fly-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2fa84c 0%, #17722e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 10px 28px rgba(23, 114, 46, 0.45),
+    0 0 0 5px rgba(47, 168, 76, 0.14);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.cash-target-hit {
+  animation: cashTargetPop 0.45s cubic-bezier(.34, 1.9, .5, 1);
+}
+
+@keyframes cashTargetPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); box-shadow: 0 0 0 7px rgba(47, 168, 76, 0.3); }
+  100% { transform: scale(1); }
+}
+
+.cash-pop {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: 900;
+  color: #16a34a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+  animation: cashPopRise 0.9s ease-out forwards;
+}
+
+@keyframes cashPopRise {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.8); }
+  20% { opacity: 1; transform: translate(-50%, 12px) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, 34px) scale(1); }
+}
+
+.modal--closing {
+  animation: modalFastClose 0.18s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes modalFastClose {
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -308,6 +373,7 @@
   max-height: calc(100vh - 32px);
   overflow-y: auto;
 }
+
 .wo-dock__card {
   position: relative;
   background: #fffdf8;
@@ -316,12 +382,21 @@
   border-radius: 10px;
   padding: 12px 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  animation: woDockIn 0.22s cubic-bezier(.32,.72,0,1);
+  animation: woDockIn 0.22s cubic-bezier(.32, .72, 0, 1);
 }
+
 @keyframes woDockIn {
-  from { opacity: 0; transform: translateX(24px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
+
 .wo-dock__title {
   display: block;
   font-size: 13px;
@@ -329,11 +404,13 @@
   margin-bottom: 6px;
   color: #3d3428;
 }
+
 .wo-dock__line {
   margin: 0 0 3px;
   font-size: 12.5px;
   color: #3d3428;
 }
+
 .wo-dock__review {
   margin-top: 8px;
   width: 100%;
@@ -346,7 +423,10 @@
   font-weight: 800;
   cursor: pointer;
 }
-.wo-dock__review:active { opacity: 0.85; }
+
+.wo-dock__review:active {
+  opacity: 0.85;
+}
 
 /* ── Dashboard = Desktop Workspace ─────────────────────────── */
 .pos-dashboard {
@@ -621,6 +701,72 @@
   color: var(--yellow);
   border-color: rgba(161, 98, 7, 0.3);
   background: rgba(161, 98, 7, 0.07);
+}
+
+/* ── Wipe-out on payoff ────────────────────────────────────────── */
+.tc--wiping {
+  position: relative;
+  overflow: hidden;
+  animation: tcPaidOut 0.7s cubic-bezier(.4, 0, .2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes tcPaidOut {
+  0% { opacity: 1; transform: scale(1); }
+  16% { transform: scale(1.03); box-shadow: 0 8px 26px rgba(22, 163, 74, 0.35); }
+  55% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.86) translateY(10px); filter: blur(2px); }
+}
+
+.tc__wipe-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 48%, rgba(214, 250, 224, 0.9) 55%, transparent 72%);
+  animation: tcWipeSweep 0.55s cubic-bezier(.4, 0, .2, 1) forwards;
+}
+
+@keyframes tcWipeSweep {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
+}
+
+.tc__paid-stamp {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tc__paid-stamp span {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #16a34a;
+  border: 3px solid #16a34a;
+  border-radius: 8px;
+  padding: 3px 14px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.3);
+  animation: tcStampIn 0.3s cubic-bezier(.175, .885, .32, 1.5) both;
+  animation-delay: 0.06s;
+}
+
+@keyframes tcStampIn {
+  from { opacity: 0; transform: rotate(-10deg) scale(2.4); }
+  to { opacity: 1; transform: rotate(-10deg) scale(1); }
+}
+
+.tc--empty-in {
+  animation: tcEmptyIn 0.25s ease;
+}
+
+@keyframes tcEmptyIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* ── Delayed ────────────────────────────────────────────────── */
@@ -1023,7 +1169,9 @@
 }
 
 @keyframes soc-pulse {
-  50% { opacity: 0.45; }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .oc__notes-icon {

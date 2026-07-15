@@ -29,6 +29,7 @@ export default function SalesReport({ gridLines = true } = {}) {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [search, setSearch]             = useState('');
   const [colWidths, setColWidths]       = useState(loadColWidths);
+  const [sort, setSort]                 = useState({ col: 'time', dir: 'desc' });
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +54,10 @@ export default function SalesReport({ gridLines = true } = {}) {
   }, [date]);
 
   const toggleOrder = (id) => setExpandedOrder(prev => prev === id ? null : id);
+
+  const toggleSort = (col) => setSort(prev => prev.col === col
+    ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+    : { col, dir: 'asc' });
 
   const startResize = (col, e) => {
     e.preventDefault();
@@ -119,12 +124,31 @@ export default function SalesReport({ gridLines = true } = {}) {
   ].sort((a, b) => b.time.localeCompare(a.time));
 
   const q = search.trim().toLowerCase();
-  const filteredOrders = allRows.filter(o => !q
-    || o.label.toLowerCase().includes(q)
-    || (o.customerName || '').toLowerCase().includes(q)
-    || (o.customerPhone || '').toLowerCase().includes(q)
-    || (o.tableName || '').toLowerCase().includes(q)
-    || (PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '').toLowerCase().includes(q));
+  const filteredOrders = allRows
+    .map(o => ({ ...o, itemMatch: !!q && (o.items || []).some(item => (item.name || '').toLowerCase().includes(q)) }))
+    .filter(o => !q
+      || o.label.toLowerCase().includes(q)
+      || (o.customerName || '').toLowerCase().includes(q)
+      || (o.customerPhone || '').toLowerCase().includes(q)
+      || (o.tableName || '').toLowerCase().includes(q)
+      || (PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '').toLowerCase().includes(q)
+      || o.itemMatch);
+
+  const SORT_ACCESSORS = {
+    id: o => o.label,
+    time: o => o.time,
+    customer: o => o.customerName || '',
+    payment: o => PAYMENT_LABELS[o.paymentMethod] || o.paymentMethod || '',
+    amount: o => o.amount || 0,
+  };
+  const sortAcc = SORT_ACCESSORS[sort.col];
+  const sortedOrders = sortAcc
+    ? [...filteredOrders].sort((a, b) => {
+        const av = sortAcc(a), bv = sortAcc(b);
+        const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+        return sort.dir === 'asc' ? cmp : -cmp;
+      })
+    : filteredOrders;
 
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -178,7 +202,7 @@ export default function SalesReport({ gridLines = true } = {}) {
       )}
 
       {/* ── No search matches ── */}
-      {!loading && !error && salesData && allRows.length > 0 && filteredOrders.length === 0 && (
+      {!loading && !error && salesData && allRows.length > 0 && sortedOrders.length === 0 && (
         <div className="report-state">
           <div className="report-state-icon">🔍</div>
           <p>No orders match "{search}".</p>
@@ -186,50 +210,28 @@ export default function SalesReport({ gridLines = true } = {}) {
       )}
 
       {/* ── Data ── */}
-      {!loading && !error && salesData && allRows.length > 0 && filteredOrders.length > 0 && (
+      {!loading && !error && salesData && allRows.length > 0 && sortedOrders.length > 0 && (
         <>
-          {/* ── Summary ── */}
-          <div className="sales-summary">
-            <div className="summary-breakdown">
-              <div className="summary-item summary-item--credit">
-                <div className="summary-label">Credit Ledger</div>
-                <div className="summary-amount">₹{(salesData.credit || 0).toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--card">
-                <div className="summary-label">Card / UPI / QR</div>
-                <div className="summary-amount">₹{(salesData.card || 0).toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--cash">
-                <div className="summary-label">Cash Collection</div>
-                <div className="summary-amount">₹{(salesData.cash || 0).toLocaleString('en-IN')}</div>
-              </div>
-              <div className="summary-item summary-item--total">
-                <div className="summary-label">Total</div>
-                <div className="summary-amount">₹{((salesData.card || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</div>
-              </div>
-            </div>
-          </div>
-
           {/* ── Orders Table ── */}
           <div className="sales-orders">
             <div className="orders-section-label">
-              Orders — {filteredOrders.length}
+              Orders — {sortedOrders.length}
             </div>
-            <div className="orders-table" style={colVarStyle}>
+            <div className="orders-table orders-table--listview" style={colVarStyle}>
               <div className="table-header">
                 <div className="col-sn">SN<span className="col-resize-handle" onMouseDown={e => startResize('sn', e)} /></div>
-                <div className="col-id">#<span className="col-resize-handle" onMouseDown={e => startResize('id', e)} /></div>
-                <div className="col-time">Time<span className="col-resize-handle" onMouseDown={e => startResize('time', e)} /></div>
-                <div className="col-customer">Customer<span className="col-resize-handle" onMouseDown={e => startResize('customer', e)} /></div>
-                <div className="col-payment">Payment<span className="col-resize-handle" onMouseDown={e => startResize('payment', e)} /></div>
-                <div className="col-amount">Amount<span className="col-resize-handle" onMouseDown={e => startResize('amount', e)} /></div>
+                <div className="col-id" onClick={() => toggleSort('id')}>#{sort.col === 'id' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('id', e)} /></div>
+                <div className="col-time" onClick={() => toggleSort('time')}>Time{sort.col === 'time' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('time', e)} /></div>
+                <div className="col-customer" onClick={() => toggleSort('customer')}>Customer{sort.col === 'customer' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('customer', e)} /></div>
+                <div className="col-payment" onClick={() => toggleSort('payment')}>Payment{sort.col === 'payment' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('payment', e)} /></div>
+                <div className="col-amount" onClick={() => toggleSort('amount')}>Amount{sort.col === 'amount' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('amount', e)} /></div>
                 <div className="col-action"></div>
               </div>
 
-              {filteredOrders.map((order, idx) => (
-                <div key={order.key} className="order-row">
+              {sortedOrders.map((order, idx) => (
+                <div key={order.key} className={`order-row${idx % 2 ? ' order-row--alt' : ''}`}>
                   <div
-                    className={`table-row${expandedOrder === order.key ? ' table-row--expanded' : ''}${order.deleted ? ' table-row--deleted' : ''}`}
+                    className={`table-row${(expandedOrder === order.key || (q && order.itemMatch)) ? ' table-row--expanded' : ''}${order.deleted ? ' table-row--deleted' : ''}`}
                     onClick={() => order.items && toggleOrder(order.key)}
                     style={{ cursor: order.items ? 'pointer' : 'default' }}
                   >
@@ -258,7 +260,7 @@ export default function SalesReport({ gridLines = true } = {}) {
                     </div>
                   </div>
 
-                  {order.items && expandedOrder === order.key && (
+                  {order.items && (expandedOrder === order.key || (q && order.itemMatch)) && (
                     <div className="order-details">
                       <div className="details-summary">
                         <span>Total: ₹{(order.amount || 0).toLocaleString('en-IN')}</span>
@@ -297,6 +299,13 @@ export default function SalesReport({ gridLines = true } = {}) {
                   )}
                 </div>
               ))}
+
+              <div className="table-footer">
+                <span className="footer-chip footer-chip--credit">Credit ₹{(salesData.credit || 0).toLocaleString('en-IN')}</span>
+                <span className="footer-chip footer-chip--card">Card/UPI/QR ₹{(salesData.card || 0).toLocaleString('en-IN')}</span>
+                <span className="footer-chip footer-chip--cash">Cash ₹{(salesData.cash || 0).toLocaleString('en-IN')}</span>
+                <span className="footer-chip footer-chip--total">Total ₹{((salesData.card || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</span>
+              </div>
             </div>
           </div>
         </>

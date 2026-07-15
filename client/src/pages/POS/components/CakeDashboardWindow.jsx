@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { flyToCashStack } from './flyToCashStack';
 import '../pos.css';
 
 const API = import.meta.env.VITE_API_URL || '/api';
@@ -26,12 +27,6 @@ const PAYMENT_METHODS = [
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const PAY_TYPE_LABEL = { ADVANCE: 'Advance', REGULAR: 'Follow-up' };
 
-const TABS = [
-  { key: 'unpaid', label: "Today's Orders" },
-  { key: 'delivery', label: 'Delivery Today' },
-  { key: 'total', label: 'Total Orders' },
-];
-
 // ── Status badge ──────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const m = STATUS_META[status] ?? { label: status, color: '#6b7280' };
@@ -52,6 +47,8 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [done, setDone] = useState(null); // null | { fullyPaid, amount }
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/pos/cake-orders/${order.id}/payments`, { headers: H })
@@ -79,9 +76,64 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
         body: JSON.stringify({ payments: tenders }),
       });
       if (!r.ok) { const d = await r.json(); setErr(d.error || 'Payment failed'); return; }
-      onSuccess();
+      setDone({ fullyPaid: remaining === 0, amount: total });
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
+  }
+
+  async function printSlip() {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      const r = await fetch(`${API}/pos/cake-orders/${order.id}/print`, { method: 'POST', headers: H });
+      if (!r.ok) { const d = await r.json(); alert(d.error || 'Print failed'); }
+    } catch (e) { alert(e.message); }
+    finally { setPrinting(false); }
+  }
+
+  // Payment recorded — cashier reviews/prints, then Done closes this modal
+  // and hands off to onSuccess, which is what fires the card's fly-to-drawer.
+  if (done) {
+    return (
+      <div
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        onClick={() => onSuccess(done)}
+      >
+        <div
+          style={{
+            background: '#fdf9f4', borderRadius: 14, padding: '24px 28px', width: 320,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.35)', border: '1px solid #c4b49c', textAlign: 'center',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#2d7a2d', marginBottom: 6 }}>✓ Payment Recorded</div>
+          <div style={{ fontSize: 12, color: '#6b5640', marginBottom: 18 }}>
+            {fmtMoney(done.amount)} · {order.order_number}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button
+              onClick={printSlip}
+              disabled={printing}
+              style={{
+                padding: '10px', borderRadius: 8, border: 'none',
+                background: '#c1440e', color: '#fff', fontWeight: 800, cursor: 'pointer',
+                fontSize: 12, opacity: printing ? 0.65 : 1,
+              }}
+            >{printing ? '…' : '🖨 Print Slip'}</button>
+            <button
+              onClick={() => onSuccess(done)}
+              style={{
+                padding: '10px', borderRadius: 8, border: '1px solid #c4b49c',
+                background: 'rgba(255,255,255,0.6)', color: '#6b5640', fontWeight: 700, cursor: 'pointer', fontSize: 12,
+              }}
+            >Done →</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -135,11 +187,17 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
             <div key={m} style={{ display: 'grid', gridTemplateColumns: '86px 1fr', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#6b5640' }}>{label}</span>
               <input
+                id={`ck-pay-${m}`}
                 type="number" min="0" step="0.01"
                 value={amounts[m]}
                 autoFocus={i === 0}
                 onChange={e => setAmounts(prev => ({ ...prev, [m]: e.target.value }))}
-                onKeyDown={e => e.key === 'Enter' && confirm()}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  if (i < PAYMENT_METHODS.length - 1) document.getElementById(`ck-pay-${PAYMENT_METHODS[i + 1][0]}`)?.focus();
+                  else confirm();
+                }}
                 onFocus={e => e.target.select()}
                 placeholder="0.00"
                 style={{
@@ -216,10 +274,16 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
 }
 
 // ── Cake Dash Card ────────────────────────────────────────────────────
-function CakeDashCard({ order, onPay, onRefresh, onOpen = null }) {
+function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false }) {
   const navigate = useNavigate();
   const [printing, setPrinting] = useState(false);
+  const cardRef = useRef(null);
   const openOrder = () => (onOpen ? onOpen(order.id) : navigate(`/pos/cake/${order.id}`));
+
+  useEffect(() => {
+    if (!closing || !cardRef.current) return;
+    flyToCashStack(cardRef.current.getBoundingClientRect(), { amount: order.balance_due });
+  }, [closing]);
 
   async function printSlip(e) {
     e.stopPropagation();
@@ -237,9 +301,10 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null }) {
 
   return (
     <div
-      className="tc"
+      ref={cardRef}
+      className={`tc${closing ? ' tc--wiping' : ''}`}
       style={{ minHeight: 210, cursor: 'pointer' }}
-      onClick={openOrder}
+      onClick={closing ? undefined : openOrder}
     >
       {/* Order # + Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -324,67 +389,56 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null }) {
         >{printing ? '…' : '🖨 Slip'}</button>
 
       </div>
+      {closing && (
+        <>
+          <div className="tc__wipe-sweep" />
+          <div className="tc__paid-stamp"><span>PAID ✓</span></div>
+        </>
+      )}
     </div>
   );
 }
 
 // In-memory cache — later mounts paint instantly, refresh happens silently
-let cakeCache = null; // { today, delivery }
+let cakeCache = null; // { pending }
 
 // ── Main: Cake Dashboard Window ───────────────────────────────────────
 export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken = 0 }) {
-  const [tab, setTab] = useState('unpaid');
-  const [todayOrders, setTodayOrders] = useState(() => cakeCache?.today ?? []);
-  const [deliveryOrders, setDeliveryOrders] = useState(() => cakeCache?.delivery ?? []);
+  const [visibleOrders, setVisibleOrders] = useState(() => cakeCache?.pending ?? []);
   const [loading, setLoading] = useState(false);
   const [payTarget, setPayTarget] = useState(null);
+  const [closingIds, setClosingIds] = useState(() => new Set());
 
   const load = useCallback(async () => {
     if (!cakeCache) setLoading(true);
     try {
-      const [todayR, delivR] = await Promise.all([
-        fetch(`${API}/pos/cake-orders?filter=today`, { headers: H }),
-        fetch(`${API}/pos/cake-orders?filter=delivery_today`, { headers: H }),
-      ]);
-      const today = todayR.ok ? await todayR.json() : [];
-      const delivery = delivR.ok ? await delivR.json() : [];
-      cakeCache = { today, delivery };
-      setTodayOrders(today);
-      setDeliveryOrders(delivery);
+      const r = await fetch(`${API}/pos/cake-orders?filter=pending`, { headers: H });
+      const pending = r.ok ? await r.json() : [];
+      cakeCache = { pending };
+      setVisibleOrders(pending);
     } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load, refreshToken]);
 
-  // Derive per-tab lists
-  const unpaidOrders = todayOrders.filter(
-    o => (o.balance_due ?? 0) > 0 && !['DELIVERED', 'CANCELLED'].includes(o.status)
-  );
-  const totalOrders = [...todayOrders, ...deliveryOrders].reduce((acc, o) => {
-    if (!acc.find(x => x.id === o.id)) acc.push(o);
-    return acc;
-  }, []);
+  const outstandingBalance = visibleOrders.reduce((s, o) => s + (o.balance_due ?? 0), 0);
 
-  const visibleOrders =
-    tab === 'unpaid' ? unpaidOrders :
-      tab === 'delivery' ? deliveryOrders :
-        totalOrders;
-
-  const tabCounts = {
-    unpaid: unpaidOrders.length,
-    delivery: deliveryOrders.length,
-    total: totalOrders.length,
-  };
-
-  const outstandingBalance = unpaidOrders.reduce((s, o) => s + (o.balance_due ?? 0), 0);
-
-  function onPaySuccess() {
+  function onPaySuccess({ fullyPaid } = {}) {
+    const paidId = payTarget?.id;
     setPayTarget(null);
-    load();
+    if (fullyPaid && paidId) {
+      setClosingIds(prev => new Set(prev).add(paidId));
+      setTimeout(() => {
+        setClosingIds(prev => { const n = new Set(prev); n.delete(paidId); return n; });
+        load();
+      }, 750);
+    } else {
+      load();
+    }
   }
 
-  // No cake orders today — hide the window entirely
-  if (!loading && totalOrders.length === 0) return null;
+  // No pending cake orders — hide the window entirely
+  if (!loading && visibleOrders.length === 0) return null;
 
   return (
     <>
@@ -407,34 +461,8 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
             </span>
           )}
           <span className="desktop-chrome__count">
-            {totalOrders.length} today
+            {visibleOrders.length} pending
           </span>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #c4b49c', background: '#f5ece0', padding: '0 16px' }}>
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                padding: '8px 14px', fontSize: 11, fontWeight: 700, border: 'none',
-                borderBottom: tab === t.key ? '2px solid #c1440e' : '2px solid transparent',
-                background: 'none', color: tab === t.key ? '#c1440e' : '#9c8870',
-                cursor: 'pointer', letterSpacing: '0.02em',
-                display: 'flex', alignItems: 'center', gap: 5, transition: 'color 0.12s',
-              }}
-            >
-              {t.label}
-              {tabCounts[t.key] > 0 && (
-                <span style={{
-                  fontSize: 9, fontWeight: 900, borderRadius: 20, padding: '1px 5px', minWidth: 14,
-                  textAlign: 'center', color: '#fff',
-                  background: tab === t.key ? '#c1440e' : '#9c8870',
-                }}>{tabCounts[t.key]}</span>
-              )}
-            </button>
-          ))}
         </div>
 
         {/* Body */}
@@ -443,13 +471,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9c8870', fontSize: 12 }}>Loading…</div>
           )}
           {!loading && visibleOrders.length === 0 && (
-            <div className="pos-empty-state">
-              {tab === 'unpaid'
-                ? 'No unpaid cake orders for today.'
-                : tab === 'delivery'
-                  ? 'No deliveries scheduled for today.'
-                  : 'No cake orders found for today.'}
-            </div>
+            <div className="pos-empty-state">No cake orders with pending amount.</div>
           )}
           {!loading && visibleOrders.length > 0 && (
             <div className="table-card-grid">
@@ -460,6 +482,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
                   onPay={setPayTarget}
                   onRefresh={load}
                   onOpen={onOpenOrder}
+                  closing={closingIds.has(o.id)}
                 />
               ))}
             </div>

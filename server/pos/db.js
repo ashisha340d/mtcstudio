@@ -292,6 +292,19 @@ async function ensureSchema() {
     FOREIGN KEY(variance_approved_by) REFERENCES pos_users(id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // Business-day columns — one till session per business date (Daily Cash Closing)
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS business_date DATE`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS denominations_json LONGTEXT`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS cash_taken DOUBLE NOT NULL DEFAULT 0`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS closing_balance DOUBLE`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS closing_note TEXT`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS reopened_by INT`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS reopened_at DATETIME`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS reopen_reason TEXT`);
+  await dbRun(`ALTER TABLE pos_till_sessions ADD COLUMN IF NOT EXISTS reopen_count INT NOT NULL DEFAULT 0`);
+  await dbRun(`UPDATE pos_till_sessions SET business_date = DATE(opened_at) WHERE business_date IS NULL`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pos_till_business_date ON pos_till_sessions(business_date)`);
+
   await dbRun(`CREATE TABLE IF NOT EXISTS pos_cash_movements (
     id              INT PRIMARY KEY AUTO_INCREMENT,
     till_session_id INT NOT NULL,
@@ -392,6 +405,7 @@ async function ensureSchema() {
     UNIQUE(lookup_type, name(191))
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
   await dbRun(`CREATE INDEX IF NOT EXISTS idx_lookup_master_type ON lookup_master(lookup_type)`);
+  await dbRun(`ALTER TABLE lookup_master ADD COLUMN IF NOT EXISTS multiselect INT NOT NULL DEFAULT 0`);
 
   await dbRun(`CREATE TABLE IF NOT EXISTS waiter_calls (
     id          INT PRIMARY KEY AUTO_INCREMENT,
@@ -566,6 +580,13 @@ async function ensureSchema() {
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_caption VARCHAR(64)`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_notes TEXT`);
   await dbRun(`ALTER TABLE cake_orders ADD COLUMN IF NOT EXISTS advance_method VARCHAR(16) NOT NULL DEFAULT 'CASH'`);
+
+  // Modifiers went multi-select — widen from single INT id to a comma-separated VARCHAR of ids
+  await dbRun(`ALTER TABLE cake_orders MODIFY COLUMN shape_id        VARCHAR(191)`);
+  await dbRun(`ALTER TABLE cake_orders MODIFY COLUMN cream_type_id   VARCHAR(191)`);
+  await dbRun(`ALTER TABLE cake_orders MODIFY COLUMN sponge_type_id  VARCHAR(191)`);
+  await dbRun(`ALTER TABLE cake_orders MODIFY COLUMN theme_id        VARCHAR(191)`);
+  await dbRun(`ALTER TABLE cake_orders MODIFY COLUMN dietary_type_id VARCHAR(191)`);
 
   // Pre-populate pos_price from product_variants where still 0
   await dbRun(`

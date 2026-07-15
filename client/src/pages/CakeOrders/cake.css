@@ -18,22 +18,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
+  padding: 0px !important;
   background: linear-gradient(180deg, #d2c6b2 0%, #b8a890 100%);
   border-bottom: 1px solid #a89880;
   box-shadow: 0 2px 8px rgba(42, 31, 18, 0.14);
   flex-shrink: 0;
-  gap: 12px;
+  gap: 2px;
   flex-wrap: wrap;
 }
 
 .cake-back-btn {
-  padding: 6px 14px;
-  border-radius: 7px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: 1px solid #a89880;
   background: rgba(255, 255, 255, 0.5);
   color: #6b5640;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   letter-spacing: 0.03em;
@@ -57,13 +58,27 @@
   margin: 2px 0 0;
 }
 
+/* ── Header toolbar cluster ──────────────────────────────── */
+.ck-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.ck-toolbar button {
+  height: 30px;
+  box-sizing: border-box;
+}
+
 .cake-btn-primary {
-  padding: 9px 20px;
-  border-radius: 8px;
+  padding: 0 14px;
+  border-radius: 6px;
   border: none;
   background: #c1440e;
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   cursor: pointer;
   letter-spacing: 0.04em;
@@ -80,12 +95,12 @@
 }
 
 .cake-btn-ghost {
-  padding: 9px 16px;
-  border-radius: 8px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: 1px solid #a89880;
   background: rgba(255, 255, 255, 0.55);
   color: #6b5640;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.12s;
@@ -101,12 +116,12 @@
 }
 
 .cake-btn-danger {
-  padding: 9px 16px;
-  border-radius: 8px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: 1px solid rgba(192, 57, 43, 0.4);
   background: rgba(192, 57, 43, 0.07);
   color: #c0392b;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.12s;
@@ -293,45 +308,16 @@
   cursor: not-allowed;
 }
 
-/* ── Form layout ─────────────────────────────────────────── */
+/* ── Form layout — single column ─────────────────────────── */
 .cake-form-body {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  gap: 0;
-}
-
-.cake-form-left {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 20px 20px 24px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.cake-form-right {
-  flex: 1.15;
-  min-width: 360px;
-  overflow-y: auto;
-  padding: 20px 24px 20px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* ── Draggable column divider ────────────────────────────── */
-.ck-split-divider {
-  flex: 0 0 6px;
-  cursor: col-resize;
-  background: transparent;
-  border-left: 1px solid rgba(160, 144, 128, 0.3);
-  transition: background 0.12s;
-}
-
-.ck-split-divider:hover {
-  background: rgba(193, 68, 14, 0.15);
+  gap: 10px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 /* ── Section ─────────────────────────────────────────────── */
@@ -339,7 +325,7 @@
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid #c4b49c;
   border-radius: 10px;
-  padding: 16px 18px;
+  padding: 10px 14px;
   box-shadow: 0 2px 8px rgba(80, 50, 20, 0.08), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
@@ -349,7 +335,7 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #6b5640;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -357,36 +343,9 @@
   border-bottom: 1px solid rgba(160, 144, 128, 0.25);
 }
 
-.cake-form-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 /* ── Fields ──────────────────────────────────────────────── */
-.cake-field {
-  flex: 1;
-  min-width: 140px;
-  margin-bottom: 12px;
-}
-
-.cake-field-label {
-  display: block;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #9c8870;
-  margin-bottom: 5px;
-}
-
-.cake-field-hint {
-  font-size: 10px;
-  color: #b0a090;
-  margin-top: 4px;
-}
-
 .cake-input {
+  height: 42px;
   width: 100%;
   padding: 9px 12px;
   border-radius: 8px;
@@ -436,12 +395,6 @@
   color: #111827;
 }
 
-.cake-input--readonly {
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b5640;
-  cursor: default;
-}
-
 .cake-input--num {
   text-align: right;
   font-weight: 700;
@@ -463,6 +416,7 @@ input[type="number"] {
 .cake-textarea {
   resize: vertical;
   min-height: 72px;
+  height: auto;
 }
 
 .cake-error {
@@ -476,59 +430,6 @@ input[type="number"] {
   color: #059669;
   margin-top: 4px;
   font-weight: 700;
-}
-
-/* ── Accessories ─────────────────────────────────────────── */
-.cake-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: #2a1f12;
-  user-select: none;
-}
-
-.cake-check input {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: #c1440e;
-}
-
-/* ── Pricing summary ─────────────────────────────────────── */
-.cake-price-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 13px;
-  color: #6b5640;
-  padding: 5px 0;
-  border-bottom: 1px solid rgba(160, 144, 128, 0.15);
-  margin-bottom: 8px;
-}
-
-.cake-price-total {
-  font-size: 16px;
-  font-weight: 800;
-  color: #2a1f12;
-  border-top: 2px solid #c4b49c;
-  border-bottom: none;
-  padding-top: 8px;
-  margin-top: 4px;
-}
-
-.cake-price-balance {
-  font-size: 15px;
-  font-weight: 800;
-  color: #2d7a2d;
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.cake-price-balance--due {
-  color: #c0392b;
 }
 
 /* ── Photo uploader ──────────────────────────────────────── */
@@ -561,7 +462,7 @@ input[type="number"] {
   right: 3px;
   width: 18px;
   height: 18px;
-  border-radius: '50%';
+  border-radius: 50%;
   background: rgba(192, 57, 43, 0.85);
   border: none;
   color: #fff;
@@ -595,6 +496,84 @@ input[type="number"] {
 }
 
 /* ── Status history ──────────────────────────────────────── */
+.ck-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1.5px solid #e0c56a;
+  background: #fdf6d8;
+  color: #7a5f10;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ck-pin-btn:hover {
+  background: #f7ecb8;
+}
+
+.ck-sticky-note {
+  position: fixed;
+  top: 90px;
+  right: 30px;
+  width: 300px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 500;
+  padding: 22px 14px 14px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(#fdf6d8 0px, #fdf6d8 23px, #f0dfa0 24px);
+  border: 1px solid #e0c56a;
+  box-shadow: 3px 6px 16px rgba(42, 31, 18, 0.35);
+  transform: rotate(1.5deg);
+}
+
+.ck-sticky-pin {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+}
+
+.ck-sticky-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: transparent;
+  color: #9c8870;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ck-sticky-close:hover {
+  color: #c0392b;
+}
+
+.ck-sticky-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a5f10;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(160, 130, 30, 0.25);
+}
+
+.ck-sticky-body {
+  overflow-y: auto;
+}
+
 .cake-history-row {
   display: flex;
   justify-content: space-between;
@@ -653,75 +632,92 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
-/* ── Mode toggle ─────────────────────────────────────────── */
-.ck-mode-toggle {
+/* ── Status ribbon (header) ──────────────────────────────── */
+.ck-status-ribbon {
   display: flex;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1.5px solid #c4b49c;
-  flex-shrink: 0;
-}
-
-.ck-mode-btn {
-  padding: 7px 16px;
-  border: none;
-  background: rgba(255, 255, 255, 0.5);
-  color: #9c8870;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  letter-spacing: 0.03em;
-}
-
-.ck-mode-btn--active {
-  background: #c1440e;
-  color: #fff;
-}
-
-/* ── Order header strip ──────────────────────────────────── */
-.ck-order-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: rgba(193, 68, 14, 0.06);
-  border: 1px solid rgba(193, 68, 14, 0.2);
-  border-radius: 8px;
-  padding: 10px 16px;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f3ecdf 0%, #e4d9c3 100%);
+  border: 1px solid #b8a890;
+  box-shadow: 0 1px 4px rgba(42, 31, 18, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
-.ck-order-num {
-  font-size: 17px;
-  font-weight: 900;
-  color: #c1440e;
-  letter-spacing: 0.05em;
+.ck-status-ribbon>button {
+  height: 30px;
+  width: 92px;
+  box-sizing: border-box;
 }
 
-.ck-order-date {
-  font-size: 12px;
-  color: #9c8870;
-  font-weight: 600;
-}
 
 /* ── Layout helpers ──────────────────────────────────────── */
 .ck-row {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
 }
 
 .ck-field {
   flex: 1;
   min-width: 120px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  position: relative;
 }
 
-.ck-field--half {
-  flex: 0 0 calc(50% - 6px);
+/* Hints/errors hang below the field without shifting input alignment */
+.ck-field .cake-crm-hint,
+.ck-field .cake-error {
+  position: absolute;
+  top: 100%;
+  left: 2px;
+  margin-top: 2px;
+  white-space: nowrap;
 }
 
-.ck-field--quarter {
-  flex: 0 0 calc(25% - 9px);
+/* ── Customer & Delivery — one row, aligned bottoms ───────── */
+.ck-row--cust {
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ck-cust-fields {
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.ck-locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.ck-field--phone {
+  flex: 0 0 15ch;
+  min-width: 0;
+}
+
+.ck-field--grow {
+  flex: 1 1 140px;
+  min-width: 80px;
+  max-width: 220px;
+}
+
+.ck-field--date {
+  flex: 0 0 128px;
+  min-width: 0;
+}
+
+.ck-field--time {
+  flex: 0 0 144px;
+  min-width: 0;
+}
+
+.ck-field--date .cake-input,
+.ck-field--time .cake-input {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .ck-label {
@@ -732,102 +728,6 @@ input[type="number"] {
   text-transform: uppercase;
   color: #9c8870;
   margin-bottom: 5px;
-}
-
-/* ── Product picker ──────────────────────────────────────── */
-.ck-picker {
-  position: relative;
-}
-
-.ck-picker .cake-input,
-.ck-picker .cake-input:focus {
-  color: #111827;
-}
-
-.ck-picker .cake-input::selection {
-  background: rgba(193, 68, 14, 0.18);
-  color: #111827;
-}
-
-.ck-picker .cake-input::placeholder {
-  color: #8b7b68;
-}
-
-.ck-picker-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #9c8870;
-  font-size: 16px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 4px;
-}
-
-.ck-dropdown {
-  /* position/top/left/width/z-index set via inline style (position:fixed) to escape overflow containers */
-  background: #fff;
-  border: 1.5px solid #c1440e;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.28);
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.ck-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background 0.1s;
-  border-bottom: 1px solid rgba(160, 144, 128, 0.1);
-}
-
-.ck-dropdown-item:hover {
-  background: rgba(193, 68, 14, 0.07);
-  color: #2a1f12;
-}
-
-.ck-dropdown-item:hover .ck-dropdown-name {
-  color: #2a1f12;
-}
-
-.ck-dropdown-item:hover .ck-dropdown-variant {
-  color: #9c8870;
-}
-
-.ck-dropdown-item:hover .ck-dropdown-rate {
-  color: #c1440e;
-}
-
-.ck-dropdown-name {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 700;
-  color: #2a1f12;
-}
-
-.ck-dropdown-variant {
-  font-size: 10px;
-  color: #9c8870;
-}
-
-.ck-dropdown-rate {
-  font-size: 11px;
-  font-weight: 800;
-  color: #c1440e;
-  white-space: nowrap;
-}
-
-.ck-dropdown-empty {
-  padding: 12px;
-  text-align: center;
-  color: #9c8870;
-  font-size: 12px;
 }
 
 /* ── Modifier chips ──────────────────────────────────────── */
@@ -850,29 +750,36 @@ input[type="number"] {
 }
 
 .ck-chip {
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 11px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 700;
-  border: 1.5px solid #c4b49c;
-  background: rgba(255, 255, 255, 0.6);
-  color: #6b5640;
+  border: 1.5px solid #e8b39a;
+  background: rgba(255, 255, 255, 0.75);
+  color: #b3440e;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.12s, color 0.12s, background 0.12s;
   display: flex;
   align-items: center;
   gap: 5px;
+  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.08);
 }
 
 .ck-chip:hover {
   border-color: #c1440e;
-  color: #c1440e;
+  background: rgba(193, 68, 14, 0.06);
+}
+
+.ck-chip:active {
+  transform: translateY(1px);
 }
 
 .ck-chip--active {
   background: #c1440e;
-  border-color: #c1440e;
+  border-color: #9c360b;
   color: #fff;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(193, 68, 14, 0.35);
 }
 
 .ck-chip-charge {
@@ -884,32 +791,22 @@ input[type="number"] {
 /* ── Line item table ─────────────────────────────────────── */
 .ck-line-table-wrap {
   overflow-x: auto;
+
 }
 
 .ck-line-table {
   width: 100%;
+  border: 1px solid #ffffff !important;
   font-size: 12px;
   background: transparent;
   border-collapse: collapse;
 }
 
-.ck-line-table th {
-  color: #9c8870;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 5px 6px;
-  text-align: left;
-  white-space: nowrap;
-  background: transparent;
-  border-bottom: 1px solid rgba(160, 144, 128, 0.25);
-}
-
 .ck-line-row td {
-  padding: 5px 6px;
+  padding: 1px !important;
   font-size: 14px;
   vertical-align: middle;
+  border: 1px solid #ffffff !important;
 }
 
 .ck-line-amount {
@@ -923,6 +820,7 @@ input[type="number"] {
 .cake-input--sm {
   padding: 6px 8px;
   font-size: 12px;
+  height: 38px;
 }
 
 .ck-rm-btn {
@@ -946,7 +844,11 @@ input[type="number"] {
 }
 
 .ck-add-row {
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 7px;
   border: 1.5px dashed #c4b49c;
   background: transparent;
@@ -961,6 +863,16 @@ input[type="number"] {
 .ck-add-row:hover {
   border-color: #c1440e;
   color: #c1440e;
+}
+
+.ck-add-row:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ck-add-row:disabled:hover {
+  border-color: #c4b49c;
+  color: #9c8870;
 }
 
 /* ── Pricing panel ───────────────────────────────────────── */
@@ -998,26 +910,7 @@ input[type="number"] {
 }
 
 /* ── Responsive ──────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .cake-form-body {
-    flex-direction: column;
-  }
-
-  .cake-form-left {
-    flex: none !important;
-  }
-
-  .ck-split-divider {
-    display: none;
-  }
-
-  .cake-form-right {
-    width: 100%;
-    flex: none !important;
-    border-top: 1px solid rgba(160, 144, 128, 0.3);
-    padding: 16px 20px;
-  }
-
+@media (max-width: 600px) {
   .cake-stats-row {
     gap: 8px;
   }
@@ -1058,8 +951,15 @@ input[type="number"] {
 }
 
 @keyframes ckw-pop {
-  from { transform: scale(0.97); opacity: 0; }
-  to   { transform: scale(1);    opacity: 1; }
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .ckw-chrome {
@@ -1146,6 +1046,76 @@ input[type="number"] {
   padding: 14px 16px 16px;
 }
 
+.ck-flav-modal--cards {
+  width: 720px;
+  max-height: 86vh;
+  border-radius: 16px;
+  padding: 18px 20px 20px;
+}
+
+.ck-flav-modal--mods {
+  width: 640px;
+  max-height: 82vh;
+  border-radius: 16px;
+  padding: 18px 20px 20px;
+}
+
+/* ── Pricing modal — two columns, everything in one view ───── */
+.ck-flav-modal--pay {
+  width: 780px;
+  max-height: 92vh;
+  border-radius: 16px;
+  padding: 18px 20px 20px;
+}
+
+.ck-pay-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 4px 28px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.ck-pay-col {
+  min-width: 0;
+}
+
+.ck-pay-hist {
+  margin-top: 10px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.ck-pay-hist-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  color: #6b5640;
+  padding: 3px 0;
+  border-bottom: 1px solid #f0e8d8;
+}
+
+.ck-pay-hist-when {
+  color: #9c8870;
+  margin-left: 5px;
+}
+
+.ck-pay-hist-amt {
+  font-weight: 700;
+  color: #2d7a2d;
+}
+
+.ck-pay-hist-amt--neg {
+  color: #c0392b;
+}
+
+@media (max-width: 640px) {
+  .ck-pay-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ck-flav-head {
   display: flex;
   align-items: center;
@@ -1156,59 +1126,239 @@ input[type="number"] {
   margin-bottom: 10px;
 }
 
-.ck-flav-close {
-  background: none;
-  border: none;
-  font-size: 15px;
-  cursor: pointer;
-  color: #9c8870;
-  line-height: 1;
+.ck-flav-modal--cards .ck-flav-head {
+  align-items: baseline;
+  margin-bottom: 14px;
 }
 
-.ck-flav-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.ck-flav-modal--cards .ck-flav-head>div {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
+}
+
+.ck-flav-head-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9c8870;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.ck-flav-close {
+  background: rgba(160, 144, 128, 0.15);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  cursor: pointer;
+  color: #6b5640;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ck-flav-close:hover {
+  background: rgba(192, 57, 43, 0.15);
+  color: #c0392b;
+}
+
+.ck-flav-search {
+  margin-bottom: 14px;
+}
+
+/* ── Card grid (Pick Flavour / Accessory) ────────────────────── */
+.ck-flav-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
   overflow-y: auto;
   align-content: start;
-  padding-bottom: 2px;
+  padding: 2px 2px 6px;
 }
 
-.ck-flav-pill {
+.ck-flav-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 8px;
-  border-radius: 10px;
-  border: 1.5px solid #c4b49c;
-  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 14px;
+  background: #fff;
   cursor: pointer;
-  transition: all 0.12s;
-  text-align: center;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  box-shadow: 0 1px 4px rgba(80, 50, 20, 0.1), 0 0 0 1.5px #e6dcc8;
+  transition: transform 0.14s, box-shadow 0.14s;
 }
 
-.ck-flav-pill:hover {
-  border-color: #c1440e;
-  background: rgba(193, 68, 14, 0.07);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(80, 50, 20, 0.14);
+.ck-flav-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(80, 50, 20, 0.18), 0 0 0 1.5px #d9a97a;
 }
 
-.ck-flav-pill-name {
-  font-size: 11px;
+.ck-flav-card--sel {
+  box-shadow: 0 10px 22px rgba(193, 68, 14, 0.22), 0 0 0 2.5px #c1440e;
+}
+
+.ck-flav-card--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ck-flav-card-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 10px 10px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: #f5ede0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.ck-flav-card-stepper button {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #c1440e;
+  color: #fff;
+  font-size: 14px;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ck-flav-card-stepper span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #2a1f12;
+}
+
+.ck-flav-card-img {
+  position: relative;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ck-flav-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ck-flav-card-mono {
+  font-size: 30px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 2px 6px rgba(40, 25, 10, 0.25);
+}
+
+.ck-flav-card-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #c1440e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.ck-flav-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 10px;
+}
+
+.ck-flav-card-name {
+  font-size: 11.5px;
+  font-weight: 800;
   color: #2a1f12;
   line-height: 1.25;
   word-break: break-word;
 }
 
-.ck-flav-pill-rate {
-  font-size: 10px;
+.ck-flav-card-rate {
+  font-size: 11px;
   font-weight: 700;
   color: #c1440e;
+}
+
+/* ── Sticky footer — big Cancel / Add buttons ────────────────── */
+.ck-flav-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(160, 144, 128, 0.3);
+}
+
+.ck-flav-footer-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b5640;
+  flex-shrink: 0;
+}
+
+.ck-flav-footer-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.ck-flav-btn-cancel,
+.ck-flav-btn-add {
+  height: 46px;
+  padding: 0 26px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: filter 0.12s, background 0.12s;
+}
+
+.ck-flav-btn-cancel {
+  border: 1.5px solid #c4b49c;
+  background: rgba(255, 255, 255, 0.7);
+  color: #6b5640;
+}
+
+.ck-flav-btn-cancel:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.ck-flav-btn-add {
+  border: none;
+  background: linear-gradient(180deg, #d9530f 0%, #c1440e 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(193, 68, 14, 0.35);
+}
+
+.ck-flav-btn-add:hover {
+  filter: brightness(1.06);
+}
+
+.ck-flav-btn-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .ck-flav-empty {
@@ -1222,41 +1372,80 @@ input[type="number"] {
 /* ── Flavour cell button in cake item rows ─────────────────── */
 .ck-flavour-btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1.5px solid #c4b49c;
+  padding: 4px 8px 4px 4px;
+  border-radius: 10px;
+  border: 0;
+  outline: 0;
   background: rgba(255, 255, 255, 0.75);
   color: #2a1f12;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: border-color 0.12s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: box-shadow 0.12s;
+  min-width: 0;
 }
 
 .ck-flavour-btn:hover {
-  border-color: #c1440e;
+  box-shadow: 0 0 0 1.5px rgba(193, 68, 14, 0.45);
 }
 
 .ck-flavour-btn--empty {
   color: #9c8870;
   font-weight: 600;
+  padding: 10px 12px;
 }
 
-/* ── Pick customer button ──────────────────────────────────── */
+.ck-flavour-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Small variant image card inside line rows */
+.ck-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(40, 25, 10, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(80, 50, 20, 0.08);
+}
+
+.ck-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Pick customer button — square, aligned with inputs ────── */
 .ck-pick-cust {
-  margin-bottom: 10px;
-  padding: 7px 14px;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  margin-bottom: 6px;
   border-radius: 8px;
   border: 1.5px solid #c1440e;
   background: rgba(193, 68, 14, 0.08);
   color: #c1440e;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.12s;
 }
@@ -1264,30 +1453,6 @@ input[type="number"] {
 .ck-pick-cust:hover {
   background: #c1440e;
   color: #fff;
-}
-
-/* ── Cake Detail merged panel — uniform blocks ─────────────── */
-.ck-block-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.ck-block-head .ck-label {
-  margin-bottom: 0;
-}
-
-.ck-block-head .ck-add-row {
-  margin-top: 0;
-  padding: 4px 12px;
-}
-
-.ck-subdivider {
-  height: 1px;
-  background: rgba(160, 144, 128, 0.28);
-  margin: 14px -18px 12px;
 }
 
 /* ── Pricing — inline value input + advance pick ───────────── */
@@ -1310,34 +1475,6 @@ input[type="number"] {
   border-color: #c1440e;
 }
 
-.ck-price-adv {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 800;
-  color: #2a1f12;
-  font-variant-numeric: tabular-nums;
-}
-
-.ck-pick-btn {
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1.5px solid #c1440e;
-  background: rgba(193, 68, 14, 0.08);
-  color: #c1440e;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  transition: all 0.12s;
-  white-space: nowrap;
-}
-
-.ck-pick-btn:hover {
-  background: #c1440e;
-  color: #fff;
-}
-
 /* ── Advance payment modal rows ────────────────────────────── */
 .ck-pay-row {
   display: grid;
@@ -1354,64 +1491,195 @@ input[type="number"] {
 }
 
 /* ── Uniform price rows (tabular figures, aligned) ─────────── */
-.ck-price-row > span:last-child {
+.ck-price-row>span:last-child {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #2a1f12;
 }
 
-.ck-price-row.ck-price-balance > span:last-child {
+.ck-price-row.ck-price-balance>span:last-child {
   color: inherit;
 }
 
 /* ── Cake Detail — mockup styling (Image 1) ────────────────── */
 .ck-sec-action {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
 }
 
-.ck-sec-action .ck-add-row {
-  margin-top: 0;
-  padding: 6px 16px;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1.5px dashed #c4b49c;
-  color: #6b5640;
-  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.08);
+.ck-sec-action {
+  align-items: center;
 }
 
-/* Banded table header strip */
-.ck-line-table thead .ck-band th {
-  background: linear-gradient(180deg, #f0e8d8 0%, #e8ddc8 100%);
-  border-top: 1px solid #c4b49c;
-  border-bottom: 1px solid #c4b49c;
+.ck-sec-action button {
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.ck-line-dash {
+  text-align: center;
+  color: #b8a890;
+  font-weight: 700;
+}
+
+/* ── Selected-modifiers summary strip on the bill ────────────── */
+.ck-mod-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(160, 144, 128, 0.35);
+}
+
+.ck-mod-summary-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(193, 68, 14, 0.1);
+  border: 1px solid rgba(193, 68, 14, 0.3);
   color: #6b5640;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ck-mod-summary-group {
+  color: #c1440e;
+  font-weight: 800;
+  text-transform: uppercase;
   font-size: 9px;
-  letter-spacing: 0.1em;
-  padding: 8px 8px;
+  letter-spacing: 0.05em;
 }
 
-.ck-line-table thead .ck-band th:first-child {
-  border-left: 3px solid #c1440e;
-  border-radius: 4px 0 0 4px;
+.ck-mod-summary-x {
+  border: none;
+  background: rgba(193, 68, 14, 0.18);
+  color: #c1440e;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 8px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
-.ck-line-table thead .ck-band th:last-child {
-  border-radius: 0 4px 4px 0;
+.ck-mod-summary-x:hover {
+  background: #c1440e;
+  color: #fff;
 }
 
-/* Roomier rows, card-like inputs */
+.ck-mod-summary-charge {
+  color: #c1440e;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ck-detail-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ck-detail-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  max-width: 100%;
+}
+
+.ck-detail-pill span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4a3828;
+}
+
+.ck-detail-pill strong {
+  font-weight: 800;
+}
+
+.ck-detail-pill em {
+  font-style: italic;
+}
+
+.ck-detail-pill-x {
+  border: none;
+  background: rgba(0, 0, 0, 0.12);
+  color: #4a3828;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ck-detail-pill-x:hover {
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+}
+
+.ck-detail-box--design {
+  background: rgba(193, 68, 14, 0.08);
+  border-color: rgba(193, 68, 14, 0.2);
+}
+
+.ck-detail-box--design strong {
+  color: #c1440e;
+}
+
+.ck-detail-box--dietary {
+  background: rgba(45, 122, 45, 0.08);
+  border-color: rgba(45, 122, 45, 0.22);
+}
+
+.ck-detail-box--dietary strong {
+  color: #2d7a2d;
+}
+
+.ck-detail-box--notes {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.ck-detail-box--notes strong {
+  color: #2563eb;
+}
+
+/* Roomier rows, card-like cells — no borders, soft shadow only */
 .ck-line-row td {
   padding: 8px 5px;
 }
 
-.ck-line-row .cake-input,
-.ck-line-row .ck-flavour-btn {
+.ck-line-row .cake-input {
   border-radius: 10px;
-  border: 1.5px solid #e0d3bd;
+  border: 0;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.06);
+  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.08);
   font-weight: 700;
   padding: 9px 12px;
+}
+
+.ck-line-row .ck-flavour-btn {
+  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.08);
+  background: #fff;
 }
 
 .ck-line-row .cake-input--sm {
@@ -1420,7 +1688,86 @@ input[type="number"] {
   text-align: center;
 }
 
-.ck-line-row .cake-input:focus,
-.ck-line-row .ck-flavour-btn:hover {
+.ck-line-row .cake-input:focus {
+  box-shadow: 0 0 0 1.5px rgba(193, 68, 14, 0.55);
+}
+
+/* ── Pricing strip — totals at a glance, opens pricing modal ── */
+.ck-price-strip {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 12px;
+  margin-left: auto;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1.5px solid #c4b49c;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  width: 100%;
+}
+
+.ck-price-strip--olive {
+  margin-top: 0;
+  width: auto;
+  gap: 16px;
+  padding: 8px 14px;
+  border-color: #9ba86a;
+  background: #eef0d8;
+}
+
+.ck-price-strip--olive:hover {
+  border-color: #7d8a4c;
+  box-shadow: 0 2px 10px rgba(125, 138, 76, 0.2);
+}
+
+.ck-price-strip:hover {
   border-color: #c1440e;
+  box-shadow: 0 2px 10px rgba(193, 68, 14, 0.15);
+}
+
+.ck-price-strip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ck-price-strip:disabled:hover {
+  border-color: #c4b49c;
+  box-shadow: none;
+}
+
+.ck-price-strip-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.ck-price-strip-item em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9c8870;
+}
+
+.ck-price-strip-item b {
+  font-size: 15px;
+  font-weight: 900;
+  color: #2a1f12;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-price-strip-item--due b {
+  color: #c0392b;
+}
+
+.ck-price-strip-open {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: #c1440e;
+  white-space: nowrap;
 }

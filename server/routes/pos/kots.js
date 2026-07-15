@@ -73,6 +73,7 @@ router.get('/events', async (req, res) => {
 });
 
 router.use(requireSession);
+router.use(require('../../middleware/posDayGuard').requireOpenDay);
 
 // GET /api/pos/kots/today — history tab: orders with KOTs created today
 router.get('/today', async (req, res) => {

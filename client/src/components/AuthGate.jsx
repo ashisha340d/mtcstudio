@@ -16,7 +16,7 @@ const SAVER_IDLE_MS = 30000;  // idle on PIN screen before screensaver returns
 export default function AuthGate({ children }) {
   const { locked } = useAuth();
   const gifOk = useSplashGif();            // null=checking, true=ok, false=missing
-  const [booting, setBooting] = useState(true);
+  const [booting, setBooting] = useState(false);
   const [fadingOut, setFadingOut] = useState(false);
   const [saver, setSaver] = useState(false);
   const wasLocked = useRef(locked);

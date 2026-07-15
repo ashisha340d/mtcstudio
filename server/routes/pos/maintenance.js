@@ -249,9 +249,10 @@ router.post('/cake-lookup', async (req, res) => {
   if (!lookup_type || !name?.trim()) return res.status(400).json({ error: 'lookup_type and name required' });
   if (!LOOKUP_TYPES.includes(lookup_type)) return res.status(400).json({ error: `lookup_type must be one of: ${LOOKUP_TYPES.join(', ')}` });
   try {
+    const existing = await dbGet(`SELECT multiselect FROM lookup_master WHERE lookup_type=? LIMIT 1`, [lookup_type]);
     const row = await dbGet(
-      `INSERT INTO lookup_master (lookup_type,code,name,value,extra_charge,description,sort_order)
-       VALUES (?,?,?,?,?,?,?) RETURNING *`,
+      `INSERT INTO lookup_master (lookup_type,code,name,value,extra_charge,description,sort_order,multiselect)
+       VALUES (?,?,?,?,?,?,?,?) RETURNING *`,
       [
         lookup_type,
         code?.trim()  || name.trim().toUpperCase().replace(/\s+/g, '_'),
@@ -259,7 +260,8 @@ router.post('/cake-lookup', async (req, res) => {
         value?.trim() || null,
         parseFloat(extra_charge) || 0,
         description?.trim()      || null,
-        parseInt(sort_order)     || 0
+        parseInt(sort_order)     || 0,
+        existing?.multiselect || 0
       ]
     );
     res.status(201).json(row);
@@ -267,6 +269,14 @@ router.post('/cake-lookup', async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Name already exists for this type' });
     throw e;
   }
+});
+
+// multiselect is a per-group limit (0 = unlimited) — applies to every row of the type
+router.post('/cake-lookup/multiselect', async (req, res) => {
+  const { lookup_type, multiselect } = req.body;
+  if (!lookup_type || !LOOKUP_TYPES.includes(lookup_type)) return res.status(400).json({ error: `lookup_type must be one of: ${LOOKUP_TYPES.join(', ')}` });
+  await dbRun(`UPDATE lookup_master SET multiselect=? WHERE lookup_type=?`, [Math.max(0, parseInt(multiselect) || 0), lookup_type]);
+  res.json({ ok: true });
 });
 
 router.post('/cake-lookup/reorder', async (req, res) => {

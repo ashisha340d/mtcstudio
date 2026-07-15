@@ -287,6 +287,8 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS show_online INT DEFAULT 0`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_id INT`);
+    await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)`);
+    await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_variant_image TINYINT DEFAULT 0`);
     await dbRun(`ALTER TABLE media_library ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE cake_design_media ADD COLUMN IF NOT EXISTS media_id INT`);
     await dbRun(`ALTER TABLE cake_collections ADD COLUMN IF NOT EXISTS hero_media_id INT`);

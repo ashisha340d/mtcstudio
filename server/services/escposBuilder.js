@@ -196,4 +196,98 @@ function buildEscPos({ order = {}, items = [], payments = [], isReprint = false 
   return Buffer.concat(parts);
 }
 
-module.exports = { buildEscPos };
+// ── Daily Cash Closing report ─────────────────────────────────────
+function money2(n) {
+  return Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtTime12(ts) {
+  if (!ts) return '—';
+  try {
+    return new Date(String(ts).replace(' ', 'T') + (String(ts).includes('Z') ? '' : '+05:45'))
+      .toLocaleTimeString('en-IN', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit', hour12: true });
+  } catch { return String(ts); }
+}
+
+function buildCashClosingEscPos(d = {}, config = {}) {
+  const W = Number(config.paper_width) === 58 || Number(config.paper_width_mm) === 58 ? 32 : 48;
+  const DASH = '-'.repeat(W);
+  const EQ = '='.repeat(W);
+
+  const parts = [];
+  const b = (buf) => parts.push(buf);
+  const ln = (str) => parts.push(Buffer.from(String(str ?? '') + '\n', 'latin1'));
+  const npr = (n) => 'NPR ' + money2(n);
+
+  b(CMD.INIT);
+  b(CMD.ALIGN_CENTER); b(CMD.BOLD_ON); b(CMD.SIZE_TALL);
+  ln(config.org_name || 'MUNCH TIME CAFE');
+  b(CMD.SIZE_NORMAL);
+  ln('DAILY CASH CLOSING');
+  b(CMD.BOLD_OFF); b(CMD.ALIGN_LEFT);
+  ln(EQ);
+  ln(kv('Business Date :', d.business_date ?? '—', W));
+  ln(kv('Terminal :', d.terminal || 'POS-01', W));
+  ln(DASH);
+  ln('OPENING');
+  ln(DASH);
+  ln(kv('Time :', fmtTime12(d.opened_at), W));
+  ln(kv('Opened By :', d.opened_by_name || '—', W));
+  ln(kv('Opening Cash :', npr(d.opening_float), W));
+  ln(DASH);
+  ln('CASH ACTIVITY');
+  ln(DASH);
+  ln(kv('Cash Sales :', npr(d.cash_sales), W));
+  ln(kv('Cash In :', npr(d.cash_in), W));
+  for (const m of d.cash_in_list || []) {
+    ln('  + ' + padEnd((m.reason || m.type || '').replace(/_/g, ' '), W - 16) + padStart(money2(m.amount), 12));
+  }
+  ln(kv('Cash Out :', npr(d.cash_out), W));
+  for (const m of d.cash_out_list || []) {
+    ln('  - ' + padEnd((m.reason || m.type || '').replace(/_/g, ' '), W - 16) + padStart(money2(m.amount), 12));
+  }
+  ln(DASH);
+  ln('EXPECTED CASH');
+  ln(DASH);
+  ln(kv('Opening Cash :', npr(d.opening_float), W));
+  ln(kv('Cash Sales :', npr(d.cash_sales), W));
+  ln(kv('Cash In :', npr(d.cash_in), W));
+  ln(kv('Cash Out :', 'NPR -' + money2(d.cash_out), W));
+  ln(DASH);
+  b(CMD.BOLD_ON);
+  ln(kv('Expected Cash :', npr(d.expected), W));
+  b(CMD.BOLD_OFF);
+  ln(DASH);
+  ln('DENOMINATION COUNT');
+  ln(DASH);
+  for (const row of d.denominations || []) {
+    if (!row.qty) continue;
+    ln(padStart(String(row.denom), 5) + ' x ' + padStart(String(row.qty), 4) + ' = ' + padStart('NPR ' + money2(row.denom * row.qty), W - 15));
+  }
+  ln(DASH);
+  b(CMD.BOLD_ON);
+  ln(kv('Counted Cash :', npr(d.counted), W));
+  ln(kv('Variance :', (Number(d.variance) < 0 ? 'NPR -' : 'NPR ') + money2(Math.abs(d.variance)), W));
+  b(CMD.BOLD_OFF);
+  if (d.cash_taken != null) {
+    ln(kv('Cash Taken :', 'NPR -' + money2(d.cash_taken), W));
+    b(CMD.BOLD_ON);
+    ln(kv('Closing Balance :', npr(d.closing_balance), W));
+    b(CMD.BOLD_OFF);
+  }
+  if (d.closing_note) { ln(DASH); ln('Note: ' + String(d.closing_note).substring(0, W * 3)); }
+  ln(DASH);
+  ln('CLOSED');
+  ln(DASH);
+  ln(kv('Time :', fmtTime12(d.closed_at), W));
+  ln(kv('Closed By :', d.closed_by_name || '—', W));
+  ln(EQ);
+  b(CMD.ALIGN_CENTER);
+  ln('END OF REPORT');
+  b(CMD.ALIGN_LEFT);
+  ln(EQ);
+  b(CMD.FEED3);
+  b(CMD.CUT);
+  return Buffer.concat(parts);
+}
+
+module.exports = { buildEscPos, buildCashClosingEscPos };

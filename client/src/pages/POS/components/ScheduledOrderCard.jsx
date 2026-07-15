@@ -80,8 +80,8 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
           title="Edit items / details"
           onClick={(e) => { e.stopPropagation(); onOpen(row); }}
           style={{
-            flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-            background: '#ffffff', color: '#000', fontSize: 10, fontWeight: 800,
+            flex: 1, padding: '4px 6px', borderRadius: 6, border: 'none',
+            background: '#ffffff', color: '#000', fontSize: 9, fontWeight: 800,
             cursor: 'pointer', letterSpacing: '0.03em',
           }}
         >
@@ -91,9 +91,9 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
           title={isScheduled ? 'Send to kitchen now' : 'Process this draft now'}
           onClick={(e) => { e.stopPropagation(); onConvert(row); }}
           style={{
-            flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
+            flex: 1, padding: '4px 6px', borderRadius: 6, border: 'none',
             background: isScheduled ? '#4c5fd5' : '#c1440e', color: '#fff',
-            fontSize: 10, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.03em',
+            fontSize: 9, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.03em',
           }}
         >
           {isScheduled ? '🔥 Now' : '▶ Process'}
@@ -102,9 +102,9 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
           title="Cancel"
           onClick={(e) => { e.stopPropagation(); onCancel(row); }}
           style={{
-            padding: '6px 9px', borderRadius: 7, border: '1px solid #c0392b',
+            padding: '4px 7px', borderRadius: 6, border: '1px solid #c0392b',
             background: 'rgba(192,57,43,0.08)', color: '#c0392b',
-            fontSize: 10, fontWeight: 800, cursor: 'pointer',
+            fontSize: 9, fontWeight: 800, cursor: 'pointer',
           }}
         >
           ✕

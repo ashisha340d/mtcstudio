@@ -38,7 +38,21 @@ function parseCsv(text) {
 }
 
 // ── Variant Grid ──────────────────────────────────────────────────────────────
-function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onAdd, makeKeyHandler }) {
+function VariantImageCell({ product, variant, onPick }) {
+  const isTemp = String(product.id).startsWith('new_') || String(variant.id).startsWith('new_');
+
+  return (
+    <div className={`fm-var-img-cell${isTemp ? ' fm-var-img-cell--disabled' : ''}`}
+      title={isTemp ? 'Save this row first' : (variant.image_url ? 'Click to replace image' : 'Click to add image')}
+      onClick={() => !isTemp && onPick(product.id, variant.id)}>
+      {variant.image_url
+        ? <img src={imgSrc(variant.image_url)} alt="" className="fm-var-img-thumb" />
+        : <span className="fm-var-img-plus">+</span>}
+    </div>
+  );
+}
+
+function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onAdd, makeKeyHandler, enableImage, onPickImage }) {
   const variants = product.variants || [];
   return (
     <div className="fm-variant-wrap" >
@@ -49,6 +63,7 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
             <th style={{ width: 80 }}>Price</th>
             <th style={{ width: 80 }}>Status</th>
             <th style={{ width: 90 }}>🌐 Online</th>
+            {enableImage && <th style={{ width: 60 }}>Image</th>}
             <th style={{ width: 250 }}></th>
           </tr>
         </thead>
@@ -97,6 +112,11 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
                     {v.show_online ? 'Online' : 'Off'}
                   </button>
                 </td>
+                {enableImage && (
+                  <td>
+                    <VariantImageCell product={product} variant={v} onPick={onPickImage} />
+                  </td>
+                )}
                 <td>
                   <button className="btn btn-sm btn-delete" onClick={() => onDelete(product.id, v.id)}>✕</button>
                 </td>
@@ -104,7 +124,7 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
             );
           })}
           {!variants.length && (
-            <tr><td colSpan={5} className="fm-variant-empty">No variants — add one below</td></tr>
+            <tr><td colSpan={enableImage ? 6 : 5} className="fm-variant-empty">No variants — add one below</td></tr>
           )}
         </tbody>
       </table>
@@ -471,6 +491,7 @@ export default function FoodMenu() {
   const [dirtyProducts, setDirtyProducts] = useState(new Set());
   const [dirtyVariants, setDirtyVariants] = useState({});
   const [pickerFor, setPickerFor] = useState(null);
+  const [variantPickerFor, setVariantPickerFor] = useState(null); // { productId, variantId }
   const [importModal, setImportModal] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importRawCsv, setImportRawCsv] = useState(null);
@@ -562,6 +583,13 @@ export default function FoodMenu() {
       ...prev,
       [productId]: new Set([...(prev[productId] || []), variantId]),
     }));
+  }
+
+  function onVariantImageSelect(item) {
+    if (!variantPickerFor) return;
+    const { productId, variantId } = variantPickerFor;
+    updateVariant(productId, variantId, 'image_url', item.url || item.filename);
+    setVariantPickerFor(null);
   }
 
   // ── Add rows ───────────────────────────────────────────────────────────────
@@ -1250,6 +1278,11 @@ export default function FoodMenu() {
                       isExp && (
                         <tr key={`exp-${p.id}`} className="fm-exp-row">
                           <td colSpan={12} className="fm-exp-td">
+                            <label className="fm-var-img-toggle">
+                              <input type="checkbox" checked={!!p.enable_variant_image}
+                                onChange={e => updateProduct(p.id, 'enable_variant_image', e.target.checked ? 1 : 0)} />
+                              🖼 Enable Variant Image
+                            </label>
                             <VariantGrid
                               product={p}
                               dirtyVariantIds={dirtyVariants[p.id]}
@@ -1258,6 +1291,8 @@ export default function FoodMenu() {
                               onDelete={deleteVariant}
                               onAdd={addVariant}
                               makeKeyHandler={makeVariantKeyHandler}
+                              enableImage={!!p.enable_variant_image}
+                              onPickImage={(productId, variantId) => setVariantPickerFor({ productId, variantId })}
                             />
                           </td>
                         </tr>
@@ -1297,6 +1332,7 @@ export default function FoodMenu() {
 
       {/* ── MediaPicker modal ── */}
       {pickerFor && <MediaPicker onSelect={onImageSelect} onClose={() => setPickerFor(null)} section="menu" />}
+      {variantPickerFor && <MediaPicker onSelect={onVariantImageSelect} onClose={() => setVariantPickerFor(null)} section="menu" />}
 
       {/* ── Import preview modal ── */}
       {importModal && (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getStoreHours } from '../../../services/posApi';
-import { getNepalDateStr } from '../../../utils/dateTime';
+import { getNepalDateStr, nepalDateTimeAfterMinutes } from '../../../utils/dateTime';
 import CustomerPicker from './CustomerPicker';
 
 const NOTIFY_PRESETS = [15, 30, 45, 60];
@@ -18,6 +18,14 @@ export default function ScheduleOrderModal({ onProceed, onClose }) {
   useEffect(() => {
     getStoreHours(date).then(setHours).catch(() => setHours(null));
   }, [date]);
+
+  function setNotifyAndTime(m) {
+    setNotifyBefore(m);
+    const { date: d, time: t } = nepalDateTimeAfterMinutes(m);
+    setDate(d);
+    setTime(t);
+    setError('');
+  }
 
   function timeValid() {
     if (!time || !hours) return true;
@@ -96,14 +104,14 @@ export default function ScheduleOrderModal({ onProceed, onClose }) {
                 <button key={m}
                   className={`partner-pill${notifyBefore === m ? ' partner-pill--active' : ''}`}
                   style={{ padding: '10px 18px', fontSize: 14 }}
-                  onClick={() => setNotifyBefore(m)}
+                  onClick={() => setNotifyAndTime(m)}
                 >
                   {m} min
                 </button>
               ))}
               <input
                 type="number" min="0" max="720" value={notifyBefore}
-                onChange={e => setNotifyBefore(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                onChange={e => setNotifyAndTime(Math.max(0, parseInt(e.target.value, 10) || 0))}
                 className="modal__input"
                 style={{ width: 70, marginBottom: 0, textAlign: 'center', fontWeight: 700 }}
               />

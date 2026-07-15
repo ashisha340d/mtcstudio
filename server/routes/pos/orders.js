@@ -9,8 +9,11 @@ const { triggerStockSync }            = require('../../services/liveShelfSync');
 const { validateSplitTender }         = require('../../pos/splitTender');
 const webOrderBridge                  = require('../../services/webOrderBridge');
 
+const { requireOpenDay }              = require('../../middleware/posDayGuard');
+
 const router = express.Router();
 router.use(requireSession);
+router.use(requireOpenDay);
 
 // GET /api/pos/orders/active
 router.get('/active', async (req, res) => {

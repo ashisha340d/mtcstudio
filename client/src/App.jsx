@@ -34,6 +34,7 @@ const KDSDisplay    = lazy(() => import('./pages/KDS/KDSDisplay'));
 const CakeOrders    = lazy(() => import('./pages/CakeOrders/CakeOrders'));
 const CakeOrderForm = lazy(() => import('./pages/CakeOrders/CakeOrderForm'));
 const WaiterApp     = lazy(() => import('./pages/Waiter/WaiterApp'));
+const CashClosing   = lazy(() => import('./pages/POS/CashClosing'));
 const CustomerMenu  = lazy(() => import('./pages/CustomerMenu'));
 
 
@@ -42,9 +43,7 @@ function POSKDSRoot({ children }) {
   const { user } = useAuth();
   return (
     <POSProvider apiService={posApi} activeUser={user}>
-      <KDSProvider apiService={posApi}>
-        {children}
-      </KDSProvider>
+      {children}
     </POSProvider>
   );
 }
@@ -88,6 +87,7 @@ export default function App() {
               <Routes>
                 <Route index element={<POSDashboard />} />
                 <Route path="entry" element={<POS />} />
+                <Route path="cash-closing" element={<CashClosing />} />
                 <Route path="cake" element={<CakeOrders />} />
                 <Route path="cake/new" element={<CakeOrderForm />} />
                 <Route path="cake/:id" element={<CakeOrderForm />} />

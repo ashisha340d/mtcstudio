@@ -68,6 +68,15 @@ export function nepalNow() {
   return new Date().toLocaleTimeString('en-NP', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
+/** { date: 'YYYY-MM-DD', time: 'HH:MM' } for now + given minutes, in Nepal time */
+export function nepalDateTimeAfterMinutes(minutes) {
+  const d = new Date(Date.now() + minutes * 60000);
+  return {
+    date: d.toLocaleDateString('en-CA', { timeZone: TZ }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }),
+  };
+}
+
 export function nepalNowFull() {
   return new Date().toLocaleString('en-NP', {
     timeZone: TZ,

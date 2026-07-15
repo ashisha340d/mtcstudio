@@ -6,8 +6,11 @@ const { audit }                       = require('../../middleware/posAudit');
 const socketServer                    = require('../../pos/socketServer');
 const { getNepalDayBoundsUTC, getNepalDateStr } = require('../../utils/nepalDateTime');
 
+const { requireOpenDay } = require('../../middleware/posDayGuard');
+
 const router = express.Router();
 router.use(requireSession);
+router.use(requireOpenDay);
 
 async function creditTill(tx, cash, card, qr) {
   const till = await tx.dbGet(`SELECT id FROM pos_till_sessions WHERE status='OPEN' ORDER BY id DESC LIMIT 1`);

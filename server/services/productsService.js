@@ -126,13 +126,13 @@ async function create(body) {
     const slug = await uniqueSlug(b.name, b.slug);
     const result = await dbRun(
         `INSERT INTO products (category_id,name,slug,short_description,description,featured,status,sort_order,storefront_category,badge,
-          pos_price,prep_time_minutes,is_fast_moving,pos_station_id,pos_active,customer_visible,customer_max_qty)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          pos_price,prep_time_minutes,is_fast_moving,pos_station_id,pos_active,customer_visible,customer_max_qty,enable_variant_image)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [b.category_id || null, b.name, slug, b.short_description || null,
          b.description || null, b.featured || 0, b.status || 'active', b.sort_order || 0, b.storefront_category || null, b.badge || '',
          b.pos_price || 0, b.prep_time_minutes || 10, b.is_fast_moving ? 1 : 0, b.pos_station_id || null,
          b.pos_active !== undefined ? (b.pos_active ? 1 : 0) : 1, b.customer_visible ? 1 : 0,
-         b.customer_max_qty ? parseInt(b.customer_max_qty) : null]
+         b.customer_max_qty ? parseInt(b.customer_max_qty) : null, b.enable_variant_image ? 1 : 0]
     );
     return { product_id: result.insertId };
 }
@@ -142,12 +142,12 @@ async function update(id, body) {
     const slug = await uniqueSlug(b.name, b.slug, id);
     await dbRun(
         `UPDATE products SET category_id=?,name=?,slug=?,short_description=?,description=?,featured=?,status=?,sort_order=?,storefront_category=?,badge=?,
-          pos_price=?,prep_time_minutes=?,is_fast_moving=?,pos_station_id=?,pos_active=?,customer_visible=?,customer_max_qty=? WHERE id=?`,
+          pos_price=?,prep_time_minutes=?,is_fast_moving=?,pos_station_id=?,pos_active=?,customer_visible=?,customer_max_qty=?,enable_variant_image=? WHERE id=?`,
         [b.category_id || null, b.name, slug, b.short_description || null,
          b.description || null, b.featured || 0, b.status || 'active', b.sort_order || 0, b.storefront_category || null, b.badge || '',
          b.pos_price || 0, b.prep_time_minutes || 10, b.is_fast_moving ? 1 : 0, b.pos_station_id || null,
          b.pos_active !== undefined ? (b.pos_active ? 1 : 0) : 1, b.customer_visible ? 1 : 0,
-         b.customer_max_qty ? parseInt(b.customer_max_qty) : null, id]
+         b.customer_max_qty ? parseInt(b.customer_max_qty) : null, b.enable_variant_image ? 1 : 0, id]
     );
 }
 
@@ -158,9 +158,9 @@ async function remove(id) {
 async function addVariant(productId, body) {
     const b = body;
     const result = await dbRun(
-        `INSERT INTO product_variants (product_id,name,sku,selling_price,cost_price,stock,reorder_level,unit,status,sort_order,show_online) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO product_variants (product_id,name,sku,selling_price,cost_price,stock,reorder_level,unit,status,sort_order,show_online,image_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [productId, b.name || 'Regular', b.sku || null, b.selling_price || 0, b.cost_price || 0,
-         b.stock || 0, b.reorder_level || 0, b.unit || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0]
+         b.stock || 0, b.reorder_level || 0, b.unit || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_url || null]
     );
     return result.insertId;
 }
@@ -168,9 +168,9 @@ async function addVariant(productId, body) {
 async function updateVariant(productId, variantId, body) {
     const b = body;
     await dbRun(
-        `UPDATE product_variants SET name=?,sku=?,selling_price=?,cost_price=?,stock=?,reorder_level=?,unit=?,barcode=?,status=?,sort_order=?,show_online=? WHERE id=? AND product_id=?`,
+        `UPDATE product_variants SET name=?,sku=?,selling_price=?,cost_price=?,stock=?,reorder_level=?,unit=?,barcode=?,status=?,sort_order=?,show_online=?,image_url=? WHERE id=? AND product_id=?`,
         [b.name || 'Regular', b.sku || null, b.selling_price || 0, b.cost_price || 0, b.stock || 0,
-         b.reorder_level || 0, b.unit || null, b.barcode || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0,
+         b.reorder_level || 0, b.unit || null, b.barcode || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_url || null,
          variantId, productId]
     );
 }

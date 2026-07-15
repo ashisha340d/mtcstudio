@@ -119,6 +119,31 @@ export const addCashMovement = (payload) =>
 export const deleteCashMovement = (id) =>
   http.delete(`/pos/till/movements/${id}`).then(r => r.data);
 
+export const updateCashMovement = (id, payload) =>
+  http.put(`/pos/till/movements/${id}`, payload).then(r => r.data);
+
+// ── Business Day / Daily Cash Closing ─────────────────────────
+export const getBusinessDay = (date) =>
+  http.get('/pos/till/day', { params: { date } }).then(r => r.data);
+
+export const openBusinessDay = (opening_float) =>
+  http.post('/pos/till/open', { opening_float }).then(r => r.data);
+
+export const saveDayDraft = (payload) =>
+  http.post('/pos/till/day/draft', payload).then(r => r.data);
+
+export const closeBusinessDay = (payload) =>
+  http.post('/pos/till/day/close', payload).then(r => r.data);
+
+export const reopenBusinessDay = (date, reason) =>
+  http.post('/pos/till/day/reopen', { date, reason }).then(r => r.data);
+
+export const printDayClosing = (date) =>
+  http.post('/pos/till/day/print', { date }).then(r => r.data);
+
+export const updateDayOpening = (opening_float) =>
+  http.put('/pos/till/day/opening', { opening_float }).then(r => r.data);
+
 // ── Sales Reports ─────────────────────────────────────────────
 export const getSalesReportToday = () =>
   http.get('/pos/reports/sales').then(r => r.data);
@@ -212,7 +237,10 @@ const posApi = {
   getLedger,
   // Till / Cash Drawer
   getCurrentTill, openTill, closeTill, approveTillClose,
-  getCashMovements, addCashMovement, deleteCashMovement,
+  getCashMovements, addCashMovement, deleteCashMovement, updateCashMovement,
+  // Business Day / Daily Cash Closing
+  getBusinessDay, openBusinessDay, saveDayDraft, closeBusinessDay,
+  reopenBusinessDay, printDayClosing, updateDayOpening,
   // Sales Reports
   getSalesReportToday, getSalesReport, getCakePaymentsReport,
   getDayEndReport, closeDayEnd, reopenDayEnd,

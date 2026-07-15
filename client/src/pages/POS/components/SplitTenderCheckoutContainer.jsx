@@ -37,7 +37,7 @@ export default function SplitTenderCheckoutContainer({ orderId, onClose, onSucce
         if (found) setFetchedOrder(found);
         if (kots.length) setFetchedKots(kots);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [ctxOrder, orderId]);
 
   const order = ctxOrder ?? fetchedOrder;
@@ -51,7 +51,7 @@ export default function SplitTenderCheckoutContainer({ orderId, onClose, onSucce
         const list = Array.isArray(data) ? data : (data.customers ?? []);
         setCustomers(list.map(c => ({ id: c.phone, name: c.name, phone: c.phone, discount: Number(c.discount) || 0 })));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // DELIVERY orders already carry customer_phone from order creation — auto-resolve
@@ -73,20 +73,27 @@ export default function SplitTenderCheckoutContainer({ orderId, onClose, onSucce
           discountPercent: Number(c.discount) || 0,
         });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [order, customers, prefill]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [done, setDone] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   if (done) {
-    const onDone = () => { if (onSuccess) onSuccess(); else onClose(); };
+    // Done is manual — cashier clicks it (or backdrop/Enter) after printing.
+    // A quick fade plays first, then control hands back so the table/card
+    // fly-to-drawer animation starts only once this modal is fully gone.
+    const onDone = () => {
+      setClosing(true);
+      setTimeout(() => { if (onSuccess) onSuccess(); else onClose(); }, 180);
+    };
     return (
       <div className="modal-overlay" onClick={onDone}>
         <div
-          className="modal checkout-modal"
+          className={`modal checkout-modal${closing ? ' modal--closing' : ''}`}
           onClick={e => e.stopPropagation()}
           onKeyDown={e => { if (e.key === 'Enter') onDone(); }}
           tabIndex={-1}

@@ -722,3 +722,4 @@ router.post('/day-end/reopen', requireRole('ADMIN'), async (req, res) => {
 });
 
 module.exports = router;
+module.exports.buildDayEndReport = buildDayEndReport;

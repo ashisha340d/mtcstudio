@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import StatusTimeline from './components/StatusTimeline';
+import StatusTimeline, { TRANSITIONS } from './components/StatusTimeline';
 import CustomerPickerModal from '../POS/components/CustomerPickerModal';
 import '../POS/pos.css';
 import './cake.css';
@@ -13,11 +13,10 @@ const Rs = n => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFraction
 function Label({ children }) {
   return <div className="ck-label">{children}</div>;
 }
-function Input({ value, onChange, type = 'text', placeholder, readOnly, autoFocus }) {
+function Input({ value, onChange, type = 'text', placeholder, disabled }) {
   return (
     <input type={type} value={value ?? ''} onChange={e => onChange?.(e.target.value)}
-      placeholder={placeholder} readOnly={readOnly} autoFocus={autoFocus}
-      className={`cake-input${readOnly ? ' cake-input--readonly' : ''}`} />
+      placeholder={placeholder} className="cake-input" disabled={disabled} />
   );
 }
 function Textarea({ value, onChange, placeholder, rows = 3 }) {
@@ -26,17 +25,17 @@ function Textarea({ value, onChange, placeholder, rows = 3 }) {
       placeholder={placeholder} rows={rows} className="cake-input cake-textarea" />
   );
 }
-function Field({ label, children, half, quarter }) {
+function Field({ label, children, className }) {
   return (
-    <div className={`ck-field${half ? ' ck-field--half' : quarter ? ' ck-field--quarter' : ''}`}>
+    <div className={`ck-field${className ? ' ' + className : ''}`}>
       {label && <Label>{label}</Label>}
       {children}
     </div>
   );
 }
-function Section({ icon, title, action, children }) {
+function Section({ icon, title, action, children, className }) {
   return (
-    <div className="cake-section">
+    <div className={`cake-section${className ? ' ' + className : ''}`}>
       <div className="cake-section-title">
         <span>{icon}</span> {title}
         {action && <span className="ck-sec-action">{action}</span>}
@@ -52,87 +51,6 @@ function productLabel(p, showVariant = false) {
   if (!p) return '';
   const hasVariant = p.variant_name && (showVariant ? true : p.variant_name !== 'Regular');
   return hasVariant ? `${p.variant_name} - ${p.product_name}` : p.product_name;
-}
-
-// Dropdown uses position:fixed so it escapes overflow:auto table containers
-function ProductPicker({ products, value, onChange, placeholder = 'Search product…', showVariant = false }) {
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
-  const [dropStyle, setDropStyle] = useState({});
-  const inputRef = useRef(null);
-  const wrapRef = useRef(null);
-
-  const label = productLabel(value, showVariant);
-
-  const filtered = products.filter(p => {
-    if (!search.trim()) return true;
-    const full = `${p.product_name} ${p.variant_name || ''}`.toLowerCase();
-    return full.includes(search.toLowerCase());
-  }).slice(0, 30);
-
-  // Close on outside click
-  useEffect(() => {
-    function onDown(e) {
-      if (!wrapRef.current?.contains(e.target) && !document.getElementById('ck-portal')?.contains(e.target))
-        setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, []);
-
-  function openPicker() {
-    const rect = inputRef.current.getBoundingClientRect();
-    // Position dropdown fixed relative to viewport so it escapes any overflow container
-    setDropStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      right: 'auto',
-      zIndex: 9999,
-    });
-    setOpen(true);
-    setSearch('');
-  }
-
-  // Dropdown rendered into a fixed portal div so table overflow can't clip it
-  const dropdown = open ? (
-    <div className="ck-dropdown" style={dropStyle}>
-      {filtered.length > 0
-        ? filtered.map(p => {
-          const varLabel = p.variant_name && (showVariant ? true : p.variant_name !== 'Regular')
-            ? p.variant_name : null;
-          return (
-            <div key={`${p.product_id}-${p.variant_id}`} className="ck-dropdown-item"
-              onMouseDown={e => { e.preventDefault(); onChange(p); setOpen(false); setSearch(''); }}>
-              <span className="ck-dropdown-name">{productLabel(p, showVariant)}</span>
-              <span className="ck-dropdown-rate">₹{Number(p.rate || 0).toLocaleString('en-IN')}</span>
-            </div>
-          );
-        })
-
-        : <div className="ck-dropdown-empty">No products found</div>
-      }
-    </div>
-  ) : null;
-
-  return (
-    <div className="ck-picker" ref={wrapRef}>
-      <input
-        ref={inputRef}
-        className="cake-input"
-        value={open ? search : label}
-        placeholder={placeholder}
-        onFocus={openPicker}
-        onChange={e => { setSearch(e.target.value); if (!open) openPicker(); }}
-      />
-      {value && !open && (
-        <button className="ck-picker-clear" onClick={() => { onChange(null); setSearch(''); }}>×</button>
-      )}
-      {/* Render dropdown outside table via portal-like fixed div */}
-      {dropdown}
-    </div>
-  );
 }
 
 // ── Collapsible section (state persisted to localStorage) ────
@@ -156,10 +74,10 @@ function useSection(key, defaultOpen) {
   return [open, toggle];
 }
 
-function CollapsibleSection({ icon, title, sectionKey, defaultOpen = true, badge, children }) {
+function CollapsibleSection({ icon, title, sectionKey, defaultOpen = true, badge, className, children }) {
   const [open, toggle] = useSection(sectionKey, defaultOpen);
   return (
-    <div className="cake-section">
+    <div className={`cake-section${className ? ` ${className}` : ''}`}>
       <div className="cake-section-title ck-collapsible-title" onClick={toggle}>
         <span>{icon}</span> {title}
         {badge ? <span className="ck-sec-badge">{badge}</span> : null}
@@ -170,20 +88,45 @@ function CollapsibleSection({ icon, title, sectionKey, defaultOpen = true, badge
   );
 }
 
-// ── Modifier chip selector ────────────────────────────────────
+// ── Modifier chip selector — multi-select per group ────────────
 function ModifierGroup({ label, lookups, value, onChange }) {
+  const selected = value || [];
+  const limit = lookups?.[0]?.multiselect || 0; // 0 = unlimited
+  function toggle(id) {
+    if (selected.includes(id)) { onChange(selected.filter(v => v !== id)); return; }
+    if (limit === 1) { onChange([id]); return; } // single-select — replaces current pick
+    if (limit > 1 && selected.length >= limit) return; // cap reached
+    onChange([...selected, id]);
+  }
   return (
     <div className="ck-mod-group">
-      <Label>{label}</Label>
+      <Label>{label}{limit > 0 ? ` (max ${limit})` : ''}</Label>
       <div className="ck-chips">
         {(lookups || []).map(l => {
-          const active = value === l.id;
+          const active = selected.includes(l.id);
           return (
-            <button key={l.id} className={`ck-chip${active ? ' ck-chip--active' : ''}`}
-              onClick={() => onChange(active ? null : l.id)}>
+            <button key={l.id} onClick={() => toggle(l.id)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+                border: active ? '1px solid #8a5a12' : '1px solid #c9bda3',
+                color: active ? '#fff' : '#6b5640',
+                background: active
+                  ? 'linear-gradient(180deg, #e8a63c 0%, #c1440e 100%)'
+                  : 'linear-gradient(180deg, #ffffff 0%, #ece2cf 100%)',
+                boxShadow: active
+                  ? 'inset 0 1px 1px rgba(255,255,255,0.4), inset 0 -2px 3px rgba(0,0,0,0.25), 0 2px 3px rgba(0,0,0,0.2)'
+                  : 'inset 0 1px 1px rgba(255,255,255,0.8), inset 0 -2px 2px rgba(0,0,0,0.08), 0 2px 3px rgba(0,0,0,0.12)',
+                transform: active ? 'translateY(1px)' : 'translateY(0)',
+                transition: 'all 0.1s',
+              }}>
               {l.name}
               {l.extra_charge > 0 && (
-                <span className="ck-chip-charge">+{l.extra_charge}</span>
+                <span style={{ marginLeft: 6, opacity: 0.85, fontSize: 10 }}>+{l.extra_charge}</span>
               )}
             </button>
           );
@@ -193,44 +136,199 @@ function ModifierGroup({ label, lookups, value, onChange }) {
   );
 }
 
-// ── Flavour picker — 3-column pill modal over the form ────────
-function FlavourPickerModal({ products, onPick, onClose, title = '🎂 Pick Flavour', showVariant = false }) {
+// Deterministic warm gradient per card index — swappable for real product photos later (p.image_url)
+const CARD_GRADIENTS = [
+  'linear-gradient(135deg, #f3d5a5 0%, #e0a458 100%)',
+  'linear-gradient(135deg, #f4b9a5 0%, #d97652 100%)',
+  'linear-gradient(135deg, #e6c99f 0%, #c1440e 100%)',
+  'linear-gradient(135deg, #f0d9c0 0%, #a67c52 100%)',
+  'linear-gradient(135deg, #f6cf8e 0%, #b3652a 100%)',
+  'linear-gradient(135deg, #edc2b1 0%, #8f4a2c 100%)',
+];
+
+// Small variant image card shown in line rows — falls back to gradient + initial
+function VariantThumb({ item, products }) {
+  const prod = products.find(p => p.product_id === item.product_id && (p.variant_id ?? null) === (item.variant_id ?? null));
+  const img = prod?.image_url;
+  return (
+    <span className="ck-thumb" style={img ? undefined : { background: CARD_GRADIENTS[(item.product_id || 0) % CARD_GRADIENTS.length] }}>
+      {img ? <img src={img} alt="" /> : (item.product_name || '?').charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+// ── Flavour picker — professional card-grid modal over the form ──
+// multi: clicking toggles selection instead of closing; confirm via "Add N" button
+function FlavourPickerModal({ products, onPick, onClose, title = '🎂 Pick Flavour', showVariant = false, multi = false, value = null, existingKeys = [] }) {
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState([]);
+  const valueKey = value ? `${value.product_id}-${value.variant_id}` : null;
   const q = search.trim().toLowerCase();
   const filtered = q
     ? products.filter(p => `${p.product_name} ${p.variant_name || ''}`.toLowerCase().includes(q))
     : products;
 
+  function keyOf(p) { return `${p.product_id}-${p.variant_id}`; }
+  function qtyOf(p) { return selected.find(s => keyOf(s) === keyOf(p))?.qty || 0; }
+  function setQty(p, qty) {
+    const key = keyOf(p);
+    setSelected(prev => {
+      const idx = prev.findIndex(s => keyOf(s) === key);
+      if (qty <= 0) return prev.filter((_, i) => i !== idx);
+      if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], qty }; return next; }
+      return [...prev, { ...p, qty }];
+    });
+  }
+  const totalQty = selected.reduce((s, x) => s + x.qty, 0);
+
   return (
     <div className="ck-flav-overlay" onClick={onClose}>
-      <div className="ck-flav-modal" onClick={e => e.stopPropagation()}
+      <div className="ck-flav-modal ck-flav-modal--cards" onClick={e => e.stopPropagation()}
         onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
         <div className="ck-flav-head">
-          <span>{title}</span>
+          <div>
+            <span>{title}</span>
+            <span className="ck-flav-head-count">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</span>
+          </div>
           <button className="ck-flav-close" onClick={onClose}>✕</button>
         </div>
         <input
-          className="cake-input"
+          className="cake-input ck-flav-search"
           autoFocus
-          placeholder="🔍 Search flavour…"
+          placeholder="🔍 Search…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ marginBottom: 10 }}
         />
-        <div className="ck-flav-grid">
-          {filtered.map(p => (
-            <button
-              key={`${p.product_id}-${p.variant_id}`}
-              className="ck-flav-pill"
-              onClick={() => { onPick(p); onClose(); }}
-            >
-              <span className="ck-flav-pill-name">{productLabel(p, showVariant)}</span>
-              <span className="ck-flav-pill-rate">₹{Number(p.rate || 0).toLocaleString('en-IN')}</span>
-            </button>
-          ))}
+        <div className="ck-flav-card-grid">
+          {filtered.map((p, i) => {
+            const key = `${p.product_id}-${p.variant_id}`;
+            const already = multi && existingKeys.includes(key);
+            const qty = multi ? qtyOf(p) : 0;
+            const isSel = multi ? (already || qty > 0) : key === valueKey;
+            const Card = multi ? 'div' : 'button';
+            return (
+              <Card
+                key={key}
+                className={`ck-flav-card${isSel ? ' ck-flav-card--sel' : ''}${already ? ' ck-flav-card--disabled' : ''}`}
+                {...(multi ? {} : { disabled: already })}
+                onClick={() => { if (already) return; multi ? setQty(p, qty + 1) : (onPick(p), onClose()); }}
+              >
+                <div className="ck-flav-card-img" style={{ background: p.image_url ? undefined : CARD_GRADIENTS[i % CARD_GRADIENTS.length] }}>
+                  {p.image_url
+                    ? <img src={p.image_url} alt="" />
+                    : <span className="ck-flav-card-mono">{(p.product_name || '?').charAt(0).toUpperCase()}</span>}
+                  {!multi && isSel && <span className="ck-flav-card-check">✓</span>}
+                </div>
+                <div className="ck-flav-card-body">
+                  <span className="ck-flav-card-name">{productLabel(p, showVariant)}</span>
+                  <span className="ck-flav-card-rate">₹{Number(p.rate || 0).toLocaleString('en-IN')}</span>
+                </div>
+                {multi && !already && qty > 0 && (
+                  <div className="ck-flav-card-stepper" onClick={e => e.stopPropagation()}>
+                    <button type="button" onClick={() => setQty(p, qty - 1)}>−</button>
+                    <span>{qty}</span>
+                    <button type="button" onClick={() => setQty(p, qty + 1)}>+</button>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
           {filtered.length === 0 && (
-            <div className="ck-flav-empty">No flavours found</div>
+            <div className="ck-flav-empty">No items found</div>
           )}
+        </div>
+        {multi && (
+          <div className="ck-flav-footer">
+            <span className="ck-flav-footer-count">{totalQty > 0 ? `${totalQty} selected` : 'Nothing selected yet'}</span>
+            <div className="ck-flav-footer-btns">
+              <button className="ck-flav-btn-cancel" onClick={onClose}>Cancel</button>
+              <button className="ck-flav-btn-add" disabled={totalQty === 0}
+                onClick={() => { onPick(selected); onClose(); }}>
+                + Add {totalQty || ''}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Modifiers modal — cream/shape/sponge/theme/dietary, multi-select per group ──
+function ModifiersModal({ lookups, values, onChange, onClose }) {
+  const total = values.creamIds.length + values.shapeIds.length + values.spongeIds.length + values.themeIds.length + values.dietaryIds.length;
+  return (
+    <div className="ck-flav-overlay" onClick={onClose}>
+      <div className="ck-flav-modal ck-flav-modal--mods" onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+        <div className="ck-flav-head">
+          <div>
+            <span>🏷 Modifiers</span>
+            <span className="ck-flav-head-count">{total} selected</span>
+          </div>
+          <button className="ck-flav-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="ck-mods">
+          <ModifierGroup label="Cream Type" lookups={lookups.CREAM_TYPE} value={values.creamIds} onChange={onChange.creamIds} />
+          <ModifierGroup label="Shape" lookups={lookups.SHAPE_TYPE} value={values.shapeIds} onChange={onChange.shapeIds} />
+          <ModifierGroup label="Sponge" lookups={lookups.SPONGE_TYPE} value={values.spongeIds} onChange={onChange.spongeIds} />
+          <ModifierGroup label="Theme" lookups={lookups.THEME_TYPE} value={values.themeIds} onChange={onChange.themeIds} />
+          <ModifierGroup label="Dietary" lookups={lookups.DIETARY_TYPE} value={values.dietaryIds} onChange={onChange.dietaryIds} />
+        </div>
+        <div className="ck-flav-footer">
+          <span className="ck-flav-footer-count">Tap a chip to toggle it — pick as many as you need per category</span>
+          <div className="ck-flav-footer-btns">
+            <button className="ck-flav-btn-add" onClick={onClose}>Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Details modal — single-column form, max 3 reference images ──
+function DetailsModal({ values, onChange, images, onUpload, onRemoveImage, onClose }) {
+  return (
+    <div className="ck-flav-overlay" onClick={onClose}>
+      <div className="ck-flav-modal ck-flav-modal--mods" onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+        <div className="ck-flav-head">
+          <div><span>📝 Cake Order Detail</span></div>
+          <button className="ck-flav-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="ck-mods">
+          <Field label="Design Notes">
+            <Textarea value={values.designNotes} onChange={onChange.designNotes} placeholder="Decorations, finishing…" rows={2} />
+          </Field>
+          <Field label="Dietary Notes">
+            <Textarea value={values.dietaryNotes} onChange={onChange.dietaryNotes} placeholder="Eggless, nut-free…" rows={2} />
+          </Field>
+          <Field label="Internal Notes">
+            <Input value={values.internalNotes} onChange={onChange.internalNotes} placeholder="Staff notes…" />
+          </Field>
+          <Field label={`Reference Images (${images.length}/3)`}>
+            <div className="cake-photo-area">
+              {images.map((img, i) => (
+                <div key={i} className="cake-photo-thumb">
+                  <img src={img.url || img} alt="" />
+                  <button className="cake-photo-rm" onClick={() => onRemoveImage(i)}>×</button>
+                </div>
+              ))}
+              {images.length < 3 && (
+                <label className="cake-photo-add">
+                  <input type="file" multiple accept="image/*" style={{ display: 'none' }}
+                    onChange={e => onUpload(Array.from(e.target.files).slice(0, 3 - images.length))} />
+                  <span>📷 Add</span>
+                </label>
+              )}
+            </div>
+          </Field>
+        </div>
+        <div className="ck-flav-footer">
+          <span className="ck-flav-footer-count" />
+          <div className="ck-flav-footer-btns">
+            <button className="ck-flav-btn-add" onClick={onClose}>Done</button>
+          </div>
         </div>
       </div>
     </div>
@@ -240,44 +338,88 @@ function FlavourPickerModal({ products, onPick, onClose, title = '🎂 Pick Flav
 // ── Advance payment modal — split across methods ──────────────
 const PAY_METHODS = [['CASH', '💵 Cash'], ['CARD', '💳 Card'], ['QR', '📱 QR'], ['WALLET', '👛 Wallet']];
 
-function AdvancePaymentModal({ amounts, grandTotal, onConfirm, onClose }) {
+// ── Payment options modal — totals + discount + advance split, one panel ──
+function PricingModal({ totals, discount, onDiscountChange, amounts, advLocked, readOnly, followupPaid, payHistory, onConfirm, onClose }) {
   const [local, setLocal] = useState(amounts);
-  const total = Object.values(local).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const advEntered = Object.values(local).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const paid = advEntered + followupPaid;
+  const locked = advLocked || readOnly;
 
   return (
     <div className="ck-flav-overlay" onClick={onClose}>
-      <div className="ck-flav-modal" style={{ width: 360 }} onClick={e => e.stopPropagation()}
+      <div className="ck-flav-modal ck-flav-modal--pay" onClick={e => e.stopPropagation()}
         onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
         <div className="ck-flav-head">
-          <span>💳 Advance Payment</span>
+          <span>💰 Payment Options</span>
           <button className="ck-flav-close" onClick={onClose}>✕</button>
         </div>
-        {PAY_METHODS.map(([m, label], i) => (
-          <div key={m} className="ck-pay-row">
-            <span className="ck-pay-label">{label}</span>
-            <input
-              className="cake-input cake-input--num"
-              type="number" min="0" step="0.01" placeholder="0.00"
-              autoFocus={i === 0}
-              value={local[m]}
-              onFocus={e => e.target.select()}
-              onKeyDown={e => { if (e.key === 'Enter' && total > 0) { onConfirm(local); onClose(); } }}
-              onChange={e => setLocal(prev => ({ ...prev, [m]: e.target.value }))}
-            />
+        {/* Two columns: totals left, advance split + history right — everything visible at once */}
+        <div className="ck-pay-grid">
+          <div className="ck-pay-col">
+            <div className="ck-price-row"><span>Cake Total</span><span>{Rs(totals.cake_total)}</span></div>
+            {totals.modifier_total > 0 && <div className="ck-price-row"><span>Modifiers</span><span>+{Rs(totals.modifier_total)}</span></div>}
+            {totals.accessory_total > 0 && <div className="ck-price-row"><span>Accessories</span><span>+{Rs(totals.accessory_total)}</span></div>}
+            <div className="ck-price-row">
+              <span>Discount</span>
+              <input className="ck-price-input" type="number" min="0" step="0.01" placeholder="0"
+                disabled={readOnly} value={discount} onChange={e => onDiscountChange(e.target.value)} />
+            </div>
+            <div className="ck-price-row ck-price-grand"><span>Total</span><span>{Rs(totals.grand_total)}</span></div>
+            <div className="ck-price-row"><span>Paid</span><span>{Rs(paid)}</span></div>
+            <div className={`ck-price-row ck-price-balance${totals.grand_total - paid > 0 ? ' ck-price-balance--due' : ''}`}>
+              <span>Balance</span><span>{Rs(totals.grand_total - paid)}</span>
+            </div>
           </div>
-        ))}
-        <div className="ck-price-row" style={{ marginTop: 8 }}>
-          <span>Total Entered</span><span style={{ fontWeight: 800 }}>{Rs(total)}</span>
+
+          <div className="ck-pay-col">
+            <div className="ck-label">Advance</div>
+            {PAY_METHODS.map(([m, label], i) => (
+              <div key={m} className="ck-pay-row">
+                <span className="ck-pay-label">{label}</span>
+                <input
+                  id={`ck-adv-${m}`}
+                  className="cake-input cake-input--num"
+                  type="number" min="0" step="0.01" placeholder="0.00"
+                  disabled={locked}
+                  value={local[m]}
+                  onFocus={e => e.target.select()}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    if (i < PAY_METHODS.length - 1) document.getElementById(`ck-adv-${PAY_METHODS[i + 1][0]}`)?.focus();
+                    else if (!locked) { onConfirm(local); onClose(); }
+                  }}
+                  onChange={e => setLocal(prev => ({ ...prev, [m]: e.target.value }))}
+                />
+              </div>
+            ))}
+            {advLocked && <div className="cake-subtitle">🔒 Advance locked — business day closed. Reopen the day to change it.</div>}
+            {readOnly && <div className="cake-subtitle">🔒 Sent to bakery — further payment via POS Dashboard.</div>}
+
+            {payHistory.length > 0 && (
+              <div className="ck-pay-hist">
+                <div className="ck-label">Payment History</div>
+                {payHistory.map(p => (
+                  <div key={p.id} className="ck-pay-hist-row">
+                    <span>
+                      {p.amount < 0 ? 'Reversal' : (p.payment_type === 'ADVANCE' ? 'Advance' : 'Follow-up')} · {p.method}
+                      <span className="ck-pay-hist-when">
+                        {new Date(String(p.created_at).replace(' ', 'T') + '+05:45').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </span>
+                    <span className={`ck-pay-hist-amt${p.amount < 0 ? ' ck-pay-hist-amt--neg' : ''}`}>{Rs(p.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="ck-price-row">
-          <span>Order Total</span><span>{Rs(grandTotal)}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="cake-btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
-          <button className="cake-btn-primary" style={{ flex: 2 }}
-            onClick={() => { onConfirm(local); onClose(); }}>
-            Confirm {Rs(total)}
-          </button>
+        <div className="ck-flav-footer">
+          <span className="ck-flav-footer-count" />
+          <div className="ck-flav-footer-btns">
+            <button className="ck-flav-btn-cancel" onClick={onClose}>{readOnly ? 'Close' : 'Cancel'}</button>
+            {!readOnly && <button className="ck-flav-btn-add" onClick={() => { onConfirm(local); onClose(); }}>Confirm</button>}
+          </div>
         </div>
       </div>
     </div>
@@ -303,15 +445,16 @@ function CakeItemRow({ item, products, onChange, onRemove }) {
     <tr className="ck-line-row">
       <td style={{ minWidth: 140 }}>
         <button className={`ck-flavour-btn${pickerVal ? '' : ' ck-flavour-btn--empty'}`} onClick={() => setShowFlav(true)}>
-          {pickerVal ? productLabel(pickerVal) : '🎂 Pick flavour…'}
+          {pickerVal
+            ? <><VariantThumb item={item} products={products} /><span className="ck-flavour-name">{productLabel(pickerVal)}</span></>
+            : '🎂 Pick flavour…'}
         </button>
         {showFlav && (
-          <FlavourPickerModal products={products} onPick={onProductSelect} onClose={() => setShowFlav(false)} />
+          <FlavourPickerModal products={products} onPick={onProductSelect} onClose={() => setShowFlav(false)} value={pickerVal} />
         )}
       </td>
       <td style={{ width: 70 }}>
-
-        <input className="cake-input cake-input--sm" value={item.size || ''} onChange={e => set('size', e.target.value)} placeholder="1 KG…" />
+        <input className="cake-input cake-input--sm" value={item.size || ''} onChange={e => set('size', e.target.value)} placeholder="1 lbs…" />
       </td>
       <td style={{ width: 50 }}>
         <input className="cake-input cake-input--sm" type="number" min="1" value={item.qty || 1}
@@ -348,13 +491,16 @@ function AccessoryRow({ item, products, onChange, onRemove }) {
     <tr className="ck-line-row">
       <td style={{ minWidth: 140 }}>
         <button className={`ck-flavour-btn${pickerVal ? '' : ' ck-flavour-btn--empty'}`} onClick={() => setShowPick(true)}>
-          {pickerVal ? productLabel(pickerVal, true) : '🎁 Pick accessory…'}
+          {pickerVal
+            ? <><VariantThumb item={item} products={products} /><span className="ck-flavour-name">{productLabel(pickerVal, true)}</span></>
+            : '🎁 Pick accessory…'}
         </button>
         {showPick && (
           <FlavourPickerModal products={products} onPick={onProductSelect} onClose={() => setShowPick(false)}
-            title="🎁 Pick Accessory" showVariant />
+            title="🎁 Pick Accessory" showVariant value={pickerVal} />
         )}
       </td>
+      <td style={{ width: 70 }} className="ck-line-dash">—</td>
       <td style={{ width: 50 }}>
         <input className="cake-input cake-input--sm" type="number" min="1" value={item.qty || 1}
           onChange={e => set('qty', parseInt(e.target.value) || 1)} />
@@ -417,9 +563,11 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
 
   function exit() { windowed ? onClose() : navigate('/pos'); }
 
-  // Mode: minimal | advanced
-  const [mode, setMode] = useState(() => localStorage.getItem('cake_entry_mode') || 'minimal');
-  function setModeAndPersist(m) { setMode(m); localStorage.setItem('cake_entry_mode', m); }
+  const [showModifiersModal, setShowModifiersModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showAddAccModal, setShowAddAccModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showStatusSticky, setShowStatusSticky] = useState(false);
 
   // Double-ESC → close / POS dashboard
   const lastEscRef = useRef(0);
@@ -464,15 +612,15 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
   const [delivTime, setDelivTime] = useState('');
 
   // ── Cake items & accessories ────────────────────────────────
-  const [items, setItems] = useState([newItem()]);
+  const [items, setItems] = useState([]);
   const [accessories, setAccessories] = useState([]);
 
   // ── Modifiers ───────────────────────────────────────────────
-  const [creamId, setCreamId] = useState(null);
-  const [shapeId, setShapeId] = useState(null);
-  const [spongeId, setSpongeId] = useState(null);
-  const [themeId, setThemeId] = useState(null);
-  const [dietaryId, setDietaryId] = useState(null);
+  const [creamIds, setCreamIds] = useState([]);
+  const [shapeIds, setShapeIds] = useState([]);
+  const [spongeIds, setSpongeIds] = useState([]);
+  const [themeIds, setThemeIds] = useState([]);
+  const [dietaryIds, setDietaryIds] = useState([]);
 
   // ── Cake details ────────────────────────────────────────────
   const [message, setMessage] = useState('');
@@ -486,6 +634,7 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
   const [discount, setDiscount] = useState('0');
   // Advance can be split across methods; follow-ups are collected via POS Dashboard
   const [advAmounts, setAdvAmounts] = useState({ CASH: '', CARD: '', QR: '', WALLET: '' });
+  const [advLocked, setAdvLocked] = useState(false); // advance rows on a closed business day — frozen
   const [showPayModal, setShowPayModal] = useState(false);
   const [followupPaid, setFollowupPaid] = useState(0);
   const [payHistory, setPayHistory] = useState([]);
@@ -498,8 +647,7 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
   // ── Local pricing estimate ──────────────────────────────────
   const cakeTotal = items.reduce((s, it) => s + (parseFloat(it.rate) || 0) * (parseInt(it.qty) || 1), 0);
   const accTotal = accessories.reduce((s, ac) => s + (parseFloat(ac.rate) || 0) * (parseInt(ac.qty) || 1), 0);
-  const modTotal = [creamId, shapeId, spongeId, themeId, dietaryId].reduce((s, lid) => {
-    if (!lid) return s;
+  const modTotal = [...creamIds, ...shapeIds, ...spongeIds, ...themeIds, ...dietaryIds].reduce((s, lid) => {
     const all = Object.values(lookups).flat();
     const lk = all.find(l => l.id === lid);
     return s + (lk?.extra_charge || 0);
@@ -540,11 +688,11 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
         setCustName(d.customer_name ?? '');
         setDelivDate(d.delivery_date ?? '');
         setDelivTime(d.delivery_time ?? '');
-        setCreamId(d.cream_type_id ?? null);
-        setShapeId(d.shape_id ?? null);
-        setSpongeId(d.sponge_type_id ?? null);
-        setThemeId(d.theme_id ?? null);
-        setDietaryId(d.dietary_type_id ?? null);
+        setCreamIds(d.cream_ids ?? []);
+        setShapeIds(d.shape_ids ?? []);
+        setSpongeIds(d.sponge_ids ?? []);
+        setThemeIds(d.theme_ids ?? []);
+        setDietaryIds(d.dietary_ids ?? []);
         setMessage(d.message_on_cake ?? '');
         setDesignNotes(d.design_notes ?? '');
         setDietaryNotes(d.dietary_notes ?? '');
@@ -566,14 +714,13 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
           adv[m] = Number(d.advance_paid) - followup;
         }
         setAdvAmounts(Object.fromEntries(Object.entries(adv).map(([m, v]) => [m, v > 0 ? String(v) : ''])));
+        setAdvLocked(!!d.advance_locked);
         setFollowupPaid(followup);
         setPayHistory(pays);
         setImages((d.images ?? []).map(img => ({ url: img.image_url, name: img.image_name || '' })));
         setServerTotals({ cake_total: d.cake_total, modifier_total: d.modifier_total, accessory_total: d.accessory_total, grand_total: d.grand_total, advance_paid: d.advance_paid, balance_due: d.balance_due });
         // Restore line items
-        setItems(d.items?.length
-          ? d.items.map(it => ({ _key: Math.random(), product_id: it.product_id, product_name: it.product_name, variant_id: it.variant_id, variant_name: it.variant_name, size: it.size || '', unit: it.unit, qty: it.qty, rate: it.rate }))
-          : [newItem()]);
+        setItems((d.items || []).map(it => ({ _key: Math.random(), product_id: it.product_id, product_name: it.product_name, variant_id: it.variant_id, variant_name: it.variant_name, size: it.size || '', unit: it.unit, qty: it.qty, rate: it.rate })));
         setAccessories((d.accessories || []).map(ac => ({ _key: Math.random(), product_id: ac.product_id, product_name: ac.product_name, variant_id: ac.variant_id, variant_name: ac.variant_name, unit: ac.unit, qty: ac.qty, rate: ac.rate })));
       })
       .finally(() => setLoading(false));
@@ -628,8 +775,8 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
       customer_name: custName.trim(),
       delivery_date: delivDate || null,
       delivery_time: delivTime || null,
-      shape_id: shapeId, cream_type_id: creamId, sponge_type_id: spongeId,
-      theme_id: themeId, dietary_type_id: dietaryId,
+      shape_id: shapeIds, cream_type_id: creamIds, sponge_type_id: spongeIds,
+      theme_id: themeIds, dietary_type_id: dietaryIds,
       message_on_cake: message.trim() || null,
       design_notes: designNotes.trim() || null,
       dietary_notes: dietaryNotes.trim() || null,
@@ -684,34 +831,18 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
       const d = await r.json();
       setStatus(d.status);
       setHistory(d.statusHistory ?? []);
+      if (newStatus === 'CONFIRMED' && !(Number(d.advance_paid) > 0)) setShowPayModal(true); // no payment yet → collect it before sending to bakery
     } finally { setStatusChanging(false); }
   }
 
   // ── Print ────────────────────────────────────────────────────
   async function handlePrint() {
     if (!id || printing) return;
-
     setPrinting(true);
-
     try {
-      console.log('Print URL:', `${API}/pos/cake-orders/${id}/print`);
-
-      const r = await fetch(
-        `${API}/pos/cake-orders/${id}/print`,
-        { method: 'POST', headers: H }
-      );
-
-      console.log('Status:', r.status);
-      console.log('OK:', r.ok);
-
-      const text = await r.text();
-      console.log('Response:', text);
-
-      if (!r.ok) {
-        alert(text || 'Print failed');
-      }
+      const r = await fetch(`${API}/pos/cake-orders/${id}/print`, { method: 'POST', headers: H });
+      if (!r.ok) alert((await r.text()) || 'Print failed');
     } catch (e) {
-      console.error('Print Error:', e);
       alert(e.message);
     } finally {
       setPrinting(false);
@@ -730,6 +861,13 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
     } finally { setSendingWA(false); }
   }
 
+  // ── Viber ─────────────────────────────────────────────────────
+  function handleSendViber() {
+    if (!phone?.trim()) return;
+    const p = String(phone).replace(/\D/g, '');
+    window.open(`viber://chat?number=%2B977${p.slice(-10)}`, '_blank');
+  }
+
   // ── SMS (Nepal only) ────────────────────────────────────────────
   async function handleSendSMS() {
     if (!id || sendingSMS) return;
@@ -742,15 +880,22 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
     } finally { setSendingSMS(false); }
   }
 
-  // ── Delete ────────────────────────────────────────────────────
-  async function handleDelete() {
-    if (!id || !confirm('Delete this cake order?')) return;
-    const r = await fetch(`${API}/pos/cake-orders/${id}`, { method: 'DELETE', headers: H });
-    if (r.ok) { windowed ? onClose() : navigate('/pos', { replace: true }); }
-  }
-
   // ── Display totals (prefer server after first save) ──────────
   const totals = serverTotals || { cake_total: cakeTotal, modifier_total: modTotal, accessory_total: accTotal, grand_total: grand, advance_paid: advance, balance_due: balance };
+
+  function addAccessoryFromPick(picked) {
+    const rows = (Array.isArray(picked) ? picked : [picked]).map(p =>
+      ({ ...newAcc(), product_id: p.product_id, product_name: p.product_name, variant_id: p.variant_id, variant_name: p.variant_name, rate: p.rate || '', qty: p.qty || 1 }));
+    setAccessories(prev => [...prev, ...rows]);
+    setServerTotals(null);
+  }
+
+  function addItemsFromPick(picked) {
+    const rows = (Array.isArray(picked) ? picked : [picked]).map(p =>
+      ({ ...newItem(), product_id: p.product_id, product_name: p.product_name, variant_id: p.variant_id, variant_name: p.variant_name, rate: p.rate || '', qty: p.qty || 1 }));
+    setItems(prev => [...prev, ...rows]);
+    setServerTotals(null);
+  }
 
   function handleEnterNext(e) {
     if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -783,8 +928,8 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
       const s = JSON.parse(localStorage.getItem('cake_win_rect'));
       if (s?.w >= 720) return s;
     } catch { }
-    const w = Math.min(1180, window.innerWidth - 60);
-    const h = Math.min(780, window.innerHeight - 50);
+    const w = Math.min(1064, window.innerWidth - 60);
+    const h = Math.min(600, window.innerHeight - 50);
     return { x: Math.max(10, (window.innerWidth - w) / 2), y: Math.max(10, (window.innerHeight - h) / 2), w, h };
   });
   const rectRef = useRef(rect);
@@ -835,37 +980,6 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
     e.stopPropagation();
   };
 
-  /* ── Column split (left/right) — draggable, persisted ── */
-  const bodyRef = useRef(null);
-  const [leftPct, setLeftPct] = useState(() => {
-    const v = parseFloat(localStorage.getItem('cake_split_pct'));
-    return Number.isFinite(v) && v >= 25 && v <= 75 ? v : 46;
-  });
-  const splitDrag = useRef(false);
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!splitDrag.current || !bodyRef.current) return;
-      const r = bodyRef.current.getBoundingClientRect();
-      setLeftPct(Math.min(75, Math.max(25, ((e.clientX - r.left) / r.width) * 100)));
-    };
-    const onUp = () => {
-      if (!splitDrag.current) return;
-      splitDrag.current = false;
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      setLeftPct(p => { try { localStorage.setItem('cake_split_pct', String(p)); } catch { } return p; });
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, []);
-  const startSplitDrag = (e) => {
-    splitDrag.current = true;
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    e.preventDefault();
-  };
-
   const shellProps = {
     windowed, rect, startMove, startResize,
     onCloseWin: exit,
@@ -875,269 +989,200 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
 
   if (loading) return <WindowShell {...shellProps}><div className="cake-loading">Loading…</div></WindowShell>;
 
-  const isAdvanced = mode === 'advanced';
-
   // Section badges
-  const modCount = [creamId, shapeId, spongeId, themeId, dietaryId].filter(Boolean).length;
-  const accCount = accessories.filter(a => a.product_name?.trim()).length;
-  const detailCount = [designNotes, dietaryNotes, allergyNotes, assignedBaker, internalNotes].filter(s => s?.trim()).length + images.length;
+  const modCount = creamIds.length + shapeIds.length + spongeIds.length + themeIds.length + dietaryIds.length;
+  const detailCount = [designNotes, dietaryNotes, internalNotes].filter(s => s?.trim()).length + images.length;
+
+  // Customer + delivery must be filled before items/modifiers/pricing unlock
+  const custReady = !!(custName.trim() && delivDate && delivTime);
+  const hasAmount = items.some(it => (parseFloat(it.rate) || 0) > 0);
+  const payReady = custReady && hasAmount;
+  const locked = !isNew && status !== 'PENDING'; // sent to bakery — Unsend to edit
+  const lockHint = locked ? 'Order sent to bakery — Unsend to edit'
+    : (!custReady ? 'Fill customer name, delivery date & time first'
+    : (!hasAmount ? 'Add a cake line item with an amount first' : undefined));
+
+  // Selected modifiers, resolved to names — shown as a read-only grid on the bill
+  const selectedMods = [
+    ['Cream', lookups.CREAM_TYPE, creamIds, setCreamIds],
+    ['Shape', lookups.SHAPE_TYPE, shapeIds, setShapeIds],
+    ['Sponge', lookups.SPONGE_TYPE, spongeIds, setSpongeIds],
+    ['Theme', lookups.THEME_TYPE, themeIds, setThemeIds],
+    ['Dietary', lookups.DIETARY_TYPE, dietaryIds, setDietaryIds],
+  ].flatMap(([group, list, ids, setIds]) =>
+    ids.map(id => {
+      const l = (list || []).find(x => x.id === id);
+      return l ? { group, name: l.name, extra_charge: l.extra_charge, onRemove: () => { setIds(ids.filter(x => x !== id)); setServerTotals(null); } } : null;
+    }).filter(Boolean)
+  );
+
+  // Detail fields formatted into a readable paragraph, shown under the modifiers grid
+  const detailParts = [
+    ['Design', designNotes, setDesignNotes, 'ck-detail-box--design'],
+    ['Dietary', dietaryNotes, setDietaryNotes, 'ck-detail-box--dietary'],
+    ['Notes', internalNotes, setInternalNotes, 'ck-detail-box--notes'],
+  ].filter(([, v]) => v?.trim());
 
   return (
     <WindowShell {...shellProps}>
 
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="cake-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {!windowed && <button className="cake-back-btn" onClick={() => navigate('/pos')}>← POS</button>}
-          <div>
-            <h1 className="cake-title">
-              {isNew ? '🎂 New Cake Order' : `🎂 ${custName || orderNum}`}
-            </h1>
-            {!isNew && (
-              <p className="cake-subtitle">{orderNum} · {orderDate}</p>
-            )}
-          </div>
-        </div>
+        {!windowed && <button className="cake-back-btn" onClick={() => navigate('/pos')}>← POS</button>}
 
-        <div className="ck-mode-toggle">
-          <button className={`ck-mode-btn${!isAdvanced ? ' ck-mode-btn--active' : ''}`} onClick={() => setModeAndPersist('minimal')}>⚡ Minimal</button>
-          <button className={`ck-mode-btn${isAdvanced ? ' ck-mode-btn--active' : ''}`} onClick={() => setModeAndPersist('advanced')}>🔧 Advanced</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="ck-toolbar">
           {!isNew && (
-            <>
+            <div className="ck-status-ribbon">
               <button className="cake-btn-ghost" onClick={handlePrint} disabled={printing}>{printing ? '…' : '🖨 Print'}</button>
-              {phone?.trim() && status === 'CONFIRMED' && (
-                <button className="cake-btn-ghost" onClick={handleSendWhatsApp} disabled={sendingWA}>{sendingWA ? '…' : '📲 WhatsApp'}</button>
+              <button className="cake-btn-ghost" onClick={handleSendWhatsApp} disabled={sendingWA || !phone?.trim() || status !== 'CONFIRMED'}>{sendingWA ? '…' : '📲 WhatsApp'}</button>
+              <button className="cake-btn-ghost" onClick={handleSendViber} disabled={!phone?.trim()}>📞 Viber</button>
+              <button className="cake-btn-ghost" onClick={handleSendSMS} disabled={sendingSMS || !phone?.trim() || status !== 'CONFIRMED' || !isNepaliNumber(phone)}>{sendingSMS ? '…' : '✉️ SMS'}</button>
+              {status === 'CONFIRMED' && (
+                <button className="cake-btn-ghost" onClick={() => handleTransition('PENDING')} disabled={statusChanging}>↩ Unsend</button>
               )}
-              {phone?.trim() && status === 'CONFIRMED' && isNepaliNumber(phone) && (
-                <button className="cake-btn-ghost" onClick={handleSendSMS} disabled={sendingSMS}>{sendingSMS ? '…' : '✉️ SMS'}</button>
+              {(TRANSITIONS[status] || []).includes('CANCELLED') && (
+                <button className="cake-btn-danger" onClick={() => handleTransition('CANCELLED')} disabled={statusChanging}>❌ Cancel</button>
               )}
-              <button className="cake-btn-danger" onClick={handleDelete}>Delete</button>
-            </>
+              <button className="cake-btn-primary" onClick={handleSave} disabled={saving || locked} title={locked ? lockHint : undefined}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
           )}
-          <button className="cake-btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : isNew ? 'Create Order' : 'Save'}
-          </button>
+          {isNew && (
+            <button className="cake-btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Create Order'}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="cake-form-body" ref={bodyRef}>
-        {/* ── LEFT ─────────────────────────────────────────── */}
-        <div className="cake-form-left" style={{ flex: `0 0 ${leftPct}%` }}>
+      {/* ── Single-column body ───────────────────────────────── */}
+      <div className="cake-form-body">
+        <Section icon="🎂" title={isNew ? 'New Cake Order' : `${orderNum}${orderDate ? ' · ' + orderDate : ''}`}
+          action={<>
+            <button className="cake-btn-ghost" disabled={!custReady || locked} title={lockHint} onClick={() => setShowAddItemModal(true)}>🎂Cake</button>
+            <button className="cake-btn-ghost" disabled={!custReady || locked} title={lockHint} onClick={() => setShowAddAccModal(true)}>🎉Accessory</button>
+            <button className="cake-btn-ghost" disabled={!custReady || locked} title={lockHint} onClick={() => setShowModifiersModal(true)}>
+              🔧 Modify Cake{modCount > 0 ? ` · ${modCount}` : ''}
+            </button>
+            <button className="cake-btn-ghost" disabled={!custReady || locked} title={lockHint} onClick={() => setShowDetailsModal(true)}>
+              📝 Detail{detailCount > 0 ? ` · ${detailCount}` : ''}
+            </button>
+            {!isNew && history.length > 0 && (
+              <button type="button" className="ck-pin-btn" title="Status History" onClick={() => setShowStatusSticky(v => !v)}>
+                📌 History<span className="ck-sec-badge">{history.length}</span>
+              </button>
+            )}
+          </>}>
 
-          {/* ① Customer + Delivery — merged, compact */}
-          <Section icon="👤" title="Customer & Delivery">
-            <button className="ck-pick-cust" onClick={() => setShowCustPicker(true)}>👥 Pick Customer</button>
-            <div className="ck-row">
-              <Field label="Phone" half>
+          {/* Customer + delivery — everything else unlocks once this row is complete; locks again once sent to bakery */}
+          <div className="ck-row ck-row--cust">
+            <div className={`ck-row ck-cust-fields${locked ? ' ck-locked' : ''}`} title={locked ? lockHint : undefined}>
+              <Field label="Phone" className="ck-field--phone">
                 <Input value={phone} onChange={onPhoneChange} type="tel" placeholder="98XXXXXXXX" />
                 {crmHint && <div className="cake-crm-hint">{crmHint}</div>}
               </Field>
-              <Field label="Name *" half>
+
+              <Field label="Name *" className="ck-field--grow">
                 <Input value={custName} onChange={setCustName} placeholder="Full name" />
                 {errors.custName && <div className="cake-error">{errors.custName}</div>}
               </Field>
-            </div>
-            <div className="ck-row">
-              <Field label="Delivery Date *" half>
+
+              <button type="button" className="ck-pick-cust" title="Pick from customers"
+                onClick={() => setShowCustPicker(true)}>👥</button>
+
+              <Field label="Delivery Date *" className="ck-field--date">
                 <Input value={delivDate} onChange={setDelivDate} type="date" />
                 {errors.delivDate && <div className="cake-error">{errors.delivDate}</div>}
               </Field>
-              <Field label="Delivery Time" half>
+              <Field label="Delivery Time *" className="ck-field--time">
                 <Input value={delivTime} onChange={setDelivTime} type="time" />
               </Field>
             </div>
-          </Section>
 
-          {/* ② Cake Detail — flavour + message + accessories, one panel */}
-          <Section icon="🎂" title="Cake Detail"
-            action={<button className="ck-add-row" onClick={() => { setItems(prev => [...prev, newItem()]); setServerTotals(null); }}>+ Add Row</button>}>
-            {errors.items && <div className="cake-error" style={{ marginBottom: 6 }}>{errors.items}</div>}
-            <div className="ck-line-table-wrap">
-              <table className="ck-line-table">
-                <thead>
-                  <tr className="ck-band">
-                    <th>Flavour</th><th>Note Size</th><th>Lbl</th><th>Rate Per Pound ₹</th><th>Amt</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, i) => (
-                    <CakeItemRow key={it._key} item={it} products={baseProducts} onChange={v => { setItems(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }} onRemove={() => { setItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev); setServerTotals(null); }} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {!isNew && (
+              <StatusTimeline currentStatus={status} onTransition={handleTransition} loading={statusChanging} compact hideCancel />
+            )}
 
-            {/* Message on cake */}
-            <div style={{ marginTop: 12 }}>
-              <Label>Message on Cake</Label>
-              <Input value={message} onChange={setMessage} placeholder="e.g. Happy Birthday Aarav!" />
-            </div>
-
-            {/* Accessories — merged here */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '14px 0 8px' }}>
-              <button className="ck-add-row" onClick={() => { setAccessories(prev => [...prev, newAcc()]); setServerTotals(null); }}>+ Add Accessory</button>
-            </div>
-            <div className="ck-line-table-wrap">
-              <table className="ck-line-table">
-                <thead>
-                  <tr className="ck-band">
-                    <th>🎁 Accessories{accCount > 0 ? ` · ${accCount}` : ''}</th><th>Qty</th><th>Rate ₹</th><th>Amount</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {accessories.map((ac, i) => (
-                    <AccessoryRow key={ac._key} item={ac} products={accProducts}
-                      onChange={v => { setAccessories(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }}
-                      onRemove={() => { setAccessories(prev => prev.filter((_, j) => j !== i)); setServerTotals(null); }} />
-                  ))}
-                  {accessories.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: '10px 8px', color: '#9c8870', fontSize: 11, textAlign: 'center' }}>No accessories yet</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-
-        </div>
-
-        <div className="ck-split-divider" onMouseDown={startSplitDrag} title="Drag to resize" />
-
-        {/* ── RIGHT PANEL ───────────────────────────────────── */}
-        <div className="cake-form-right" style={{ flex: 1, minWidth: 0 }}>
-
-          {/* ① Modifiers — collapsible */}
-          <CollapsibleSection icon="🏷" title="Modifiers" sectionKey="modifiers" defaultOpen={true}
-            badge={modCount > 0 ? `${modCount} selected` : null}>
-            <div className="ck-mods">
-              <ModifierGroup label="Cream Type" lookups={lookups.CREAM_TYPE} value={creamId} onChange={v => { setCreamId(v); setServerTotals(null); }} />
-              <ModifierGroup label="Shape" lookups={lookups.SHAPE_TYPE} value={shapeId} onChange={v => { setShapeId(v); setServerTotals(null); }} />
-              {isAdvanced && (
-                <>
-                  <ModifierGroup label="Sponge" lookups={lookups.SPONGE_TYPE} value={spongeId} onChange={v => { setSpongeId(v); setServerTotals(null); }} />
-                  <ModifierGroup label="Theme" lookups={lookups.THEME_TYPE} value={themeId} onChange={v => { setThemeId(v); setServerTotals(null); }} />
-                  <ModifierGroup label="Dietary" lookups={lookups.DIETARY_TYPE} value={dietaryId} onChange={v => { setDietaryId(v); setServerTotals(null); }} />
-                </>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* ② Details — collapsible, advanced only */}
-          {isAdvanced && (
-            <CollapsibleSection icon="📝" title="Details" sectionKey="details" defaultOpen={false}
-              badge={detailCount > 0 ? `${detailCount} filled` : null}>
-              <div className="ck-row">
-                <Field label="Design Notes" half>
-                  <Textarea value={designNotes} onChange={setDesignNotes} placeholder="Decorations, finishing…" rows={2} />
-                </Field>
-                <Field label="Dietary / Allergy" half>
-                  <Textarea value={dietaryNotes} onChange={setDietaryNotes} placeholder="Eggless, nut-free…" rows={2} />
-                  <Input value={allergyNotes} onChange={setAllergyNotes} placeholder="Specific allergy notes…" style={{ marginTop: 6 }} />
-                </Field>
-              </div>
-              {/* Ref images + baker + internal — merged */}
-              <div className="ck-row" style={{ marginTop: 8 }}>
-                <Field label="Assigned Baker" half>
-                  <Input value={assignedBaker} onChange={setAssignedBaker} placeholder="Baker name…" />
-                </Field>
-                <Field label="Internal Notes" half>
-                  <Input value={internalNotes} onChange={setInternalNotes} placeholder="Staff notes…" />
-                </Field>
-              </div>
-              <div style={{ marginTop: 10 }}>
-                <Label>Reference Images</Label>
-                <div className="cake-photo-area">
-                  {images.map((img, i) => (
-                    <div key={i} className="cake-photo-thumb">
-                      <img src={img.url || img} alt="" />
-                      <button className="cake-photo-rm" onClick={() => setImages(p => p.filter((_, j) => j !== i))}>×</button>
-                    </div>
-                  ))}
-                  <label className="cake-photo-add">
-                    <input type="file" multiple accept="image/*" style={{ display: 'none' }}
-                      onChange={e => handleImageUpload(Array.from(e.target.files))} />
-                    <span>📷 Add</span>
-                  </label>
-                </div>
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* Pricing — compact rows; advance split entered via Pick modal */}
-          <Section icon="💰" title="Pricing">
-            <div className="ck-price-row"><span>Cake Total</span><span>{Rs(totals.cake_total)}</span></div>
-            {totals.modifier_total > 0 && <div className="ck-price-row"><span>Modifiers</span><span>+{Rs(totals.modifier_total)}</span></div>}
-            {totals.accessory_total > 0 && <div className="ck-price-row"><span>Accessories</span><span>+{Rs(totals.accessory_total)}</span></div>}
-            <div className="ck-price-row">
-              <span>Discount</span>
-              <input className="ck-price-input" type="number" min="0" step="0.01" placeholder="0"
-                value={discount} onChange={e => { setDiscount(e.target.value); setServerTotals(null); }} />
-            </div>
-            <div className="ck-price-row ck-price-grand"><span>Total</span><span>{Rs(totals.grand_total)}</span></div>
-
-            <div className="ck-price-row">
-              <span>Advance</span>
-              <span className="ck-price-adv">
-                <span>{Rs(advSum)}</span>
-                <button className="ck-pick-btn" onClick={() => setShowPayModal(true)}>💳 Pick</button>
+            {/* Payment strip — always-visible totals, opens the payment options modal */}
+            <button type="button" className="ck-price-strip ck-price-strip--olive" disabled={!payReady} title={lockHint}
+              onClick={() => setShowPayModal(true)}>
+              <span className="ck-price-strip-item"><em>Total</em><b>{Rs(totals.grand_total)}</b></span>
+              <span className="ck-price-strip-item"><em>Paid</em><b>{Rs(totals.advance_paid)}</b></span>
+              <span className={`ck-price-strip-item${totals.balance_due > 0 ? ' ck-price-strip-item--due' : ''}`}>
+                <em>Balance</em><b>{Rs(totals.balance_due)}</b>
               </span>
-            </div>
-            {followupPaid > 0 && (
-              <div className="ck-price-row"><span>Follow-up Received</span><span>{Rs(followupPaid)}</span></div>
-            )}
+              <span className="ck-price-strip-open">💰 Payment ›</span>
+            </button>
+          </div>
 
-            <div className={`ck-price-row ck-price-balance${totals.balance_due > 0 ? ' ck-price-balance--due' : ''}`}>
-              <span>Balance Due</span><span>{Rs(totals.balance_due)}</span>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 10, color: '#9c8870', lineHeight: 1.4 }}>
-              Advance is recorded in payments on Save.{!isNew && ' Use POS Dashboard to collect follow-up payments.'}
-            </div>
+          <Field label="Message on Cake">
+            <Input value={message} onChange={setMessage} placeholder="e.g. Happy Birthday Message!" disabled={locked} />
+          </Field>
 
-            {payHistory.length > 0 && (
-              <div style={{ marginTop: 10 }}>
-                <div className="ck-label" style={{ marginBottom: 4 }}>Payment History</div>
-                {payHistory.map(p => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 10, color: '#6b5640', padding: '3px 0', borderBottom: '1px solid #f0e8d8' }}>
-                    <span>
-                      {p.amount < 0 ? 'Reversal' : (p.payment_type === 'ADVANCE' ? 'Advance' : 'Follow-up')} · {p.method}
-                      <span style={{ color: '#9c8870', marginLeft: 5 }}>
-                        {new Date(String(p.created_at).replace(' ', 'T') + '+05:45').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </span>
-                    <span style={{ fontWeight: 700, color: p.amount < 0 ? '#c0392b' : '#2d7a2d' }}>{Rs(p.amount)}</span>
-                  </div>
+          {errors.items && <div className="cake-error" style={{ marginBottom: 6 }}>{errors.items}</div>}
+          <div className={`ck-line-table-wrap${locked ? ' ck-locked' : ''}`} title={locked ? lockHint : undefined}>
+            <table className="ck-line-table">
+              <tbody>
+                {items.map((it, i) => (
+                  <CakeItemRow key={it._key} item={it} products={baseProducts} onChange={v => { setItems(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }} onRemove={() => { setItems(prev => prev.filter((_, j) => j !== i)); setServerTotals(null); }} />
                 ))}
-              </div>
-            )}
-          </Section>
+                {accessories.map((ac, i) => (
+                  <AccessoryRow key={ac._key} item={ac} products={accProducts}
+                    onChange={v => { setAccessories(prev => prev.map((x, j) => j === i ? v : x)); setServerTotals(null); }}
+                    onRemove={() => { setAccessories(prev => prev.filter((_, j) => j !== i)); setServerTotals(null); }} />
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          {/* Status — edit mode only */}
-          {!isNew && (
-            <Section icon="📊" title="Status">
-              <StatusTimeline currentStatus={status} onTransition={handleTransition} loading={statusChanging} />
-              {history.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div className="ck-label" style={{ marginBottom: 6 }}>History</div>
-                  {history.map((h, i) => (
-                    <div key={i} className="cake-history-row">
-                      <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                        {h.old_status && <><span className="cake-history-status cake-history-status--old">{h.old_status}</span><span style={{ color: '#9c8870', fontSize: 11 }}>→</span></>}
-                        <span className="cake-history-status cake-history-status--new">{h.new_status}</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: '#9c8870' }}>
-                        {h.changed_by_name && <span>{h.changed_by_name} · </span>}
-                        {new Date(h.changed_at + 'Z').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Section>
+          {selectedMods.length > 0 && (
+            <div className="ck-mod-summary">
+              {selectedMods.map((m, i) => (
+                <span key={i} className="ck-mod-summary-tag">
+                  <span className="ck-mod-summary-group">{m.group}</span> {m.name}
+                  {m.extra_charge > 0 && <span className="ck-mod-summary-charge">+{m.extra_charge}</span>}
+                  <button type="button" className="ck-mod-summary-x" onClick={m.onRemove}>✕</button>
+                </span>
+              ))}
+            </div>
           )}
-        </div>
+
+          {detailParts.length > 0 && (
+            <div className="ck-detail-list">
+              {detailParts.map(([caption, msg, setter, shadeClass]) => (
+                <div key={caption} className={`ck-detail-pill ${shadeClass}`}>
+                  <span><strong>{caption}:</strong> <em>{msg.trim()}</em></span>
+                  <button type="button" className="ck-detail-pill-x" onClick={() => { setter(''); setServerTotals(null); }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
       </div>
+
+      {/* Status history — floating sticky note, pinned open via the 📌 History button */}
+      {showStatusSticky && !isNew && history.length > 0 && (
+        <div className="ck-sticky-note">
+          <span className="ck-sticky-pin">📌</span>
+          <button type="button" className="ck-sticky-close" onClick={() => setShowStatusSticky(false)}>✕</button>
+          <div className="ck-sticky-title">📊 Status History</div>
+          <div className="ck-sticky-body">
+            {history.map((h, i) => (
+              <div key={i} className="cake-history-row">
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                  {h.old_status && <><span className="cake-history-status cake-history-status--old">{h.old_status}</span><span style={{ color: '#9c8870', fontSize: 11 }}>→</span></>}
+                  <span className="cake-history-status cake-history-status--new">{h.new_status}</span>
+                </div>
+                <div style={{ fontSize: 10, color: '#9c8870' }}>
+                  {h.changed_by_name && <span>{h.changed_by_name} · </span>}
+                  {new Date(h.changed_at + 'Z').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showCustPicker && (
         <CustomerPickerModal
@@ -1151,12 +1196,56 @@ export default function CakeOrderForm({ id: propId = null, onClose = null }) {
         />
       )}
       {showPayModal && (
-        <AdvancePaymentModal
+        <PricingModal
+          totals={totals}
+          discount={discount}
+          onDiscountChange={v => { setDiscount(v); setServerTotals(null); }}
           amounts={advAmounts}
-          grandTotal={totals.grand_total}
+          advLocked={advLocked}
+          readOnly={locked}
+          followupPaid={followupPaid}
+          payHistory={payHistory}
           onClose={() => setShowPayModal(false)}
           onConfirm={(vals) => { setAdvAmounts(vals); setServerTotals(null); }}
         />
+      )}
+      {showModifiersModal && (
+        <ModifiersModal
+          lookups={lookups}
+          values={{ creamIds, shapeIds, spongeIds, themeIds, dietaryIds }}
+          onChange={{
+            creamIds: v => { setCreamIds(v); setServerTotals(null); },
+            shapeIds: v => { setShapeIds(v); setServerTotals(null); },
+            spongeIds: v => { setSpongeIds(v); setServerTotals(null); },
+            themeIds: v => { setThemeIds(v); setServerTotals(null); },
+            dietaryIds: v => { setDietaryIds(v); setServerTotals(null); },
+          }}
+          onClose={() => setShowModifiersModal(false)}
+        />
+      )}
+      {showDetailsModal && (
+        <DetailsModal
+          values={{ designNotes, dietaryNotes, internalNotes }}
+          onChange={{
+            designNotes: setDesignNotes,
+            dietaryNotes: setDietaryNotes,
+            internalNotes: setInternalNotes,
+          }}
+          images={images}
+          onUpload={handleImageUpload}
+          onRemoveImage={i => setImages(p => p.filter((_, j) => j !== i))}
+          onClose={() => setShowDetailsModal(false)}
+        />
+      )}
+      {showAddAccModal && (
+        <FlavourPickerModal products={accProducts} onPick={addAccessoryFromPick}
+          onClose={() => setShowAddAccModal(false)} title="🎁 Pick Accessories" showVariant multi
+          existingKeys={accessories.map(ac => `${ac.product_id}-${ac.variant_id}`)} />
+      )}
+      {showAddItemModal && (
+        <FlavourPickerModal products={baseProducts} onPick={addItemsFromPick}
+          onClose={() => setShowAddItemModal(false)} title="🎂 Pick Flavours" multi
+          existingKeys={items.map(it => `${it.product_id}-${it.variant_id}`)} />
       )}
     </WindowShell>
   );

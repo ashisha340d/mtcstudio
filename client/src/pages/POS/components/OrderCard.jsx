@@ -4,6 +4,7 @@ import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
 import CustomerPickerModal from './CustomerPickerModal';
 import DeliveryPartnerModal from './OrderTypeModal';
+import { flyToCashStack } from './flyToCashStack';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return '0m';
@@ -21,8 +22,14 @@ const TYPE_META = {
 
 const LONG_PRESS_MS = 550;
 
-export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
+export default function OrderCard({ order, index, onClick, onDirectCheckout, closing = false }) {
   const { kotsByOrder, updateOrderFields } = usePOS();
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (!closing || !cardRef.current) return;
+    flyToCashStack(cardRef.current.getBoundingClientRect(), { amount: order.total_amount });
+  }, [closing]);
 
   // Tick every minute so the elapsed-time timer advances
   const [tick, setTick] = useState(0);
@@ -81,7 +88,8 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
   }
 
   return (
-    <div className={`oc oc--${meta.cls}${isDraft ? ' oc--draft' : ''}`} onClick={() => onClick(order)}>
+    <div ref={cardRef} className={`oc oc--${meta.cls}${isDraft ? ' oc--draft' : ''}${closing ? ' tc--wiping' : ''}`}
+      onClick={closing ? undefined : () => onClick(order)}>
       <button
         className="oc__assign-btn"
         title={order.customer_phone ? 'Change customer' : 'Add customer'}
@@ -204,6 +212,12 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout }) {
             onClose={() => setShowAssign(false)}
           />
         )
+      )}
+      {closing && (
+        <>
+          <div className="tc__wipe-sweep" />
+          <div className="tc__paid-stamp"><span>PAID ✓</span></div>
+        </>
       )}
     </div >
   );

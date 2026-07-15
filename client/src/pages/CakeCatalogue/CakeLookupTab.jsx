@@ -13,7 +13,7 @@ const TYPES = [
   { key: 'PRODUCT_BADGE', label: '🏷 Product Badge', hint: 'e.g. VEG, SPICY, NEW' },
 ];
 
-function LookupGroup({ type, rows, onAdd, onUpdate, onDelete, onReorder }) {
+function LookupGroup({ type, rows, onAdd, onUpdate, onDelete, onReorder, onSetMultiselect }) {
   const [adding, setAdding] = useState(false);
   const [draft,  setDraft]  = useState({ name: '', extra_charge: '', description: '' });
   const [edits,  setEdits]  = useState({});
@@ -71,6 +71,12 @@ function LookupGroup({ type, rows, onAdd, onUpdate, onDelete, onReorder }) {
         <span className="fm-card__title">{type.label}</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#aaa' }}>{rows.length} entries · {type.hint}</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#888' }}>
+            Max select
+            <input type="number" min="0" style={{ width: 46, padding: '3px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: 11 }}
+              defaultValue={rows[0]?.multiselect || 0}
+              onBlur={e => onSetMultiselect(type.key, parseInt(e.target.value) || 0)} />
+          </label>
           <button className="btn-primary" style={{ padding: '4px 12px', fontSize: 11 }}
             onClick={() => setAdding(a => !a)}>
             {adding ? '✕ Cancel' : '+ Add'}
@@ -192,6 +198,12 @@ export default function CakeLookupTab() {
     catch (e) { flash(e.response?.data?.error || 'Delete failed', true); }
   }
 
+  async function handleSetMultiselect(lookup_type, multiselect) {
+    setRows(rs => rs.map(r => r.lookup_type === lookup_type ? { ...r, multiselect } : r));
+    try { await API.post('/maintenance/cake-lookup/multiselect', { lookup_type, multiselect }); flash('Saved'); }
+    catch (e) { flash(e.response?.data?.error || 'Save failed', true); await load(); }
+  }
+
   async function handleReorder(order) {
     const bySortOrder = Object.fromEntries(order.map(o => [o.id, o.sort_order]));
     setRows(rs => rs.map(r => bySortOrder[r.id] !== undefined ? { ...r, sort_order: bySortOrder[r.id] } : r));
@@ -224,6 +236,7 @@ export default function CakeLookupTab() {
           onUpdate={handleUpdate}
           onDelete={handleDelete}
           onReorder={handleReorder}
+          onSetMultiselect={handleSetMultiselect}
         />
       ))}
     </div>

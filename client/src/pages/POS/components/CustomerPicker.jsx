@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const AVATAR_COLORS = ['#c1440e', '#1d4ed8', '#2d7a2d', '#7c3aed', '#a16207', '#0369a1'];
+const PHONE_RE = /^\+?[1-9]\d{6,14}$/; // generic E.164-ish, any country
+
+function toProperCase(str) {
+  return str.trim().toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
+}
 
 /**
  * Reusable inline customer search + pick + quick-add.
@@ -35,6 +40,7 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
     const phone = newPhone.trim();
     const name = newName.trim();
     if (!phone || !name) { setError('Phone and name required'); return; }
+    if (!PHONE_RE.test(phone)) { setError('Invalid phone number'); return; }
     setSaving(true);
     setError('');
     try {
@@ -71,7 +77,7 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
               className="modal__input cust-picker__phone"
               autoFocus type="tel" placeholder="Phone number — 10 digits"
               value={newPhone}
-              onChange={e => { setNewPhone(e.target.value); setError(''); }}
+              onChange={e => { setNewPhone(e.target.value.replace(/(?!^\+)[^\d]/g, '')); setError(''); }}
               onKeyDown={e => { if (e.key === 'Enter') handleSaveNew(); }}
             />
             <button className="modal__btn modal__btn--cancel" style={{ flex: '0 0 auto', marginBottom: 10 }}
@@ -84,6 +90,7 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
             placeholder="Customer full name"
             value={newName}
             onChange={e => { setNewName(e.target.value); setError(''); }}
+            onBlur={e => setNewName(toProperCase(e.target.value))}
             onKeyDown={e => { if (e.key === 'Enter') handleSaveNew(); }}
           />
           {error && <div className="cust-picker__error">{error}</div>}
