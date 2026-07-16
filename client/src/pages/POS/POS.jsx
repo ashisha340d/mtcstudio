@@ -15,6 +15,7 @@ import SalesReportModal from './components/SalesReportModal';
 import AddProductModal from './components/AddProductModal';
 import { printReceipt } from './components/ThermalReceipt';
 import { API, W, fmt, cleanVariantName } from './posShared';
+import { getMenuSnapshot, subscribeMenu, initMenuStore } from '../../stores/menuStore';
 import './pos.css';
 
 const H = { 'Content-Type': 'application/json', 'X-Session-ID': 'dev-session' };
@@ -38,34 +39,6 @@ const canEdit = () => true;
 let _cartId = 0;
 const newId = () => `ci_${++_cartId}`;
 const ALL_CAT = '__ALL__';
-
-function normalizeMenuProduct(product) {
-  const rawPrice = product?.price ?? product?.pos_price ?? product?.min_price ?? product?.max_price ?? product?.selling_price ?? 0;
-  const rawPrep = product?.prep_time_minutes ?? product?.prep_time ?? 10;
-  const rawActive = product?.is_active ?? product?.pos_active ?? 1;
-  const rawVariantCount = product?.variant_count ?? product?.variantCount ?? (Array.isArray(product?.variants) ? product.variants.length : 0) ?? 0;
-  const badgeCodes = String(product?.badge || product?.badges || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const price = Number(rawPrice);
-  const prepTime = Number(rawPrep);
-  const variantCount = Number(rawVariantCount);
-  const isActive = rawActive === 0 || rawActive === '0' || rawActive === false ? 0 : 1;
-
-  return {
-    ...product,
-    id: product?.id ?? product?.product_id,
-    name: product?.name ?? product?.product_name ?? '',
-    price: Number.isFinite(price) ? price : 0,
-    prep_time_minutes: Number.isFinite(prepTime) ? prepTime : 10,
-    is_active: isActive,
-    is_fast_moving: Boolean(Number(product?.is_fast_moving ?? 0)),
-    variant_count: Number.isFinite(variantCount) ? variantCount : 0,
-    badge: badgeCodes.join(','),
-  };
-}
 
 function getProductBadges(product) {
   const badges = [];
@@ -102,9 +75,7 @@ function loadLayout() {
   return null;
 }
 
-/* ── Session caches — paint instantly on re-entry, refresh in background ── */
-let menuCache = null;    // normalized active products (full list)
-let catTblCache = null;  // { cats, tbls }
+/* ── Menu data comes from the global menuStore (memory + IndexedDB + socket sync) ── */
 
 /* ── Remove Sent Item — classify mistake / return / waste ─────── */
 function RemoveItemModal({ item, onConfirm, onClose }) {
@@ -727,8 +698,8 @@ export default function POS() {
   })();
   const _initCart = [...(initState.draftItems ?? []), ..._schedItems].map(i => ({ ...i, _id: newId() }));
 
-  const [categories, setCategories] = useState(() => catTblCache?.cats ?? []);
-  const [products, setProducts] = useState(() => menuCache ?? []);
+  const [categories, setCategories] = useState(() => getMenuSnapshot().cats ?? []);
+  const [products, setProducts] = useState(() => getMenuSnapshot().menu ?? []);
   const [quickOn, setQuickOn] = useState(() => {
     try { return localStorage.getItem(QUICK_ON_KEY) !== '0'; } catch { return true; }
   });
@@ -747,7 +718,7 @@ export default function POS() {
   });
   const [search, setSearch] = useState('');
   const [orderType, setOrderType] = useState(initState.orderType ?? 'DINE_IN');
-  const [tables, setTables] = useState(() => catTblCache?.tbls ?? []);
+  const [tables, setTables] = useState(() => getMenuSnapshot().tbls ?? []);
   const [activeTable, setActiveTable] = useState(initState.tableId ? String(initState.tableId) : '');
   /* ── Scheduled / Draft mode — items saved to pos_scheduled_orders,
      never touching pos_orders/pos_kots until conversion ── */
@@ -918,35 +889,27 @@ export default function POS() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [cart.length, editableItems.length]);
 
-  /* ── Load categories + tables (cached paint, background refresh) ── */
+  /* ── Menu / categories / tables from global menuStore ─────── */
+  // Never fetches if the store already has data (prefetched at boot).
+  // Store notifies on socket-driven updates → React re-renders automatically.
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/food-menu/categories`).then(r => r.json()),
-      fetch(`${API}/pos/tables`, { headers: H }).then(r => r.json()),
-    ]).then(([cats, tbls]) => {
-      catTblCache = { cats, tbls };
-      setCategories(cats);
-      setTables(tbls);
-    }).catch(() => { });
+    const apply = () => {
+      const { menu, cats, tbls } = getMenuSnapshot();
+      if (menu) { setProducts(menu); setLoading(false); }
+      if (cats) setCategories(cats);
+      if (tbls) setTables(tbls);
+    };
+    if (!getMenuSnapshot().menu) setLoading(true);
+    const unsub = subscribeMenu(apply);
+    initMenuStore().finally(() => setLoading(false));
+    apply();
+    return unsub;
   }, []);
 
   /* ── Persist active category selection ───────────────────── */
   useEffect(() => {
     try { localStorage.setItem('pos_activeCat', activeCat); } catch { /* best-effort */ }
   }, [activeCat]);
-
-  /* ── Load full menu once; category switching filters client-side ── */
-  useEffect(() => {
-    if (!menuCache) setLoading(true);
-    fetch(`${API}/food-menu/products`)
-      .then(r => r.json())
-      .then(rows => {
-        menuCache = (rows || []).map(normalizeMenuProduct).filter(p => p.is_active !== 0);
-        setProducts(menuCache);
-      })
-      .catch(() => { })
-      .finally(() => setLoading(false));
-  }, []);
 
   /* ── Fast-moving items derived from the same list ─────────── */
   const fastProducts = useMemo(() => products.filter(p => p.is_fast_moving), [products]);

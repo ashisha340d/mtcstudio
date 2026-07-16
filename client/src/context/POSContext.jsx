@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
 import { createSocket } from '../socket';
 import { createAlertPlayer } from '../utils/alertSound';
+import { refreshMenu, refreshTables } from '../stores/menuStore';
 
 // ── Constants ─────────────────────────────────────────────────
 export const ORDER_TYPE = {
@@ -773,7 +774,10 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     socket.on('order-cancelled', reload);
     socket.on('order-completed', reload);
     socket.on('reconnect',       reload); // re-sync after connection drop
-    socket.on('tables-updated',  () => loadMasterDataRef.current());
+    socket.on('tables-updated',  () => { loadMasterDataRef.current(); refreshTables(); });
+    // Menu edited anywhere (FoodMenu, modifiers, pricing…) — refresh the
+    // global menu store; every mounted POS screen re-renders automatically.
+    socket.on('menu-updated', (p) => refreshMenu(p?.version));
 
     // Item prepared in KDS — update the order's ready count live and pop a toast.
     // Uses the server-supplied product/table context (not local state) so this still

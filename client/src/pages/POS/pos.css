@@ -2548,3 +2548,121 @@
   background: var(--window-border);
   border-radius: 2px;
 }
+
+/* ── Fonepay Panel — read-only "Check Fonepay" popup ──────────── */
+.fonepay-panel {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 2500;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  background: #fff8dc;
+  border: 1.5px solid var(--yellow);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(42, 31, 18, 0.38);
+  overflow: hidden;
+}
+
+.fonepay-panel__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 1px solid var(--yellow);
+  font-size: 13px;
+  font-weight: 700;
+  color: #4a3828;
+}
+
+.fonepay-panel__title button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #4a3828;
+  font-size: 14px;
+}
+
+.fonepay-panel__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px 0;
+}
+
+.fonepay-panel__toolbar button {
+  background: var(--yellow);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fonepay-panel__toolbar button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fonepay-panel__state {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.fonepay-panel__state--error {
+  color: var(--red);
+}
+
+.fonepay-panel__grid-wrap {
+  overflow: auto;
+  padding: 10px 14px 14px;
+}
+
+.fonepay-panel__grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.fonepay-panel__grid th {
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--text-2);
+  border-bottom: 1.5px solid var(--yellow);
+  white-space: nowrap;
+}
+
+.fonepay-panel__grid td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eadfa8;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.fonepay-panel__grid tbody tr {
+  cursor: pointer;
+}
+
+.fonepay-panel__grid tbody tr:hover {
+  background: rgba(161, 98, 7, 0.08);
+}
+
+.fonepay-panel__row--selected {
+  background: rgba(161, 98, 7, 0.18) !important;
+}
+
+.fonepay-panel__copy-btn {
+  background: none;
+  border: 1px solid var(--yellow);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+}

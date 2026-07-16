@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/productsController');
+const menuVersion = require('../pos/menuVersion');
+
+// Product writes (incl. images/variants) invalidate the POS menu cache
+router.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  res.on('finish', () => { if (res.statusCode < 400) menuVersion.bump(); });
+  next();
+});
 
 router.get('/', ctrl.list);
 router.post('/', ctrl.create);

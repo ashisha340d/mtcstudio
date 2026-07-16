@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePOS } from '../../../context/POSContext';
 import { printReceipt } from './ThermalReceipt';
 import SplitTenderCheckout from './SplitTenderCheckout';
+import FonepayPanel from './FonepayPanel';
 
 const API = import.meta.env.VITE_API_URL || '/api';
 const H = { 'Content-Type': 'application/json', 'X-Session-ID': 'dev-session' };
@@ -81,6 +82,7 @@ export default function SplitTenderCheckoutContainer({ orderId, onClose, onSucce
   const [snapshot, setSnapshot] = useState(null);
   const [done, setDone] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [showFonepay, setShowFonepay] = useState(false);
 
   if (done) {
     // Done is manual — cashier clicks it (or backdrop/Enter) after printing.
@@ -206,6 +208,21 @@ export default function SplitTenderCheckoutContainer({ orderId, onClose, onSucce
         prefill={splitTenderPrefill}
         orderMeta={orderMeta}
       />
+      <button
+        onClick={() => setShowFonepay(true)}
+        title="Read the latest 3 Fonepay payments (read-only)"
+        style={{
+          position: 'fixed', top: 16, right: 16, zIndex: 2410,
+          background: 'var(--yellow, #a16207)', color: '#fff', border: 'none',
+          borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}
+        data-testid="checkout-fonepay-button"
+      >
+        💳 Check Fonepay
+      </button>
+      {showFonepay && (
+        <FonepayPanel onClose={() => setShowFonepay(false)} />
+      )}
       {error && (
         <div
           style={{

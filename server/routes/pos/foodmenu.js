@@ -5,8 +5,19 @@
 // ─────────────────────────────────────────────────────────────
 const express = require('express');
 const { dbAll, dbGet, dbRun, transaction } = require('../../pos/db');
+const menuVersion = require('../../pos/menuVersion');
 
 const router = express.Router();
+
+// Any successful write to menu data bumps the version and notifies POS clients
+router.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  res.on('finish', () => { if (res.statusCode < 400) menuVersion.bump(); });
+  next();
+});
+
+// GET /api/food-menu/version — cache validation stamp for POS clients
+router.get('/version', (req, res) => res.json({ version: menuVersion.get() }));
 
 // GET /api/food-menu/categories
 router.get('/categories', async (req, res) => {

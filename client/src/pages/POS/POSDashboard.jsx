@@ -16,6 +16,7 @@ import AddCustomerModal from './components/AddCustomerModal';
 import ScheduleOrderModal from './components/ScheduleOrderModal';
 import ScheduledOrderCard from './components/ScheduledOrderCard';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
+import FonepayPanel from './components/FonepayPanel';
 // Lazy — shares the route chunk, idle-prefetched below
 const CakeOrderFormWindow = lazy(() => import('../CakeOrders/CakeOrderForm'));
 import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder, getBusinessDay } from '../../services/posApi';
@@ -37,7 +38,7 @@ function Clock() {
 const TOOLBAR_ORDER_KEY = 'pos_toolbar_btn_order';
 const DEFAULT_BTN_ORDER = [
   'takeaway', 'delivery', 'schedule', 'draft', 'cake', 'weborders',
-  'tablemerge', 'shift', 'revert', 'drawer', 'closeday',
+  'tablemerge', 'shift', 'revert', 'drawer', 'closeday', 'fonepay',
 ];
 
 function noop() { }
@@ -115,6 +116,7 @@ export default function POSDashboard() {
   const [showShift, setShowShift] = useState(false);
   const [showRevert, setShowRevert] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [showFonepay, setShowFonepay] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showWebOrders, setShowWebOrders] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -492,6 +494,11 @@ export default function POSDashboard() {
       onClick: () => navigate('/pos/cash-closing'),
       title: 'Daily cash closing — open/close the business day (F2)',
     },
+    fonepay: {
+      className: 'pos-topbar__btn--g3', label: '💳 Check Fonepay',
+      onClick: () => setShowFonepay(true),
+      title: 'Read the latest 3 Fonepay payments (read-only)',
+    },
   };
 
   return (
@@ -644,6 +651,9 @@ export default function POSDashboard() {
       )}
       {showDrawer && (
         <CashDrawerModal onClose={() => setShowDrawer(false)} />
+      )}
+      {showFonepay && (
+        <FonepayPanel onClose={() => setShowFonepay(false)} />
       )}
       {showSalesReport && (
         <SalesReportModal onClose={() => setShowSalesReport(false)} />

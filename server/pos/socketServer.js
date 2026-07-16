@@ -175,6 +175,13 @@ function emitTablesUpdated() {
   io.to('waiter').emit('tables-updated');
 }
 
+// Menu data changed (products/categories/variants/modifiers/pricing) —
+// POS clients refetch and update their local caches.
+function emitMenuUpdated(version) {
+  if (!io) return;
+  io.to('pos').emit('menu-updated', { version });
+}
+
 // New pending web order imported from the website — POS screens show a popup,
 // play the web_order sound and refresh the Web Orders badge.
 function emitWebOrderReceived(payload) {
@@ -192,4 +199,4 @@ function emitPendingRejected(pendingId, payload) {
   io.to(`pending-${pendingId}`).emit('pending-rejected', payload);
 }
 
-module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected };
+module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitMenuUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected };

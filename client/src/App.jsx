@@ -21,6 +21,7 @@ const Automation         = lazy(() => import('./pages/Automation/Automation'));
 // ── POS / KDS / Auth ─────────────────────────────────────────
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { POSProvider, prefetchPOSData } from './context/POSContext';
+import { initMenuStore } from './stores/menuStore';
 import { KDSProvider }          from './context/KDSContext';
 import AuthGate                 from './components/AuthGate';
 import KDSAuthGate              from './components/KDSAuthGate';
@@ -54,7 +55,7 @@ function POSRoot({ children }) {
     return () => { delete document.documentElement.dataset.uiTheme; };
   }, []);
   // Warm master data + active orders while the boot splash / PIN screen shows
-  useEffect(() => { prefetchPOSData(posApi); }, []);
+  useEffect(() => { prefetchPOSData(posApi); initMenuStore(); }, []);
   return (
     <AuthProvider apiService={posApi}>
       <AuthGate>
