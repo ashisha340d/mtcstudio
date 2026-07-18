@@ -319,10 +319,15 @@ export default function CashClosing() {
                                  value={qty[d] ?? ''} disabled={isClosed} placeholder="0"
                                  onChange={e => setQty(prev => ({ ...prev, [d]: e.target.value }))}
                                  onKeyDown={e => {
-                                   if (e.key !== 'Enter') return;
+                                   // Arrow keys shouldn't bump the number value — repurpose
+                                   // them (and Enter) for row-to-row navigation instead.
+                                   if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
                                    e.preventDefault();
-                                   const next = DENOMS[DENOMS.indexOf(d) + 1] ?? DENOMS[0];
-                                   const el = document.getElementById(`cc-qty-${next}`);
+                                   const idx = DENOMS.indexOf(d);
+                                   const target = e.key === 'ArrowUp'
+                                     ? (DENOMS[idx - 1] ?? DENOMS[DENOMS.length - 1])
+                                     : (DENOMS[idx + 1] ?? DENOMS[0]);
+                                   const el = document.getElementById(`cc-qty-${target}`);
                                    el?.focus(); el?.select();
                                  }}
                                  onFocus={e => e.target.select()} />

@@ -294,6 +294,12 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE cake_collections ADD COLUMN IF NOT EXISTS hero_media_id INT`);
     await dbRun(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_delivery_partner INT DEFAULT 0`);
     await dbRun(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS discount DOUBLE DEFAULT 0`);
+    // Customer search — FULLTEXT for name/address/notes candidate retrieval, plain
+    // indexes so phone2/email prefix lookups don't fall back to a table scan.
+    await dbRun(`ALTER TABLE customers ADD FULLTEXT INDEX IF NOT EXISTS ft_customers_search (name, address, notes)`);
+    await dbRun(`ALTER TABLE customers ADD INDEX IF NOT EXISTS idx_customers_phone2 (phone2)`);
+    await dbRun(`ALTER TABLE customers ADD INDEX IF NOT EXISTS idx_customers_email (email)`);
+    await dbRun(`ALTER TABLE customers ADD INDEX IF NOT EXISTS idx_customers_email2 (email2)`);
     await dbRun(`ALTER TABLE cake_design_media ADD INDEX IF NOT EXISTS idx_ckm_media (media_id)`);
     await dbRun(`ALTER TABLE cake_collections ADD INDEX IF NOT EXISTS idx_cc_hero_media (hero_media_id)`);
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_featured_image (featured_image)`);

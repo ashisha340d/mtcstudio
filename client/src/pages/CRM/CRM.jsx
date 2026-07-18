@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import GoogleSync from './GoogleSync';
 import './CRM.css';
 
 const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' });
@@ -17,6 +18,11 @@ const TABS = [
   { key: 'birthdays', label: '🎂 Birthdays' },
 ];
 
+const STATE_KEY = 'crm-customers-state';
+const savedState = (() => {
+  try { return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; } catch { return {}; }
+})();
+
 export default function CRM() {
   const [tab,       setTab]      = useState('customers');
   const [rows,      setRows]     = useState([]);
@@ -25,8 +31,12 @@ export default function CRM() {
   const [edits,     setEdits]    = useState({});
   const [editMode,  setEditMode] = useState(false);
   const [newRow,    setNewRow]   = useState(BLANK);
-  const [search,    setSearch]   = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [search,    setSearch]   = useState(savedState.search ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(savedState.search ?? '');
+  const [statusFilter, setStatusFilter] = useState(savedState.statusFilter ?? 'active');
+  const [page,      setPage]     = useState(savedState.page ?? 1);
+  const [limit,     setLimit]    = useState(savedState.limit ?? 25);
+  const [total,     setTotal]    = useState(0);
   const [saving,    setSaving]   = useState(false);
   const [toast,     setToast]    = useState(null);
   const addRefs = useRef([]);
@@ -37,10 +47,10 @@ export default function CRM() {
   };
 
   const loadCustomers = useCallback(() => {
-    API.get('/crm/customers', { params: { search, status: statusFilter } })
-      .then(r => setRows(r.data))
+    API.get('/crm/customers', { params: { search: debouncedSearch, status: statusFilter, page, limit } })
+      .then(r => { setRows(r.data.rows); setTotal(r.data.total); })
       .catch(() => {});
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter, page, limit]);
 
   const loadStats = useCallback(() => {
     API.get('/crm/stats').then(r => setStats(r.data)).catch(() => {});
@@ -50,7 +60,18 @@ export default function CRM() {
     API.get('/crm/birthdays').then(r => setBdRows(r.data)).catch(() => {});
   }, []);
 
+  // Same debounce technique as the POS customer picker — don't fire a ranked
+  // search request per keystroke, wait for typing to settle.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   useEffect(() => { loadCustomers(); loadStats(); }, [loadCustomers, loadStats]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, limit]);
+  useEffect(() => {
+    localStorage.setItem(STATE_KEY, JSON.stringify({ search, statusFilter, page, limit }));
+  }, [search, statusFilter, page, limit]);
   useEffect(() => { if (tab === 'birthdays') loadBirthdays(); }, [tab, loadBirthdays]);
 
   function setField(phone, field, val) {
@@ -143,6 +164,9 @@ export default function CRM() {
           <h1>CRM — Customer Management</h1>
           <span style={{ fontSize: 13, color: '#aaa' }}>Customer database, loyalty & birthday club</span>
         </div>
+        <div className="crm-header-actions">
+          <GoogleSync onSynced={() => { loadCustomers(); loadStats(); }} />
+        </div>
       </div>
 
       {/* Stats */}
@@ -180,7 +204,7 @@ export default function CRM() {
       {/* ── CUSTOMERS TAB ── */}
       {tab === 'customers' && (
         <>
-          {/* Toolbar */}
+          {/* Toolbar + pagination, single row to save space */}
           <div className="crm-toolbar">
             <input
               className="crm-search"
@@ -207,10 +231,71 @@ export default function CRM() {
               <span className="dot" />
               {editMode ? 'Edit Mode ON' : 'Edit Mode OFF'}
             </button>
+
+            <div className="crm-pager">
+              <span className="crm-pager__info">
+                {total === 0 ? '0 results' : `${(page - 1) * limit + 1}–${Math.min(page * limit, total)} of ${total}`}
+              </span>
+              <button className="crm-btn-icon" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
+              <span className="crm-pager__page">Page {page} / {Math.max(1, Math.ceil(total / limit))}</span>
+              <button className="crm-btn-icon" disabled={page * limit >= total} onClick={() => setPage(p => p + 1)}>Next ›</button>
+              <select className="crm-filter-select" value={limit} onChange={e => setLimit(Number(e.target.value))}>
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
           </div>
 
           {/* Grid */}
           <div className={`crm-card ${editMode ? 'edit-mode' : ''}`}>
+            {/* Add form */}
+            <div className="crm-add-form">
+              <div className="crm-field crm-field--required" style={{ maxWidth: 150 }}>
+                <label>Phone (primary)</label>
+                <input ref={el => addRefs.current[0]=el} placeholder="e.g. 9800000000"
+                  value={newRow.phone} onChange={e => setNewRow(f => ({...f, phone: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,0,false)} />
+              </div>
+              <div className="crm-field" style={{ maxWidth: 140 }}>
+                <label>Phone 2</label>
+                <input ref={el => addRefs.current[1]=el} placeholder="Alt number"
+                  value={newRow.phone2} onChange={e => setNewRow(f => ({...f, phone2: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,1,false)} />
+              </div>
+              <div className="crm-field crm-field--required">
+                <label>Name</label>
+                <input ref={el => addRefs.current[2]=el} placeholder="Full name"
+                  value={newRow.name} onChange={e => setNewRow(f => ({...f, name: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,2,false)} />
+              </div>
+              <div className="crm-field">
+                <label>Email</label>
+                <input ref={el => addRefs.current[3]=el} type="email" placeholder="email@example.com"
+                  value={newRow.email} onChange={e => setNewRow(f => ({...f, email: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,3,false)} />
+              </div>
+              <div className="crm-field" style={{ maxWidth: 150 }}>
+                <label>Birthday</label>
+                <input ref={el => addRefs.current[4]=el} type="date"
+                  value={newRow.birthday} onChange={e => setNewRow(f => ({...f, birthday: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,4,false)} />
+              </div>
+              <div className="crm-field">
+                <label>Address</label>
+                <input ref={el => addRefs.current[5]=el} placeholder="Street / area"
+                  value={newRow.address} onChange={e => setNewRow(f => ({...f, address: e.target.value}))}
+                  onKeyDown={e => addKeyDown(e,5,true)} />
+              </div>
+              <div style={{ display:'flex', alignItems:'flex-end' }}>
+                <button className="btn-primary" onClick={addCustomer} disabled={saving}>+ Add Customer</button>
+              </div>
+            </div>
+            <div style={{ padding:'8px 20px', fontSize:11, color:'#bbb' }}>
+              Enable Edit Mode to modify existing records · Phone number is permanent (primary key)
+            </div>
+
             <table className="crm-table">
               <thead>
                 <tr>
@@ -328,49 +413,6 @@ export default function CRM() {
                 )}
               </tbody>
             </table>
-
-            {/* Add form */}
-            <div className="crm-add-form">
-              <div className="crm-field crm-field--required" style={{ maxWidth: 150 }}>
-                <label>Phone (primary)</label>
-                <input ref={el => addRefs.current[0]=el} placeholder="e.g. 9800000000"
-                  value={newRow.phone} onChange={e => setNewRow(f => ({...f, phone: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,0,false)} />
-              </div>
-              <div className="crm-field" style={{ maxWidth: 140 }}>
-                <label>Phone 2</label>
-                <input ref={el => addRefs.current[1]=el} placeholder="Alt number"
-                  value={newRow.phone2} onChange={e => setNewRow(f => ({...f, phone2: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,1,false)} />
-              </div>
-              <div className="crm-field crm-field--required">
-                <label>Name</label>
-                <input ref={el => addRefs.current[2]=el} placeholder="Full name"
-                  value={newRow.name} onChange={e => setNewRow(f => ({...f, name: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,2,false)} />
-              </div>
-              <div className="crm-field">
-                <label>Email</label>
-                <input ref={el => addRefs.current[3]=el} type="email" placeholder="email@example.com"
-                  value={newRow.email} onChange={e => setNewRow(f => ({...f, email: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,3,false)} />
-              </div>
-              <div className="crm-field" style={{ maxWidth: 150 }}>
-                <label>Birthday</label>
-                <input ref={el => addRefs.current[4]=el} type="date"
-                  value={newRow.birthday} onChange={e => setNewRow(f => ({...f, birthday: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,4,false)} />
-              </div>
-              <div className="crm-field">
-                <label>Address</label>
-                <input ref={el => addRefs.current[5]=el} placeholder="Street / area"
-                  value={newRow.address} onChange={e => setNewRow(f => ({...f, address: e.target.value}))}
-                  onKeyDown={e => addKeyDown(e,5,true)} />
-              </div>
-              <div style={{ display:'flex', alignItems:'flex-end' }}>
-                <button className="btn-primary" onClick={addCustomer} disabled={saving}>+ Add Customer</button>
-              </div>
-            </div>
             <div style={{ padding:'8px 20px', fontSize:11, color:'#bbb' }}>
               Enable Edit Mode to modify existing records · Phone number is permanent (primary key)
             </div>

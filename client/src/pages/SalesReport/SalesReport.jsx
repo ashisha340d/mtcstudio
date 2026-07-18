@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
 import posApi from '../../services/posApi';
+import { printReceipt } from '../POS/components/ThermalReceipt';
 import './SalesReport.css';
 
 const PAYMENT_LABELS = { CASH: 'Cash', CARD: 'Card', QR: 'QR/UPI', WALLET: 'Wallet', LEDGER: 'Ledger' };
+
+// order.time stays "HH:MM" (24h) for correct string sorting — format to 12h AM/PM only for display
+function fmt12h(hhmm) {
+  const [h, m] = (hhmm || '').split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
 
 const COL_WIDTHS_KEY = 'salesReport.colWidths';
 const DEFAULT_COL_WIDTHS = { sn: 32, id: 54, time: 68, customer: 220, payment: 100, amount: 90, action: 36 };
@@ -20,7 +30,10 @@ function todayNepal() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
 }
 
-export default function SalesReport({ gridLines = true } = {}) {
+export default function SalesReport({
+  gridLines = true, actionsEnabled = false, isAdmin = false,
+  revertOrderTransaction, revertCakeTransaction, notify,
+} = {}) {
   const [date, setDate]                 = useState(todayNepal);
   const [salesData, setSalesData]       = useState(null);
   const [cakeData, setCakeData]         = useState(null);
@@ -30,6 +43,9 @@ export default function SalesReport({ gridLines = true } = {}) {
   const [search, setSearch]             = useState('');
   const [colWidths, setColWidths]       = useState(loadColWidths);
   const [sort, setSort]                 = useState({ col: 'time', dir: 'desc' });
+  const [refreshTick, setRefreshTick]   = useState(0);
+
+  const showActions = actionsEnabled && isAdmin && date === todayNepal();
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +67,39 @@ export default function SalesReport({ gridLines = true } = {}) {
     };
     fetch();
     return () => { cancelled = true; };
-  }, [date]);
+  }, [date, refreshTick]);
+
+  async function handleRecall(order, e) {
+    e.stopPropagation();
+    const input = window.prompt(`Reason for recalling ${order.label} (optional):`);
+    if (input === null) return;
+    try {
+      if (order.source === 'CAKE') await revertCakeTransaction({ cakeOrderId: order.cakeOrderId, reason: input });
+      else await revertOrderTransaction({ orderId: order.id, reason: input });
+      notify?.('success', `${order.label} recalled`);
+      setRefreshTick(t => t + 1);
+    } catch (err) {
+      notify?.('error', err.response?.data?.error || err.message || 'Recall failed');
+    }
+  }
+
+  function handlePrint(order, e) {
+    e.stopPropagation();
+    printReceipt({
+      order: {
+        id: order.id,
+        order_type: order.orderType,
+        table_name: order.tableName,
+        customer_name: order.customerName,
+        customer_phone: order.customerPhone,
+        total_amount: order.amount,
+        created_at: order.closedAt,
+      },
+      items: order.items || [],
+      payments: order.payments || [],
+      isReprint: true,
+    });
+  }
 
   const toggleOrder = (id) => setExpandedOrder(prev => prev === id ? null : id);
 
@@ -87,7 +135,7 @@ export default function SalesReport({ gridLines = true } = {}) {
     '--w-customer': `${colWidths.customer}px`,
     '--w-payment': `${colWidths.payment}px`,
     '--w-amount': `${colWidths.amount}px`,
-    '--w-action': `${colWidths.action}px`,
+    '--w-action': `${showActions ? Math.max(colWidths.action, 84) : colWidths.action}px`,
   };
 
   // Merge KOT and cake orders into a single list
@@ -95,6 +143,9 @@ export default function SalesReport({ gridLines = true } = {}) {
     ...(salesData?.orders || []).map(o => ({
       key: `f-${o.id}`,
       source: 'FOOD',
+      id: o.id,
+      orderType: o.orderType,
+      closedAt: o.closedAt,
       label: `#${o.id}`,
       time: o.time,
       customerName: o.customerName,
@@ -109,6 +160,7 @@ export default function SalesReport({ gridLines = true } = {}) {
     ...(cakeData?.transactions || []).map(t => ({
       key: `c-${t.id}`,
       source: 'CAKE',
+      cakeOrderId: t.cakeOrderId,
       label: t.order_number,
       time: t.time,
       customerName: t.customer_name,
@@ -225,7 +277,7 @@ export default function SalesReport({ gridLines = true } = {}) {
                 <div className="col-customer" onClick={() => toggleSort('customer')}>Customer{sort.col === 'customer' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('customer', e)} /></div>
                 <div className="col-payment" onClick={() => toggleSort('payment')}>Payment{sort.col === 'payment' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('payment', e)} /></div>
                 <div className="col-amount" onClick={() => toggleSort('amount')}>Amount{sort.col === 'amount' && <span className="sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}<span className="col-resize-handle" onMouseDown={e => startResize('amount', e)} /></div>
-                <div className="col-action"></div>
+                <div className="col-action">{showActions && 'Action'}</div>
               </div>
 
               {sortedOrders.map((order, idx) => (
@@ -238,7 +290,7 @@ export default function SalesReport({ gridLines = true } = {}) {
                     <div className="col-sn">{idx + 1}</div>
                     <div className="col-id">{order.label}</div>
                     <div className="col-time">
-                      <div className="order-time">{order.time}</div>
+                      <div className="order-time">{fmt12h(order.time)}</div>
                     </div>
                     <div className="col-customer">
                       {order.source === 'CAKE' && <div className="table-tag">Cake</div>}
@@ -256,6 +308,14 @@ export default function SalesReport({ gridLines = true } = {}) {
                     </div>
                     <div className="col-amount">₹{order.deleted ? 0 : (order.amount || 0).toLocaleString('en-IN')}</div>
                     <div className="col-action">
+                      {showActions && !order.deleted && (
+                        <>
+                          {order.source === 'FOOD' && (
+                            <button className="report-action-btn" title="Print receipt" onClick={e => handlePrint(order, e)}>🖨</button>
+                          )}
+                          <button className="report-action-btn report-action-btn--recall" title="Recall / revert this transaction" onClick={e => handleRecall(order, e)}>↩</button>
+                        </>
+                      )}
                       {order.items && <span className="expand-chevron">{expandedOrder === order.key ? '▲' : '▼'}</span>}
                     </div>
                   </div>

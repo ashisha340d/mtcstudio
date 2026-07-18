@@ -8,7 +8,6 @@ import CheckoutModal from './components/SplitTenderCheckoutContainer';
 import OrderTypeModal from './components/OrderTypeModal';
 import TableMergeModal from './components/TableMergeModal';
 import ShiftOrderModal from './components/ShiftOrderModal';
-import RevertTransactionModal from './components/RevertTransactionModal';
 import CashDrawerModal from './components/CashDrawerModal';
 import SalesReportModal from './components/SalesReportModal';
 import WebOrdersModal from './components/WebOrdersModal';
@@ -39,7 +38,7 @@ function Clock() {
 const TOOLBAR_ORDER_KEY = 'pos_toolbar_btn_order';
 const DEFAULT_BTN_ORDER = [
   'takeaway', 'delivery', 'schedule', 'draft', 'cake', 'weborders',
-  'tablemerge', 'shift', 'revert', 'drawer', 'closeday', 'fonepay',
+  'tablemerge', 'shift', 'drawer', 'closeday', 'fonepay',
 ];
 
 function noop() { }
@@ -104,6 +103,7 @@ export default function POSDashboard() {
     tables, orders, tableOrderMap, kotsByOrder, ui,
     loadMasterData, loadActiveOrders, notify,
     webOrderCount, webOrdersRequested, clearShowWebOrdersRequest,
+    revertOrderTransaction, revertCakeTransaction,
   } = usePOS();
   const { user, lock } = useAuth();
   const navigate = useNavigate();
@@ -115,7 +115,6 @@ export default function POSDashboard() {
   const [orderTypeModal, setOrderTypeModal] = useState(null);
   const [showTableMerge, setShowTableMerge] = useState(false);
   const [showShift, setShowShift] = useState(false);
-  const [showRevert, setShowRevert] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showFonepay, setShowFonepay] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
@@ -253,13 +252,13 @@ export default function POSDashboard() {
     return () => (idle ? cancelIdleCallback(id) : clearTimeout(id));
   }, []);
 
-  // F8 → toggle Sales Report · F2 → Daily Cash Closing
+  // F8 → open Sales Report (Esc closes it, handled in SalesReportModal) · F2 → Daily Cash Closing
   useEffect(() => {
     const h = (e) => {
       if (e.key !== 'F8' && e.key !== 'F2') return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       e.preventDefault();
-      if (e.key === 'F8') setShowSalesReport(prev => !prev);
+      if (e.key === 'F8') setShowSalesReport(true);
       else navigate('/pos/cash-closing');
     };
     window.addEventListener('keydown', h);
@@ -506,11 +505,6 @@ export default function POSDashboard() {
       className: 'pos-topbar__btn--g3', label: '↔ Shift Order',
       onClick: () => setShowShift(true), title: 'Shift order to a different table',
     },
-    revert: {
-      className: 'pos-topbar__btn--g3', label: '↩ Revert Transaction',
-      onClick: () => setShowRevert(true), title: 'Revert a mistaken checkout',
-      visible: () => user?.role === 'MANAGER' || user?.role === 'ADMIN',
-    },
     drawer: {
       className: 'pos-topbar__btn--g3', label: '💰 Drawer',
       onClick: () => setShowDrawer(true), title: 'Cash in / cash out for the open business day',
@@ -683,12 +677,6 @@ export default function POSDashboard() {
           onShifted={loadActiveOrders}
         />
       )}
-      {showRevert && (
-        <RevertTransactionModal
-          onClose={() => setShowRevert(false)}
-          onReverted={loadActiveOrders}
-        />
-      )}
       {showDrawer && (
         <CashDrawerModal onClose={() => setShowDrawer(false)} />
       )}
@@ -696,7 +684,13 @@ export default function POSDashboard() {
         <FonepayPanel onClose={() => setShowFonepay(false)} />
       )}
       {showSalesReport && (
-        <SalesReportModal onClose={() => setShowSalesReport(false)} />
+        <SalesReportModal
+          onClose={() => setShowSalesReport(false)}
+          isAdmin={user?.role === 'ADMIN'}
+          revertOrderTransaction={revertOrderTransaction}
+          revertCakeTransaction={revertCakeTransaction}
+          notify={notify}
+        />
       )}
       {showWebOrders && (
         <WebOrdersModal

@@ -1139,7 +1139,7 @@
 
 /* ── Customer Picker (reusable search + pick + quick-add) ───── */
 .cust-picker__list {
-  max-height: 340px;
+  height: 340px;
   overflow-y: auto;
   border: 1px solid var(--border, #c4b49c);
   border-radius: 10px;
@@ -1171,6 +1171,17 @@
 
 .cust-picker__row--new {
   border-bottom: 1px dashed var(--border, #c4b49c);
+}
+
+.cust-picker__row--active {
+  background: rgba(193, 68, 14, 0.13);
+}
+
+.cust-picker__hl {
+  background: rgba(193, 68, 14, 0.25);
+  color: inherit;
+  font-weight: 800;
+  border-radius: 2px;
 }
 
 .cust-picker__row--new .cust-picker__name {

@@ -1,40 +1,82 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const AVATAR_COLORS = ['#c1440e', '#1d4ed8', '#2d7a2d', '#7c3aed', '#a16207', '#0369a1'];
 const PHONE_RE = /^\+?[1-9]\d{6,14}$/; // generic E.164-ish, any country
+const DEBOUNCE_MS = 500;
 
 function toProperCase(str) {
   return str.trim().toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
 }
 
+// Bold the substrings of `text` matching any typed token — split() with a
+// capturing group interleaves the matches into the result at odd indices.
+function highlight(text, tokens) {
+  const str = String(text ?? '');
+  if (!str || !tokens.length) return str;
+  const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  if (!pattern) return str;
+  const parts = str.split(new RegExp(`(${pattern})`, 'gi'));
+  if (parts.length <= 1) return str;
+  return parts.map((part, i) => (i % 2 === 1 ? <mark key={i} className="cust-picker__hl">{part}</mark> : part));
+}
+
 /**
  * Reusable inline customer search + pick + quick-add.
- * Search on phone / name / address, shows up to `limit` rows,
+ * Ranked search (phone/email auto-detect, fuzzy name/address match server-side)
+ * via GET /crm/customers/search, shows up to `limit` rows, keyboard nav
+ * (↑/↓/Enter/Esc), auto-selects a lone high-confidence hit.
  * "＋ New Customer" row on top expands to phone+name quick-add.
  *
  * <CustomerPicker onSelect={(c) => ...} />   c: { phone, name, address, ... }
  */
-export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }) {
+export default function CustomerPicker({ onSelect, limit = 20, autoFocus = true }) {
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1); // 0 = "New Customer" row, 1..n = results
   const [adding, setAdding] = useState(false);
   const [newPhone, setNewPhone] = useState('');
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const timer = useRef(null);
+  const highConfidenceRef = useRef(250);
 
+  const tokens = search.trim() ? search.trim().split(/\s+/) : [];
+
+  const runSearch = useCallback((q) => {
+    const trimmed = q.trim();
+    if (!trimmed) { setRows([]); return Promise.resolve([]); }
+    setLoading(true);
+    return fetch(`${API_BASE}/crm/customers/search?q=${encodeURIComponent(trimmed)}&limit=${limit}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.highConfidence != null) highConfidenceRef.current = data.highConfidence;
+        const list = Array.isArray(data?.rows) ? data.rows : [];
+        setActiveIndex(-1);
+        setRows(list);
+        return list;
+      })
+      .catch(() => { setRows([]); return []; })
+      .finally(() => setLoading(false));
+  }, [limit]);
+
+  // Live search — debounced, skips a request while the box is empty
   useEffect(() => {
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      fetch(`${API_BASE}/crm/customers?search=${encodeURIComponent(search.trim())}`)
-        .then(r => r.json())
-        .then(list => setRows(Array.isArray(list) ? list.slice(0, limit) : []))
-        .catch(() => setRows([]));
-    }, 250);
+    if (!search.trim()) { setRows([]); return; }
+    timer.current = setTimeout(() => runSearch(search), DEBOUNCE_MS);
     return () => clearTimeout(timer.current);
-  }, [search, limit]);
+  }, [search, runSearch]);
+
+  // A single high-confidence hit (own exact-phrase/word match, or exact phone/email)
+  // is picked automatically the moment its result set lands — covers both the
+  // debounced arrival and the Enter-triggered final search below.
+  useEffect(() => {
+    if (rows.length === 1 && rows[0].score >= highConfidenceRef.current) onSelect(rows[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   async function handleSaveNew() {
     const phone = newPhone.trim();
@@ -65,6 +107,30 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
       setError('Save failed');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function selectRow(index) {
+    if (index === 0) { setAdding(true); return; }
+    const c = rows[index - 1];
+    if (c) onSelect(c);
+  }
+
+  function handleSearchKeyDown(e) {
+    const total = rows.length + 1; // +1 for the "New Customer" row
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(i => (i + 1) % total);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i => (i - 1 + total) % total);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0) { selectRow(activeIndex); return; }
+      clearTimeout(timer.current); // final search — don't wait out the debounce
+      runSearch(search);
+    } else if (e.key === 'Escape') {
+      setSearch(''); setRows([]); setActiveIndex(-1);
     }
   }
 
@@ -108,12 +174,17 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
       <input
         className="modal__input"
         autoFocus={autoFocus}
-        placeholder="🔍 Search by name, phone or address…"
+        placeholder="🔍 Search by name, phone or email…"
         value={search}
         onChange={e => setSearch(e.target.value)}
+        onKeyDown={handleSearchKeyDown}
       />
       <div className="cust-picker__list">
-        <button className="cust-picker__row cust-picker__row--new" onClick={() => setAdding(true)}>
+        <button
+          type="button"
+          className={`cust-picker__row cust-picker__row--new${activeIndex === 0 ? ' cust-picker__row--active' : ''}`}
+          onClick={() => selectRow(0)}
+        >
           <span className="cust-picker__avatar cust-picker__avatar--new">＋</span>
           <span className="cust-picker__info">
             <span className="cust-picker__name">New Customer</span>
@@ -123,21 +194,27 @@ export default function CustomerPicker({ onSelect, limit = 8, autoFocus = true }
         </button>
 
         {rows.map((c, i) => (
-          <button key={c.phone} className="cust-picker__row" onClick={() => onSelect(c)}>
+          <button
+            key={c.phone}
+            type="button"
+            className={`cust-picker__row${activeIndex === i + 1 ? ' cust-picker__row--active' : ''}`}
+            onClick={() => selectRow(i + 1)}
+          >
             <span className="cust-picker__avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
               {(c.name || '?').charAt(0).toUpperCase()}
             </span>
             <span className="cust-picker__info">
-              <span className="cust-picker__name">{c.name}</span>
+              <span className="cust-picker__name">{highlight(c.name, tokens)}</span>
               <span className="cust-picker__sub">
-                {c.phone}{c.address ? ` · ${c.address}` : ''}
+                {highlight(c.phone, tokens)}{c.address ? <> · {highlight(c.address, tokens)}</> : ''}
               </span>
             </span>
             <span className="cust-picker__arrow">→</span>
           </button>
         ))}
 
-        {rows.length === 0 && search.trim() && (
+        {loading && <div className="cust-picker__empty">Searching…</div>}
+        {!loading && rows.length === 0 && search.trim() && (
           <div className="cust-picker__empty">No customers match “{search.trim()}”</div>
         )}
       </div>

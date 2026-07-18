@@ -1,4 +1,4 @@
-import { useRef, useState, lazy, Suspense } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 
 // Lazy — keeps the heavy report page (and its chart deps) out of the POS chunk
 const SalesReport = lazy(() => import('../../SalesReport/SalesReport'));
@@ -14,9 +14,15 @@ function loadSize() {
   }
 }
 
-export default function SalesReportModal({ onClose }) {
+export default function SalesReportModal({ onClose, isAdmin, revertOrderTransaction, revertCakeTransaction, notify }) {
   const [size, setSize] = useState(loadSize);
   const modalRef = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
 
   const startResize = (e) => {
     e.preventDefault();
@@ -62,7 +68,14 @@ export default function SalesReportModal({ onClose }) {
         </button>
         <div style={{ height: '100%' }}>
           <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#9c8870' }}>Loading report…</div>}>
-            <SalesReport gridLines={true} />
+            <SalesReport
+              gridLines={true}
+              actionsEnabled={true}
+              isAdmin={isAdmin}
+              revertOrderTransaction={revertOrderTransaction}
+              revertCakeTransaction={revertCakeTransaction}
+              notify={notify}
+            />
           </Suspense>
         </div>
         <div

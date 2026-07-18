@@ -140,12 +140,14 @@ router.get('/sales', async (req, res) => {
       paymentMethod = dominant.method;
     }
 
-    const closedAt = new Date(o.closed_at.replace(' ', 'T') + 'Z');
-    const nepalTime = closedAt.toLocaleString('en-IN', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit', hour12: false });
-    const nepalDate = closedAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
+    // o.closed_at is already Nepal wall-clock (mysql2 dateStrings) — no TZ math, no 'Z'
+    const [nepalDate, closedTimePart] = String(o.closed_at).split(' ');
+    const nepalTime = (closedTimePart || '00:00:00').slice(0, 5);
 
     return {
       id: o.id,
+      orderType: o.order_type,
+      closedAt: o.closed_at,
       date: nepalDate,
       time: nepalTime,
       customerName: o.customer_name || null,
@@ -210,7 +212,7 @@ router.get('/cake-payments', async (req, res) => {
 
   const txns = await dbAll(
     `SELECT p.id, p.payment_type, ${methodExpr} AS method, p.amount, p.created_at,
-            co.order_number, co.customer_name, co.status, co.deleted_at
+            co.id AS cake_order_id, co.order_number, co.customer_name, co.status, co.deleted_at
      FROM pos_payments p JOIN cake_orders co ON co.id = p.cake_order_id
      WHERE p.created_at >= ? AND p.created_at <= ?
      ORDER BY p.created_at, p.id`,
@@ -246,8 +248,8 @@ router.get('/cake-payments', async (req, res) => {
      WHERE deleted_at IS NULL AND status IN ('PENDING','CONFIRMED')`
   );
 
-  const nepalTime = (ts) => new Date(String(ts).replace(' ', 'T') + 'Z')
-    .toLocaleString('en-IN', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit', hour12: false });
+  // ts is already Nepal wall-clock (mysql2 dateStrings) — no TZ math, no 'Z'
+  const nepalTime = (ts) => (String(ts).split(' ')[1] || '00:00:00').slice(0, 5);
 
   res.json({
     date: dateStr,
@@ -266,6 +268,7 @@ router.get('/cake-payments', async (req, res) => {
     },
     transactions: txns.map(t => ({
       id: t.id,
+      cakeOrderId: t.cake_order_id,
       time: nepalTime(t.created_at),
       order_number: t.order_number,
       customer_name: t.customer_name,

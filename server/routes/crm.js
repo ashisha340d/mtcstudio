@@ -1,20 +1,52 @@
 const express = require('express');
 const router  = express.Router();
 const { dbAll, dbGet, dbRun } = require('../database/db');
+const { searchCustomers, searchCustomersPaged, HIGH_CONFIDENCE } = require('../services/customerSearch');
 
-// LIST with search
+// Ranked live search (typeahead) — phone/email auto-detect, fuzzy-ranked text match.
+// Registered before /customers/:phone so "search" in the path isn't swallowed as a phone param.
+router.get('/customers/search', async (req, res, next) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 20));
+        if (!q) return res.json({ rows: [] });
+        const rows = await searchCustomers({ q, limit });
+        res.json({ rows, highConfidence: HIGH_CONFIDENCE });
+    } catch (e) { next(e); }
+});
+
+// LIST with search + pagination — a non-blank search routes through the same
+// ranked engine as the live picker (phone/email auto-detect, fuzzy name match);
+// a blank search keeps the plain alphabetical browse query.
 router.get('/customers', async (req, res, next) => {
     try {
-        const q  = `%${(req.query.search || '').trim()}%`;
+        const searchTerm = (req.query.search || '').trim();
         const st = req.query.status || 'active';
+        const page   = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 25));
+        const offset = (page - 1) * limit;
+
+        if (searchTerm) {
+            const result = await searchCustomersPaged({ q: searchTerm, status: st, page, limit });
+            return res.json({ rows: result.rows, total: result.total, page, limit });
+        }
+
+        const q = '%%';
+        const totalRow = await dbGet(
+            `SELECT COUNT(*) as n FROM customers
+             WHERE (phone LIKE ? OR name LIKE ? OR email LIKE ? OR phone2 LIKE ? OR address LIKE ?)
+               AND (? = 'all' OR status = ?)`,
+            [q, q, q, q, q, st, st]
+        );
         const rows = await dbAll(
             `SELECT * FROM customers
              WHERE (phone LIKE ? OR name LIKE ? OR email LIKE ? OR phone2 LIKE ? OR address LIKE ?)
                AND (? = 'all' OR status = ?)
-             ORDER BY name`,
-            [q, q, q, q, q, st, st]
+             ORDER BY name
+             LIMIT ? OFFSET ?`,
+            [q, q, q, q, q, st, st, limit, offset]
         );
-        res.json(rows);
+        res.json({ rows, total: totalRow.n, page, limit });
     } catch (e) { next(e); }
 });
 

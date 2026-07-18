@@ -36,6 +36,18 @@
   flex: 1;
 }
 
+/* Pagination — right-aligned in the toolbar row */
+.crm-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.crm-pager__info { font-size: 12px; color: #888; white-space: nowrap; }
+.crm-pager__page { font-size: 12px; color: #555; white-space: nowrap; }
+.crm-pager .crm-btn-icon { width: auto; padding: 6px 12px; }
+.crm-pager .crm-btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* Toolbar */
 .crm-toolbar {
   display: flex;

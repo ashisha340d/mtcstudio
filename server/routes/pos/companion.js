@@ -74,6 +74,15 @@ router.get('/caller-status', async (req, res) => {
     };
   }
 
+  // Per-item line list for the popup — client resolves each product's image
+  // locally from its already-synced menu cache, keyed by productId.
+  const items = activeOrder ? await dbAll(
+    `SELECT ki.product_id AS productId, ki.product_name AS name, ki.quantity, ki.status
+       FROM pos_kots k JOIN pos_kot_items ki ON ki.kot_id = k.id
+      WHERE k.order_id = ? AND ki.status <> 'CANCELLED'
+      ORDER BY ki.id`, [activeOrder.id]
+  ) : [];
+
   res.json({
     phone:           normPhone,
     customerExists:  !!(crmCustomer || posCustomer),
@@ -88,6 +97,7 @@ router.get('/caller-status', async (req, res) => {
       itemsTotal:  lifecycle?.itemsTotal ?? 0,
       itemsServed: lifecycle?.itemsServed ?? 0,
       itemsReady:  lifecycle?.itemsReady ?? 0,
+      items,
     } : null,
     cakeBalance:   Number(cakeBalRow?.bal ?? 0),
     loyaltyPoints: crmCustomer?.loyalty_points ?? 0,

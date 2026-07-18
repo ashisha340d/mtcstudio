@@ -62,6 +62,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const { startAutoSync } = require('./services/liveShelfSync');
 const systemRouter = require('./routes/system');
 const customerRouter = require('./routes/customer');
+const googleRouter = require('./routes/google');
 
 // ── App ───────────────────────────────────────────────────────
 const app = express();
@@ -115,6 +116,7 @@ app.use('/api/pos/scheduled', posScheduledRouter);
 app.use('/api/mobile', mobileRouter);
 app.use('/api/companion', companionRouter);
 app.use('/api/companion', importsRouter);
+app.use('/', googleRouter);
 
 // ── Cake Production PWA (own build, own path, own manifest/SW scope) ──
 // Registered before the generic SPA fallback below so /cake-app/* is never

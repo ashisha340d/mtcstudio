@@ -56,7 +56,7 @@ export default function SplitTenderCheckoutContainer({ orderId, cakeItems = [], 
     fetch(`${API}/crm/customers?limit=200`, { headers: H })
       .then(r => r.json())
       .then(data => {
-        const list = Array.isArray(data) ? data : (data.customers ?? []);
+        const list = Array.isArray(data) ? data : (data.rows ?? []);
         setCustomers(list.map(c => ({ id: c.phone, name: c.name, phone: c.phone, discount: Number(c.discount) || 0, is_delivery_partner: Number(c.is_delivery_partner) || 0 })));
       })
       .catch(() => { });
@@ -292,16 +292,38 @@ export default function SplitTenderCheckoutContainer({ orderId, cakeItems = [], 
         : undefined),
   };
 
+  // Enter on a tender amount field (CASH/QR/WALLET/LEDGER) normally just moves to
+  // the next focus stop (SplitTenderCheckout's own chain) — but if the amount just
+  // entered already covers the payable total (Remaining Balance hits 0), jump
+  // straight to Confirm instead of stepping through the rest of the tender chain.
+  // Captured here (not inside SplitTenderCheckout — that file is off-limits) so it
+  // runs before the input's own onKeyDown.
+  function handleTenderEnterCapture(e) {
+    if (e.key !== 'Enter') return;
+    const testid = e.target?.dataset?.testid;
+    if (!testid?.startsWith('tender-input-')) return;
+    const root = e.target.closest('.checkout-modal');
+    const remainingText = root?.querySelector('[data-testid="remaining-amount"]')?.textContent ?? '';
+    const remaining = parseFloat(remainingText.replace(/[^0-9.]/g, '')) || 0;
+    if (remaining <= 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      root?.querySelector('[data-testid="confirm-button"]')?.focus();
+    }
+  }
+
   return (
     <>
-      <SplitTenderCheckout
-        orderTotal={due}
-        onConfirm={handleConfirm}
-        onCancel={onClose}
-        customers={customers}
-        prefill={splitTenderPrefill}
-        orderMeta={orderMeta}
-      />
+      <div onKeyDownCapture={handleTenderEnterCapture}>
+        <SplitTenderCheckout
+          orderTotal={due}
+          onConfirm={handleConfirm}
+          onCancel={onClose}
+          customers={customers}
+          prefill={splitTenderPrefill}
+          orderMeta={orderMeta}
+        />
+      </div>
       <button
         onClick={() => setShowFonepay(true)}
         title="Read the latest 3 Fonepay payments (read-only)"
