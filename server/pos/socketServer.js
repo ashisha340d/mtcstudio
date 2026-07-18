@@ -21,6 +21,8 @@ function init(httpServer) {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    // Leave non-socket.io upgrades (the raw-ws SMS gateway at /ws/sms) alone.
+    destroyUpgrade: false,
   });
 
   // ── Auth middleware ────────────────────────────────────────────
@@ -199,4 +201,46 @@ function emitPendingRejected(pendingId, payload) {
   io.to(`pending-${pendingId}`).emit('pending-rejected', payload);
 }
 
-module.exports = { init, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitMenuUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected };
+// Mobile API (MTC Companion) — call lifecycle notifications to POS terminals
+function emitIncomingCall(payload) {
+  if (!io) return;
+  io.to('pos').emit('incoming-call', payload);
+}
+
+function emitCallAnswered(payload) {
+  if (!io) return;
+  io.to('pos').emit('call-answered', payload);
+}
+
+function emitCallEnded(payload) {
+  if (!io) return;
+  io.to('pos').emit('call-ended', payload);
+}
+
+function emitMissedCall(payload) {
+  if (!io) return;
+  io.to('pos').emit('missed-call', payload);
+}
+
+// OCR/WhatsApp image import lifecycle (Mero Kinmel). stage = RECEIVED | OCR |
+// PARSING | DRAFTED | MANUAL_REVIEW | FAILED. POS shows live status + refreshes
+// the draft list when a draft becomes ready.
+function emitOcrImport(payload) {
+  if (!io) return;
+  io.to('pos').emit('ocr-import', payload);
+}
+
+// A scheduled/draft order row was created or changed (e.g. a Mero Kinmel draft
+// finished the OCR pipeline). POS reloads its draft cards once — no polling wait.
+function emitScheduledChanged(payload) {
+  if (!io) return;
+  io.to('pos').emit('scheduled-changed', payload);
+}
+
+// Centralized SMS Service — live queue status to every connected Studio client.
+function emitSmsUpdate(payload) {
+  if (!io) return;
+  io.to('pos').emit('sms-update', payload);
+}
+
+module.exports = { init, emitSmsUpdate, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitMenuUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected, emitIncomingCall, emitCallAnswered, emitCallEnded, emitMissedCall, emitOcrImport, emitScheduledChanged };

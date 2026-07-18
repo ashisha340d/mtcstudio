@@ -292,6 +292,8 @@ async function ensureSchema() {
     await dbRun(`ALTER TABLE media_library ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE cake_design_media ADD COLUMN IF NOT EXISTS media_id INT`);
     await dbRun(`ALTER TABLE cake_collections ADD COLUMN IF NOT EXISTS hero_media_id INT`);
+    await dbRun(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_delivery_partner INT DEFAULT 0`);
+    await dbRun(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS discount DOUBLE DEFAULT 0`);
     await dbRun(`ALTER TABLE cake_design_media ADD INDEX IF NOT EXISTS idx_ckm_media (media_id)`);
     await dbRun(`ALTER TABLE cake_collections ADD INDEX IF NOT EXISTS idx_cc_hero_media (hero_media_id)`);
     await dbRun(`ALTER TABLE blogs ADD INDEX IF NOT EXISTS idx_blogs_featured_image (featured_image)`);

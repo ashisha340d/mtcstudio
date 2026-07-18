@@ -55,9 +55,10 @@ async function getAll({ search, category, statusFilter, featuredFilter, station,
         if (badge) { conditions.push(`FIND_IN_SET(?, p.badge)`); params.push(badge); }
         if (fastFilter === 'fast') { conditions.push(`p.is_fast_moving = 1`); }
     }
+    conditions.push(`COALESCE(p.is_combo,0) = 0`);   // combos live in their own tab
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const countRows = await dbAll(`SELECT status, featured, COUNT(*) as cnt FROM products GROUP BY status, featured`);
+    const countRows = await dbAll(`SELECT status, featured, COUNT(*) as cnt FROM products WHERE COALESCE(is_combo,0)=0 GROUP BY status, featured`);
     const counts = { all: 0, active: 0, inactive: 0, featured: 0, notFeatured: 0 };
     (countRows || []).forEach(r => {
         counts.all += r.cnt;
@@ -126,13 +127,13 @@ async function create(body) {
     const slug = await uniqueSlug(b.name, b.slug);
     const result = await dbRun(
         `INSERT INTO products (category_id,name,slug,short_description,description,featured,status,sort_order,storefront_category,badge,
-          pos_price,prep_time_minutes,is_fast_moving,pos_station_id,pos_active,customer_visible,customer_max_qty,enable_variant_image)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          pos_price,prep_time_minutes,is_fast_moving,pos_station_id,pos_active,customer_visible,customer_max_qty,enable_variant_image,is_combo)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [b.category_id || null, b.name, slug, b.short_description || null,
          b.description || null, b.featured || 0, b.status || 'active', b.sort_order || 0, b.storefront_category || null, b.badge || '',
          b.pos_price || 0, b.prep_time_minutes || 10, b.is_fast_moving ? 1 : 0, b.pos_station_id || null,
          b.pos_active !== undefined ? (b.pos_active ? 1 : 0) : 1, b.customer_visible ? 1 : 0,
-         b.customer_max_qty ? parseInt(b.customer_max_qty) : null, b.enable_variant_image ? 1 : 0]
+         b.customer_max_qty ? parseInt(b.customer_max_qty) : null, b.enable_variant_image ? 1 : 0, b.is_combo ? 1 : 0]
     );
     return { product_id: result.insertId };
 }

@@ -20,4 +20,4 @@ if errorlevel 1 (
 )
 
 echo Build successful.
-start "" D:\mtcstudio\MTC-Studio.exe
+::start "" D:\mtcstudio\MTC-Studio.exe

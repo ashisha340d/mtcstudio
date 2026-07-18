@@ -8,20 +8,24 @@ const { audit }          = require('../../middleware/posAudit');
 
 const router = express.Router();
 
-router.post('/pin', async (req, res) => {
-  const { pin } = req.body;
-  if (!pin) return res.status(400).json({ error: 'PIN required' });
-
+// Shared PIN-check, used by /pin and by the mobile module's /login.
+async function authenticatePin(pin) {
   const users = await dbAll(
     `SELECT u.*, r.name AS role
      FROM   pos_users u JOIN pos_roles r ON r.id = u.role_id
      WHERE  u.is_active = 1`
   );
-
-  let matched = null;
   for (const u of users) {
-    if (bcrypt.compareSync(String(pin), u.pin_hash)) { matched = u; break; }
+    if (bcrypt.compareSync(String(pin), u.pin_hash)) return u;
   }
+  return null;
+}
+
+router.post('/pin', async (req, res) => {
+  const { pin } = req.body;
+  if (!pin) return res.status(400).json({ error: 'PIN required' });
+
+  const matched = await authenticatePin(pin);
   if (!matched) return res.status(401).json({ error: 'Incorrect PIN' });
 
   const token = crypto.randomUUID();
@@ -51,14 +55,7 @@ router.post('/verify-pin', requireSession, async (req, res) => {
   const { pin, requiredRole } = req.body;
   if (!pin) return res.status(400).json({ error: 'PIN required' });
 
-  const users = await dbAll(
-    `SELECT u.*, r.name AS role FROM pos_users u JOIN pos_roles r ON r.id = u.role_id WHERE u.is_active = 1`
-  );
-
-  let matched = null;
-  for (const u of users) {
-    if (bcrypt.compareSync(String(pin), u.pin_hash)) { matched = u; break; }
-  }
+  const matched = await authenticatePin(pin);
   if (!matched) return res.status(401).json({ error: 'Incorrect PIN' });
 
   const LEVELS = { CASHIER: 1, MANAGER: 2, ADMIN: 3 };
@@ -69,3 +66,4 @@ router.post('/verify-pin', requireSession, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.authenticatePin = authenticatePin;

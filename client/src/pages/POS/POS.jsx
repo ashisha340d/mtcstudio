@@ -39,6 +39,8 @@ const canEdit = () => true;
 let _cartId = 0;
 const newId = () => `ci_${++_cartId}`;
 const ALL_CAT = '__ALL__';
+const CAKE_CAT = '__CAKE__';
+const CAKE_PINK = '#e91e8c';
 
 function getProductBadges(product) {
   const badges = [];
@@ -400,7 +402,7 @@ function QuickAccessRail({ items, qtyByProduct, onPick, side }) {
 }
 
 /* ── Sent KOT Item Row ───────────────────────────────────────── */
-function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHomePack }) {
+function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHomePack, comboChildren, expanded, onToggleExpand }) {
   const [hovered, setHovered] = useState(false);
   // Packing is editable only while the item is unserved
   const packLocked = item.status === 'SERVED' || item.status === 'CANCELLED';
@@ -419,8 +421,8 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
     >
       <div
         style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 5 }}
-        onDoubleClick={onEdit}
-        title="Double-click to edit"
+        onDoubleClick={onToggleExpand || onEdit}
+        title={onToggleExpand ? 'Double-click to view items' : 'Double-click to edit'}
       >
         <p style={{
           flex: 1, minWidth: 0, margin: 0,
@@ -428,6 +430,13 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
           textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.2,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{item.product_name}</p>
+        {onToggleExpand && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleExpand(); }}
+            style={{ background: 'rgba(193,68,14,0.1)', border: 'none', borderRadius: 20, cursor: 'pointer', color: W.orange, fontSize: 9, fontWeight: 800, padding: '2px 7px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}
+            title="Combo — view items"
+          >{expanded ? '▾' : '▸'} {comboChildren.length}</button>
+        )}
         {item.discount_amount > 0 && (
           <span style={{ fontSize: 9, fontWeight: 800, color: '#2d7a2d', background: 'rgba(45,122,45,0.12)', padding: '2px 6px', borderRadius: 20, flexShrink: 0 }}>
             −{fmt(item.discount_amount)} {item.discount_type ?? ''}
@@ -484,6 +493,17 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
           style={{ flex: 1, fontSize: 11, color: W.text2, background: 'rgba(255,255,255,0.55)', border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
+
+      {onToggleExpand && expanded && comboChildren && (
+        <div style={{ marginTop: 5, paddingLeft: 10, borderLeft: `2px solid ${W.borderLight}`, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {comboChildren.map(c => (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 10, fontWeight: 700, color: W.text3, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.product_name}</span>
+              <span style={{ flexShrink: 0 }}>×{c.quantity}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -574,6 +594,84 @@ function CartLine({ item, isLatest, onQty, onRemove, onNotesChange, onDoubleClic
           style={{ flex: 1, fontSize: 11, color: W.text2, background: 'rgba(255,255,255,0.55)', border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
+    </div>
+  );
+}
+
+/* ── Cake Pending Payment card — cake order with remaining balance ── */
+function CakePendingCard({ cake, leaving, onClick }) {
+  const delivery = String(cake.delivery_date || '').slice(0, 10);
+  return (
+    <button
+      onClick={() => !leaving && onClick(cake)}
+      style={{
+        position: 'relative',
+        display: 'flex', flexDirection: 'column', textAlign: 'left',
+        borderRadius: 10, overflow: 'hidden', padding: 0,
+        border: `1.5px solid rgba(233,30,140,0.4)`,
+        background: 'rgba(255,255,255,0.75)',
+        boxShadow: '0 1px 4px rgba(80,50,20,0.09)',
+        cursor: leaving ? 'default' : 'pointer',
+        opacity: leaving ? 0 : 1,
+        transform: leaving ? 'scale(0.7) translateY(-18px)' : 'none',
+        pointerEvents: leaving ? 'none' : 'auto',
+        transition: 'opacity 0.35s ease, transform 0.35s ease',
+        animation: 'cakeCardIn 0.3s ease',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px', background: 'rgba(233,30,140,0.09)', borderBottom: '1px solid rgba(233,30,140,0.18)' }}>
+        <span style={{ fontSize: 13 }}>🎂</span>
+        <span style={{ flex: 1, fontSize: 11, fontWeight: 800, color: CAKE_PINK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cake.order_number}</span>
+        <span style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff', background: CAKE_PINK, borderRadius: 20, padding: '2px 6px' }}>Due</span>
+      </div>
+      <div style={{ padding: '7px 9px', flex: 1 }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: W.text1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cake.customer_name}</p>
+        {cake.phone && <p style={{ margin: '1px 0 0', fontSize: 10, color: W.text3 }}>{cake.phone}</p>}
+        {cake.first_item && (
+          <p style={{ margin: '3px 0 0', fontSize: 10, color: W.text2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+            {cake.first_item.product_name}{cake.first_item.size ? ` ${cake.first_item.size}` : ''} ×{cake.first_item.qty}
+          </p>
+        )}
+        {delivery && <p style={{ margin: '3px 0 0', fontSize: 9, fontWeight: 700, color: W.text3 }}>Delivery {delivery}{cake.delivery_time ? ` · ${cake.delivery_time}` : ''}</p>}
+      </div>
+      <div style={{ padding: '6px 9px 8px', borderTop: `1px solid ${W.borderLight}`, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+        <span style={{ fontSize: 9, color: W.text3 }}>Paid {fmt(cake.advance_paid)} / {fmt(cake.grand_total)}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: CAKE_PINK }}>{fmt(cake.balance_due)}</span>
+      </div>
+      {leaving && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(233,30,140,0.12)', fontSize: 12, fontWeight: 800, color: CAKE_PINK }}>
+          ✓ Added to cart
+        </div>
+      )}
+    </button>
+  );
+}
+
+/* ── Cake Payment cart line — settles cake balance at checkout, never sent to KOT ── */
+function CakePaymentLine({ item, onRemove }) {
+  return (
+    <div style={{ padding: '7px 6px', borderBottom: `1px solid ${W.borderLight}`, borderRadius: 6, margin: '0 -6px', background: 'rgba(233,30,140,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <p style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 12, fontWeight: 800, color: W.text1, textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          🎂 {item.cake_order_number} — {item.cake_customer_name}
+        </p>
+        <span style={{ fontSize: 12, fontWeight: 800, color: CAKE_PINK, flexShrink: 0 }}>{fmt(item.unit_price)}</span>
+        <button
+          onClick={() => onRemove(item._id)}
+          title="Remove — cake card returns to the grid"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: W.text3, padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+        >
+          <Trash2 style={{ height: 13, width: 13 }} />
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 20, flexShrink: 0, color: CAKE_PINK, background: 'rgba(233,30,140,0.13)' }}>Cake Due</span>
+        {item.cake_item_name && <span style={{ fontSize: 10, color: W.text2 }}>{item.cake_item_name}</span>}
+        {(item.cake_grand_total ?? 0) > 0 && (
+          <span style={{ fontSize: 10, color: W.text3 }}>Paid {fmt(item.cake_advance_paid)} / {fmt(item.cake_grand_total)}</span>
+        )}
+      </div>
+      <p style={{ margin: '4px 0 0', fontSize: 9, color: W.text3 }}>Balance payment · not sent to kitchen · slip prints with the bill</p>
     </div>
   );
 }
@@ -686,11 +784,13 @@ export default function POS() {
   const isCheckingOutRef = useRef(false);
   useEffect(() => { liveOrderIdRef.current = liveOrderId; }, [liveOrderId]);
 
-  const [editableItems, setEditableItems] = useState(
-    (initState.existingItems ?? []).filter(i => i.status !== 'CANCELLED')
-  );
+  // Keep combo child lines in state (they carry price 0) so a combo parent can be
+  // expanded to verify its components; children render nested, never as bill lines.
+  const visibleExisting = (initState.existingItems ?? []).filter(i => i.status !== 'CANCELLED');
+  const [editableItems, setEditableItems] = useState(visibleExisting);
   const [existingDirty, setExistingDirty] = useState(false);
-  const committedItems = useRef((initState.existingItems ?? []).filter(i => i.status !== 'CANCELLED'));
+  const [expandedCombos, setExpandedCombos] = useState(() => new Set());
+  const committedItems = useRef(visibleExisting);
 
   const _schedItems = (() => {
     try { return initState.scheduledRow?.items_json ? JSON.parse(initState.scheduledRow.items_json) : []; }
@@ -914,6 +1014,62 @@ export default function POS() {
   /* ── Fast-moving items derived from the same list ─────────── */
   const fastProducts = useMemo(() => products.filter(p => p.is_fast_moving), [products]);
 
+  /* ── Cake orders with remaining balance — payable from this screen ── */
+  const [pendingCakes, setPendingCakes] = useState([]);
+  const [cakeLeaving, setCakeLeaving] = useState({}); // id → true while the card animates out
+  useEffect(() => {
+    if (schedMode) return;
+    let on = true;
+    fetch(`${API}/pos/cake-orders?filter=pending`, { headers: H })
+      .then(r => r.json())
+      .then(d => { if (on && Array.isArray(d)) setPendingCakes(d.filter(c => Number(c.balance_due) > 0)); })
+      .catch(() => { });
+    return () => { on = false; };
+  }, [schedMode]);
+
+  const cakeInCart = cart.filter(i => i.is_cake_payment);
+  const foodInCart = cart.filter(i => !i.is_cake_payment);
+  const cakeIdsInCart = new Set(cakeInCart.map(i => i.cake_order_id));
+
+  const cakeFiltered = useMemo(() => {
+    const base = pendingCakes.filter(c => !cakeIdsInCart.has(c.id) || cakeLeaving[c.id]);
+    if (!search) return base;
+    const q = search.toLowerCase();
+    return base.filter(c =>
+      (c.order_number || '').toLowerCase().includes(q) ||
+      (c.customer_name || '').toLowerCase().includes(q) ||
+      (c.phone || '').includes(q)
+    );
+  }, [pendingCakes, cart, cakeLeaving, search]); // eslint-disable-line
+
+  // Category disappears with its last pending order — fall back to All
+  useEffect(() => {
+    if (activeCat === CAKE_CAT && !pendingCakes.length) setActiveCat(ALL_CAT);
+  }, [pendingCakes, activeCat]);
+
+  const addCakePayment = useCallback((c) => {
+    setCart(prev => {
+      if (prev.some(i => i.is_cake_payment && i.cake_order_id === c.id)) return prev;
+      return [{
+        _id: newId(), is_cake_payment: true,
+        cake_order_id: c.id,
+        cake_order_number: c.order_number,
+        cake_customer_name: c.customer_name,
+        cake_phone: c.phone || null,
+        cake_grand_total: Number(c.grand_total) || 0,
+        cake_advance_paid: Number(c.advance_paid) || 0,
+        cake_item_name: c.first_item ? `${c.first_item.product_name}${c.first_item.size ? ' ' + c.first_item.size : ''}` : null,
+        product_id: `cake_${c.id}`,
+        product_name: `CAKE ${c.order_number} (${c.customer_name})`,
+        variant_id: null, variant_name: null,
+        unit_price: Number(c.balance_due) || 0,
+        quantity: 1, modifiers: [], notes: null,
+      }, ...prev];
+    });
+    setCakeLeaving(prev => ({ ...prev, [c.id]: true }));
+    setTimeout(() => setCakeLeaving(prev => { const n = { ...prev }; delete n[c.id]; return n; }), 380);
+  }, []);
+
   /* ── Category filter + deep search (all client-side, instant) ── */
   const filtered = useMemo(() => {
     if (search) {
@@ -928,7 +1084,7 @@ export default function POS() {
   }, [products, search, activeCat]);
 
   const qtyByProduct = [...editableItems, ...cart].reduce((acc, i) => {
-    if (i.status === 'CANCELLED') return acc;
+    if (i.status === 'CANCELLED' || i.is_combo_child) return acc; // implicit combo parts don't badge the grid
     acc[i.product_id] = (acc[i.product_id] ?? 0) + i.quantity; return acc;
   }, {});
 
@@ -954,6 +1110,21 @@ export default function POS() {
     return next.filter(i => i.quantity > 0);
   }), []);
   const removeItem = useCallback((_id) => setCart(prev => prev.filter(i => i._id !== _id)), []);
+
+  // Deleting a cake line must also rewrite the order's saved draft, otherwise the
+  // dashboard keeps the cake hidden as "reserved" and the table total stays inflated
+  const removeCakePayment = (item) => {
+    const next = cart.filter(i => i._id !== item._id);
+    setCart(next);
+    const orderId = liveOrderIdRef.current;
+    if (orderId) {
+      const draft = next.map(({ _id, ...rest }) => rest);
+      fetch(`${API}/pos/orders/${orderId}`, {
+        method: 'PATCH', headers: H,
+        body: JSON.stringify({ draft_items: draft.length ? draft : null }),
+      }).catch(() => { });
+    }
+  };
   const changeNotes = useCallback((_id, notes) => setCart(prev => prev.map(i => i._id === _id ? { ...i, notes: notes || null } : i)), []);
   const updateCartItem = useCallback((_id, data) => {
     if (!data) { setCart(prev => prev.filter(i => i._id !== _id)); return; }
@@ -999,6 +1170,16 @@ export default function POS() {
   const existingTotal = editableItems.filter(i => i.status !== 'CANCELLED').reduce((s, i) => s + i.unit_price * i.quantity - (i.discount_amount || 0), 0);
   const newItemsTotal = cart.reduce((s, i) => s + itemTotal(i), 0);
   const grandTotal = existingTotal + newItemsTotal;
+
+  // Group sent items: top-level lines + combo children keyed by parent id
+  const kotChildren = {};
+  for (const i of editableItems) {
+    if (i.is_combo_child && i.combo_parent_id) (kotChildren[i.combo_parent_id] ??= []).push(i);
+  }
+  const kotParents = editableItems.filter(i => !i.is_combo_child);
+  const toggleCombo = (id) => setExpandedCombos(s => {
+    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
 
   const tableName = initState.tableName ?? tables.find(t => String(t.id) === String(activeTable))?.name ?? null;
   const orderLabel = orderType === 'DINE_IN' ? (tableName ?? 'Dine In') : ORDER_TYPES.find(t => t.key === orderType)?.label ?? orderType;
@@ -1065,7 +1246,8 @@ export default function POS() {
   }
 
   function buildKotItems() {
-    return cart.map(i => ({
+    // Cake payment lines settle at checkout — they never become KOT items
+    return cart.filter(i => !i.is_cake_payment).map(i => ({
       product_id: i.product_id,
       variant_id: i.variant_id ?? null,
       product_name: i.product_name
@@ -1112,7 +1294,12 @@ export default function POS() {
       // Unsent draft items saved on that order → merge into cart
       try {
         const draft = order.draft_items ? JSON.parse(order.draft_items) : [];
-        if (draft.length) setCart(prev => [...draft.map(i => ({ ...i, _id: newId() })), ...prev]);
+        if (draft.length) setCart(prev => [
+          ...draft
+            .filter(d => !d.is_cake_payment || !prev.some(i => i.is_cake_payment && i.cake_order_id === d.cake_order_id))
+            .map(i => ({ ...i, _id: newId() })),
+          ...prev,
+        ]);
       } catch { /* malformed draft — skip */ }
     } catch { /* offline — proceed as fresh order */ }
   }
@@ -1146,7 +1333,24 @@ export default function POS() {
   }
 
   async function handleSaveAndSend() {
-    if (!cart.length && !existingDirty) { navigate('/pos'); return; }
+    if (!foodInCart.length && !existingDirty) {
+      // Cake-only cart: nothing for the kitchen — save it as the order's draft and exit.
+      // Checkout stays on the green button.
+      if (cakeInCart.length) {
+        setSaving(true);
+        try {
+          const orderId = await ensureOrder('OPEN');
+          await fetch(`${API}/pos/orders/${orderId}`, {
+            method: 'PATCH', headers: H,
+            body: JSON.stringify({ draft_items: cakeInCart.map(({ _id, ...rest }) => rest) }),
+          });
+          navigate('/pos');
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
+        return;
+      }
+      navigate('/pos'); return;
+    }
     setSaving(true);
     try {
       await Promise.all(
@@ -1179,15 +1383,24 @@ export default function POS() {
       );
 
       let sentOrderId = liveOrderId;
-      if (cart.length) {
+      const kotItems = buildKotItems();
+      if (kotItems.length) {
         sentOrderId = await ensureOrder('OPEN');
         await fetch(`${API}/pos/kots`, {
           method: 'POST', headers: H,
-          body: JSON.stringify({ order_id: sentOrderId, items: buildKotItems() }),
+          body: JSON.stringify({ order_id: sentOrderId, items: kotItems }),
         });
       }
 
-      setCart([]);
+      setCart(prev => prev.filter(i => i.is_cake_payment)); // cake lines survive until checkout
+      // Persist cake lines as the order's draft so they show again on re-adopt
+      if (sentOrderId) {
+        const draft = cakeInCart.map(({ _id, ...rest }) => rest);
+        fetch(`${API}/pos/orders/${sentOrderId}`, {
+          method: 'PATCH', headers: H,
+          body: JSON.stringify({ draft_items: draft.length ? draft : null }),
+        }).catch(() => { });
+      }
       setExistingDirty(false);
       if (sentOrderId) await refreshOrderItems(sentOrderId);
       setSaving(false);
@@ -1377,17 +1590,27 @@ export default function POS() {
         {editableItems.length > 0 && (
           <div style={{ padding: '10px 16px 0' }}>
             <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: W.text3, marginBottom: 6, marginTop: 0 }}>Sent to Kitchen</p>
-            {editableItems.map(item => (
-              <KotItemRow
-                key={item.id}
-                item={item}
-                onQtyChange={d => changeExistingQty(item, d)}
-                onCancel={() => cancelExistingItem(item)}
-                onNotesChange={notes => updateExistingNotes(item, notes)}
-                onEdit={() => handleExistingItemEdit(item)}
-                onHomePack={val => updateExistingHomePack(item, val)}
-              />
-            ))}
+            {kotParents.map(item => {
+              const kids = kotChildren[item.id] || [];
+              // Rescale child display qty to the (possibly edited) parent qty
+              const committed = committedItems.current.find(c => c.id === item.id);
+              const scale = committed?.quantity ? item.quantity / committed.quantity : 1;
+              const shownKids = kids.map(k => ({ ...k, quantity: Math.round(k.quantity * scale) }));
+              return (
+                <KotItemRow
+                  key={item.id}
+                  item={item}
+                  comboChildren={kids.length ? shownKids : null}
+                  expanded={expandedCombos.has(item.id)}
+                  onToggleExpand={kids.length ? () => toggleCombo(item.id) : null}
+                  onQtyChange={d => changeExistingQty(item, d)}
+                  onCancel={() => cancelExistingItem(item)}
+                  onNotesChange={notes => updateExistingNotes(item, notes)}
+                  onEdit={() => handleExistingItemEdit(item)}
+                  onHomePack={val => updateExistingHomePack(item, val)}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -1403,12 +1626,14 @@ export default function POS() {
               <p style={{ fontSize: 12, color: W.text3, fontWeight: 600, margin: 0 }}>Tap a dish to add it</p>
             </div>
             : cart.map((item, idx) => (
-              <CartLine key={item._id} item={item} isLatest={idx === 0}
-                onQty={changeQty} onRemove={removeItem}
-                onNotesChange={changeNotes}
-                onDoubleClick={() => handleCartItemClick(item)}
-                onHomePack={val => setCart(prev => prev.map(i => i._id === item._id ? { ...i, is_homepack: val } : i))}
-              />
+              item.is_cake_payment
+                ? <CakePaymentLine key={item._id} item={item} onRemove={() => removeCakePayment(item)} />
+                : <CartLine key={item._id} item={item} isLatest={idx === 0}
+                  onQty={changeQty} onRemove={removeItem}
+                  onNotesChange={changeNotes}
+                  onDoubleClick={() => handleCartItemClick(item)}
+                  onHomePack={val => setCart(prev => prev.map(i => i._id === item._id ? { ...i, is_homepack: val } : i))}
+                />
             ))
           }
         </div>
@@ -1439,16 +1664,16 @@ export default function POS() {
         ) : (
           <>
             <button
-              onClick={liveOrderId ? handleCheckout : () => { }}
+              onClick={(liveOrderId || cakeInCart.length) ? handleCheckout : () => { }}
               style={{
                 flex: 1, height: 48,
                 borderRadius: 10, border: 'none',
-                background: liveOrderId ? W.green : 'rgba(45,122,45,0.15)',
-                color: liveOrderId ? '#fff' : 'rgba(45,122,45,0.5)',
+                background: (liveOrderId || cakeInCart.length) ? W.green : 'rgba(45,122,45,0.15)',
+                color: (liveOrderId || cakeInCart.length) ? '#fff' : 'rgba(45,122,45,0.5)',
                 fontSize: 14, fontWeight: 800,
-                cursor: liveOrderId ? 'pointer' : 'not-allowed',
+                cursor: (liveOrderId || cakeInCart.length) ? 'pointer' : 'not-allowed',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                boxShadow: liveOrderId ? '0 3px 12px rgba(45,122,45,0.25)' : 'none',
+                boxShadow: (liveOrderId || cakeInCart.length) ? '0 3px 12px rgba(45,122,45,0.25)' : 'none',
                 transition: 'all 0.15s', letterSpacing: '0.04em',
               }}
             >
@@ -1468,7 +1693,7 @@ export default function POS() {
                 boxShadow: '0 3px 12px rgba(193,68,14,0.25)',
                 transition: 'all 0.15s', letterSpacing: '0.03em',
               }}
-            >{saving ? 'Sending…' : cart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : 'Done →'}</button>
+            >{saving ? 'Sending…' : foodInCart.length ? (liveOrderId ? 'Send More →' : 'Save & Send →') : cakeInCart.length ? 'Save & Done →' : 'Done →'}</button>
           </>
         )}
       </div>
@@ -1504,6 +1729,32 @@ export default function POS() {
             boxShadow: activeCat === ALL_CAT ? '0 2px 8px rgba(193,68,14,0.3)' : 'none',
           }}
         >All</button>
+
+        {!schedMode && pendingCakes.length > 0 && (
+          <button
+            onClick={() => { setActiveCat(CAKE_CAT); setSearch(''); }}
+            style={{
+              position: 'relative',
+              width: '100%', padding: '10px 8px', borderRadius: 8,
+              border: `1.5px solid ${activeCat === CAKE_CAT ? CAKE_PINK : 'rgba(233,30,140,0.5)'}`,
+              background: activeCat === CAKE_CAT ? CAKE_PINK : 'rgba(255,255,255,0.25)',
+              color: activeCat === CAKE_CAT ? '#fff' : CAKE_PINK,
+              fontSize: 11, fontWeight: 800,
+              cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
+              transition: 'all 0.12s', textAlign: 'center', lineHeight: 1.25,
+              boxShadow: activeCat === CAKE_CAT ? '0 2px 8px rgba(233,30,140,0.35)' : 'none',
+            }}
+          >
+            🎂 Cake Payment
+            <span style={{
+              position: 'absolute', top: -5, right: -3,
+              minWidth: 16, height: 16, borderRadius: 20, padding: '0 4px',
+              background: CAKE_PINK, color: '#fff', fontSize: 9, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 4px rgba(233,30,140,0.4)',
+            }}>{pendingCakes.length}</span>
+          </button>
+        )}
 
         {categories.map(cat => (
           <button
@@ -1612,13 +1863,21 @@ export default function POS() {
           <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 14px' }}>
             {loading
               ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>Loading…</div>
-              : filtered.length === 0
-                ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
-                : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
-                  {filtered.map(p => (
-                    <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
-                  ))}
-                </div>
+              : activeCat === CAKE_CAT
+                ? (cakeFiltered.length === 0
+                  ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>{search ? 'No matching cake orders' : 'All cake balances added or settled'}</div>
+                  : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))' }}>
+                    {cakeFiltered.map(c => (
+                      <CakePendingCard key={c.id} cake={c} leaving={!!cakeLeaving[c.id]} onClick={addCakePayment} />
+                    ))}
+                  </div>)
+                : filtered.length === 0
+                  ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
+                  : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
+                    {filtered.map(p => (
+                      <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
+                    ))}
+                  </div>
             }
           </div>
           {quickSide === 'right' && quickRail}
@@ -1736,6 +1995,7 @@ export default function POS() {
       {checkoutModal && (
         <CheckoutModal
           orderId={liveOrderId}
+          cakeItems={cakeInCart}
           onClose={() => { isCheckingOutRef.current = false; setCheckoutModal(false); }}
           onSuccess={() => { navigate('/pos', { replace: true }); }}
         />

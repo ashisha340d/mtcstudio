@@ -376,6 +376,9 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   // the Web Orders modal once it mounts.
   const [webOrdersRequested, setWebOrdersRequested] = useState(false);
 
+  // ── Incoming calls (MTC Companion) — docked notification stack ─
+  const [incomingCallQueue, setIncomingCallQueue] = useState([]);
+
   const refreshWebOrderCount = useCallback(async () => {
     try {
       const { pending } = await apiService.getWebOrderCounts();
@@ -798,11 +801,36 @@ export function POSProvider({ children, apiService, activeUser = null }) {
       }
     });
 
+    // A draft/scheduled row changed (e.g. Mero Kinmel OCR draft ready) — POS
+    // dashboard reloads its cards instantly instead of waiting on the 30s poll.
+    socket.on('scheduled-changed', (payload) => {
+      window.dispatchEvent(new CustomEvent('mtc:scheduled-changed', { detail: payload }));
+      if (payload?.kind === 'DRAFT') {
+        webOrderPlayerRef.current.play();
+        notify('info', `📝 New draft — ${payload.customerName || 'Mero Kinmel'}${payload.review ? ' (needs review)' : ''}`);
+      }
+    });
+
     // New pending web order pushed from the website — popup + sound + badge
     socket.on('web-order-received', (payload) => {
       webOrderPlayerRef.current.play();
       setWebOrderQueue(q => [...q, { ...payload, _dockId: payload.pendingId ?? `${Date.now()}-${Math.random()}` }]);
       setWebOrderCount(c => c + 1);
+    });
+
+    // MTC Companion phone call events — caller ID card on every POS screen
+    socket.on('incoming-call', (payload) => {
+      webOrderPlayerRef.current.play();
+      setIncomingCallQueue(q => [...q, { ...payload, _dockId: payload.callId }]);
+    });
+    socket.on('call-answered', ({ callId }) => {
+      setIncomingCallQueue(q => q.map(c => c._dockId === callId ? { ...c, _answered: true } : c));
+    });
+    socket.on('call-ended', ({ callId }) => {
+      setIncomingCallQueue(q => q.filter(c => c._dockId !== callId));
+    });
+    socket.on('missed-call', ({ callId }) => {
+      setIncomingCallQueue(q => q.filter(c => c._dockId !== callId));
     });
 
     return () => socket.disconnect();
@@ -880,6 +908,10 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     webOrdersRequested,
     requestShowWebOrders: () => setWebOrdersRequested(true),
     clearShowWebOrdersRequest: () => setWebOrdersRequested(false),
+
+    // Incoming calls
+    incomingCallQueue,
+    dismissIncomingCall: (dockId) => setIncomingCallQueue(q => q.filter(c => c._dockId !== dockId)),
   };
 
   return <POSContext.Provider value={value}>{children}</POSContext.Provider>;

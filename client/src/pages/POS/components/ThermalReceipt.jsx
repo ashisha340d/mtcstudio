@@ -6,6 +6,9 @@ export function invalidateReceiptConfig() {}
 
 export async function printReceipt({ order, items = [], payments = [], isReprint = false } = {}) {
   try {
+    // Combo child lines are kitchen/inventory only — the combo parent carries the
+    // price, so the customer receipt prints the combo name, not its components.
+    const billItems = (items || []).filter(i => !i.is_combo_child);
     const res = await fetch(`${API_BASE}/settings/print`, {
       method:  'POST',
       headers: {
@@ -13,7 +16,7 @@ export async function printReceipt({ order, items = [], payments = [], isReprint
         // Real session so the server can attribute reprints in the audit log
         'X-Session-ID': sessionStorage.getItem('mtc_session') ?? localStorage.getItem('kds_session') ?? 'dev-session',
       },
-      body:    JSON.stringify({ order, items, payments, isReprint }),
+      body:    JSON.stringify({ order, items: billItems, payments, isReprint }),
     });
 
     if (!res.ok) {

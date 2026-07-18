@@ -3,6 +3,7 @@ import { usePOS } from '../../../context/POSContext';
 import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
 import { flyToCashStack } from './flyToCashStack';
+import { cakeDraftDue } from '../posShared';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return null;
@@ -67,16 +68,35 @@ export default function TableCard({ table, onClick, onDirectCheckout, frozenOrde
   const held = (!order || !hasContent) && frozenOrderIds?.has(lastOrderIdRef.current);
   const looksOccupied = (order && hasContent) || held;
 
+  // A vacate only counts as PAID if the order went through checkout (was frozen).
+  // Emptying every line via cancel leaves the order OPEN — that's a plain vacate,
+  // no money to the drawer, so it must NOT play the paid stamp / fly-to-cash.
+  const wasFrozenRef = useRef(false);
+  if (held || (order && frozenOrderIds?.has(order.id))) wasFrozenRef.current = true;
+  else if (order && hasContent) wasFrozenRef.current = false; // normal occupancy → clear stale checkout flag
+
   const [wiping, setWiping] = useState(false);
+  const [vacating, setVacating] = useState(false);
   // useLayoutEffect (not useEffect) so the switch to the wiping snapshot
   // happens before paint — no one-frame flash of the empty table.
   useLayoutEffect(() => {
     if (looksOccupied) { wasOccupiedRef.current = true; return; }
     if (wasOccupiedRef.current) {
       wasOccupiedRef.current = false;
-      flyToCashStack(lastRectRef.current, { amount: lastOccupiedRef.current?.order?.total_amount });
-      setWiping(true);
-      const t = setTimeout(() => setWiping(false), 750);
+      // Paid orders leave tableOrderMap (status → CLOSED, so `order` is null here);
+      // a cancel-emptied order stays OPEN in the map (`order` still truthy) → plain vacate.
+      if (wasFrozenRef.current && !order) {  // real checkout → celebrate + send total to drawer
+        wasFrozenRef.current = false;
+        flyToCashStack(lastRectRef.current, {
+          amount: (Number(lastOccupiedRef.current?.order?.total_amount) || 0) + cakeDraftDue(lastOccupiedRef.current?.order),
+        });
+        setWiping(true);
+        const t = setTimeout(() => setWiping(false), 750);
+        return () => clearTimeout(t);
+      }
+      // emptied by cancellation → pop to Available with a boom, no PAID, no fly
+      setVacating(true);
+      const t = setTimeout(() => setVacating(false), 650);
       return () => clearTimeout(t);
     }
   }, [looksOccupied]);
@@ -108,7 +128,8 @@ export default function TableCard({ table, onClick, onDirectCheckout, frozenOrde
       );
     }
     return (
-      <div className="tc tc--empty tc--empty-in" onClick={() => onClick(table)}>
+      <div className={`tc tc--empty tc--empty-in${vacating ? ' tc--boom' : ''}`} onClick={() => onClick(table)}>
+        {vacating && <div className="tc__boom" aria-hidden />}
         <div className="tc__icon-empty">🪑</div>
         <div className="tc__name">{table.name}</div>
         <div className="tc__seats">{table.capacity} seats</div>
@@ -126,6 +147,7 @@ export default function TableCard({ table, onClick, onDirectCheckout, frozenOrde
 }
 
 function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, derived, isDraft, delayed, wiping, frozen, measureRef }) {
+  const cakeDue = cakeDraftDue(order);
   return (
     <div
       ref={measureRef}
@@ -139,7 +161,12 @@ function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, de
       </div>
 
       <div className="tc__amount">
-        ₹{(order.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+        ₹{((Number(order.total_amount) || 0) + cakeDue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+        {cakeDue > 0 && (
+          <span style={{ display: 'block', fontSize: 9, fontWeight: 800, color: '#e91e8c', letterSpacing: '0.03em' }}>
+            🎂 incl ₹{cakeDue.toLocaleString('en-IN', { maximumFractionDigits: 0 })} cake due
+          </span>
+        )}
       </div>
 
       {derived.total > 0 && (

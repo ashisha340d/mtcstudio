@@ -288,11 +288,21 @@ export default function CRM() {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {editMode ? (
-                        <input type="checkbox"
-                          checked={!!Number(val(r,'is_delivery_partner'))}
-                          onChange={e => setField(r.phone,'is_delivery_partner', e.target.checked ? 1 : 0)} />
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+                          <input type="checkbox"
+                            checked={!!Number(val(r,'is_delivery_partner'))}
+                            onChange={e => setField(r.phone,'is_delivery_partner', e.target.checked ? 1 : 0)} />
+                          {!!Number(val(r,'is_delivery_partner')) && (
+                            <input className="crm-inline" type="number" min="0" max="100" style={{ maxWidth: 56 }}
+                              title="Auto discount %"
+                              value={val(r,'discount')}
+                              onChange={e => setField(r.phone,'discount', Number(e.target.value))} />
+                          )}
+                        </div>
                       ) : (
-                        val(r,'is_delivery_partner') ? <span style={{ color:'#0891b2', fontWeight:700, fontSize:13 }}>🚴 Yes</span> : <span style={{ color:'#ccc' }}>—</span>
+                        val(r,'is_delivery_partner')
+                          ? <span style={{ color:'#0891b2', fontWeight:700, fontSize:13 }}>🚴 {Number(r.discount) > 0 ? `${Number(r.discount)}%` : 'Yes'}</span>
+                          : <span style={{ color:'#ccc' }}>—</span>
                       )}
                     </td>
                     <td>

@@ -7,6 +7,7 @@ const kdsEvents          = require('../../pos/kdsEvents');
 const socketServer       = require('../../pos/socketServer');
 const { triggerStockSync } = require('../../services/liveShelfSync');
 const { getSchedule }    = require('../../services/liveStoreScheduleService');
+const comboExpander      = require('../../services/comboExpander');
 
 const router = express.Router();
 
@@ -74,26 +75,31 @@ async function convertRow(row, userId) {
       [order.id, userId ?? row.created_by ?? null]
     );
 
-    for (const raw of items) {
-      const item = toKotItem(raw);
+    // Insert one KOT line; combo children pass comboParentId + isComboChild.
+    const insertItem = async (item, comboParentId, isComboChild) => {
       const prod = await tx.dbGet(`SELECT prep_time_minutes, pos_station_id FROM products WHERE id=?`, [item.product_id]);
       const stationId = prod?.pos_station_id ?? null;
-      await tx.dbRun(
+      const line = await tx.dbGet(
         `INSERT INTO pos_kot_items
-           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, status, served_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, IF(? IS NULL, NOW(), NULL))`,
-        [kot.id, item.product_id, item.variant_id, item.product_name,
-         item.quantity, item.unit_price, item.notes, item.is_home_pack,
+           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, combo_parent_id, is_combo_child, status, served_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, IF(? IS NULL, NOW(), NULL)) RETURNING *`,
+        [kot.id, item.product_id, item.variant_id ?? null, item.product_name,
+         item.quantity, item.unit_price, item.notes ?? null, item.is_home_pack ?? 0,
          prod?.prep_time_minutes ?? 10, stationId,
-         item.discount_amount, item.discount_type,
-         stationId == null ? 'SERVED' : 'ORDERSENT',
-         stationId]
+         item.discount_amount ?? 0, item.discount_type ?? null,
+         comboParentId ?? null, isComboChild ? 1 : 0,
+         stationId == null ? 'SERVED' : 'ORDERSENT', stationId]
       );
-      if (raw.variant_id) {
-        await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [raw.variant_id]);
-      } else {
-        await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [raw.product_id]);
-      }
+      if (item.variant_id) await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [item.variant_id]);
+      else await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [item.product_id]);
+      return line;
+    };
+
+    for (const raw of items) {
+      const parentItem = toKotItem(raw);
+      const parent = await insertItem(parentItem, null, 0);
+      const children = await comboExpander.componentsFor(parentItem.product_id, parentItem.quantity);
+      for (const child of children) await insertItem({ ...child, is_home_pack: parentItem.is_home_pack }, parent.id, 1);
     }
 
     await tx.dbRun(`UPDATE pos_scheduled_orders SET converted_order_id=? WHERE id=?`, [order.id, row.id]);
@@ -220,6 +226,17 @@ router.post('/:id/cancel', async (req, res) => {
   if (row.status !== 'PENDING') return res.status(400).json({ error: `Already ${row.status}` });
   await dbRun(`UPDATE pos_scheduled_orders SET status='CANCELLED' WHERE id=?`, [row.id]);
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'SCHEDULED_ORDER', entityId: row.id, action: 'CANCEL' });
+  res.json({ ok: true });
+});
+
+// DELETE /api/pos/scheduled/:id — hard delete a wrong-punched draft/scheduled row.
+router.delete('/:id', async (req, res) => {
+  const row = await dbGet(`SELECT * FROM pos_scheduled_orders WHERE id=?`, [req.params.id]);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (row.status === 'CONVERTED') return res.status(400).json({ error: 'Already converted' });
+  await dbRun(`UPDATE pos_ocr_imports SET scheduled_order_id=NULL WHERE scheduled_order_id=?`, [row.id]);
+  await dbRun(`DELETE FROM pos_scheduled_orders WHERE id=?`, [row.id]);
+  audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'SCHEDULED_ORDER', entityId: row.id, action: 'DELETE' });
   res.json({ ok: true });
 });
 

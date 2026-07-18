@@ -5,6 +5,7 @@ import MediaPicker from '../../components/MediaPicker/MediaPicker';
 import BadgeMultiSelect from './BadgeMultiSelect';
 import LiveShelfView from './LiveShelfView';
 import CategoriesView from './CategoriesView';
+import CombosView from './CombosView';
 import './FoodMenu.css';
 
 const STOREFRONT_CATS = [
@@ -954,6 +955,7 @@ export default function FoodMenu() {
           <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} title="Food menu table">☰ Food Menu</button>
           <button className={viewMode === 'liveshelf' ? 'active' : ''} onClick={() => setViewMode('liveshelf')} title="Live shelf — today's available items">📡 Live Shelf</button>
           <button className={viewMode === 'web' ? 'active' : ''} onClick={() => setViewMode('web')} title="Sort web menu order">🌐 Sort Orders</button>
+          <button className={viewMode === 'combos' ? 'active' : ''} onClick={() => setViewMode('combos')} title="Combo meals — expand into child items">🍔 Combos</button>
           <button className={viewMode === 'category' ? 'active' : ''} onClick={() => setViewMode('category')} title="Product categories">📂 Category</button>
         </div>
         <button className="btn btn-primary fm-sync-btn" disabled={opsDisabled} onClick={handleSyncAll} title="Sync live shelf, store hours & catalogue to website">⇅ Sync All</button>
@@ -1047,6 +1049,8 @@ export default function FoodMenu() {
           {/* ── Main content ── */}
           {viewMode === 'liveshelf' ? (
             <LiveShelfView />
+          ) : viewMode === 'combos' ? (
+            <CombosView />
           ) : viewMode === 'category' ? (
             <CategoriesView />
           ) : loading ? (

@@ -4,12 +4,13 @@ import { toUtcMs, formatNepalTime, formatNepalDate, getNepalDateStr } from '../.
 function fmtCountdown(ms) {
   if (ms <= 0) return null;
   const totalSec = Math.floor(ms / 1000);
-  const m = Math.floor(totalSec / 60);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, '0')} min`;
+  return { h, m, s };
 }
 
-export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCancel }) {
+export default function ScheduledOrderCard({ row, index, flash, arrive, onOpen, onConvert, onCancel, onDelete }) {
   const isScheduled = row.kind === 'SCHEDULED';
 
   // Second-level tick so "Send After" counts down live
@@ -31,9 +32,12 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
   const caption = row.order_caption || `${isScheduled ? 'Scheduled' : 'Draft'} #${index + 1}`;
   const isToday = isScheduled && String(row.scheduled_for).slice(0, 10) === getNepalDateStr();
 
+  // OCR draft that couldn't resolve items → review card (empty/unmatched), shown red.
+  const isReview = !isScheduled && (row.order_caption === 'MK-REVIEW' || items.length === 0);
+
   return (
     <div
-      className={`oc ${isScheduled ? 'oc--scheduledorder' : 'oc--draftpending'}`}
+      className={`oc ${isScheduled ? 'oc--scheduledorder' : 'oc--draftpending'}${isReview ? ' oc--review' : ''}${flash ? ' oc--flash' : ''}${arrive ? ' oc--arrive' : ''}`}
       onClick={() => onOpen(row)}
     >
       {row.order_notes && (
@@ -54,7 +58,7 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
               <div>Order For: <b>{isToday ? '' : formatNepalDate(row.scheduled_for) + ' '}{formatNepalTime(row.scheduled_for)}</b></div>
               <div>KOT @ <b>{formatNepalTime(sendAtMs)}</b></div>
               {countdown
-                ? <div className="soc__ticker">Send After: {countdown}</div>
+                ? <div className="soc__ticker">Send After: {countdown.h > 0 && <span className="soc__ticker-num">{countdown.h}H </span>}<span className="soc__ticker-num">{String(countdown.m).padStart(2, '0')}M </span><span className="soc__ticker-num">{String(countdown.s).padStart(2, '0')}S</span></div>
                 : <div className="soc__ticker soc__ticker--due">Sending to KOT…</div>}
             </div>
           ) : (
@@ -67,6 +71,12 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
         <span className="oc__cust-name">{row.customer_name || '—'}</span>
         <span className="oc__cust-phone">{row.customer_phone || '—'}</span>
       </div>
+
+      {isReview && (
+        <div className="oc__review-note">
+          ⚠ {items.length === 0 ? 'No items matched' : 'Verify items'}
+        </div>
+      )}
 
       <div className="oc__amount">
         ₹{(row.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -109,6 +119,19 @@ export default function ScheduledOrderCard({ row, index, onOpen, onConvert, onCa
         >
           ✕
         </button>
+        {onDelete && (
+          <button
+            title="Delete — wrong order"
+            onClick={(e) => { e.stopPropagation(); onDelete(row); }}
+            style={{
+              padding: '4px 7px', borderRadius: 6, border: '1px solid #7a1f16',
+              background: '#7a1f16', color: '#fff',
+              fontSize: 9, fontWeight: 800, cursor: 'pointer',
+            }}
+          >
+            🗑
+          </button>
+        )}
       </div>
     </div>
   );

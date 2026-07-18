@@ -28,6 +28,7 @@ import KDSAuthGate              from './components/KDSAuthGate';
 import posApi                   from './services/posApi';
 import POSDashboard  from './pages/POS/POSDashboard';
 import WebOrderDock  from './pages/POS/components/WebOrderDock';
+import IncomingCallDock from './pages/POS/components/IncomingCallDock';
 import POS           from './pages/POS/POS';
 
 // Secondary POS-adjacent screens — lazy, idle-prefetched from the dashboard
@@ -62,6 +63,7 @@ function POSRoot({ children }) {
         <POSKDSRoot>
           {children}
           <WebOrderDock />
+          <IncomingCallDock />
         </POSKDSRoot>
       </AuthGate>
     </AuthProvider>

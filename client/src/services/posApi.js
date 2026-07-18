@@ -209,6 +209,9 @@ export const convertScheduledOrder = (id) =>
 export const cancelScheduledOrder = (id) =>
   http.post(`/pos/scheduled/${id}/cancel`).then(r => r.data);
 
+export const deleteScheduledOrder = (id) =>
+  http.delete(`/pos/scheduled/${id}`).then(r => r.data);
+
 // ── Lookup Master ─────────────────────────────────────────────
 // Generic lookup_master reader (cream/shape/sponge/theme/dietary/table-tag/
 // product-badge types all live in the same table). Pass a lookup_type to
@@ -250,7 +253,7 @@ const posApi = {
   getWebOrders, getWebOrder, getWebOrderCounts, approveWebOrder, rejectWebOrder,
   // Scheduled & Draft Orders
   getScheduledOrders, getStoreHours, createScheduledOrder, updateScheduledOrder,
-  convertScheduledOrder, cancelScheduledOrder,
+  convertScheduledOrder, cancelScheduledOrder, deleteScheduledOrder,
   // Lookup Master
   getLookupMaster, getMaintenanceStations,
 };

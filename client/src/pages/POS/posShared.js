@@ -19,6 +19,14 @@ export const W = {
 export const fmt = (n) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Cake payment lines parked in an order's draft cart (never sent to KOT)
+export const cakeDraftItems = (order) => {
+  try { return (JSON.parse(order?.draft_items || '[]') || []).filter(i => i && i.is_cake_payment); }
+  catch { return []; }
+};
+export const cakeDraftDue = (order) =>
+  cakeDraftItems(order).reduce((s, i) => s + (Number(i.unit_price) || 0) * (i.quantity || 1), 0);
+
 // Effective variant name for display/storage: drop "Regular" and variants
 // that just repeat the product name (otherwise the caption reads "Burger (Burger)").
 export const cleanVariantName = (variantName, productName) => {

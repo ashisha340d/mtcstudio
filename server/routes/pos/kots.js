@@ -8,6 +8,7 @@ const socketServer   = require('../../pos/socketServer');
 const { getNepalDayBoundsUTC } = require('../../utils/nepalDateTime');
 const { triggerStockSync } = require('../../services/liveShelfSync');
 const webOrderBridge = require('../../services/webOrderBridge');
+const comboExpander  = require('../../services/comboExpander');
 
 const router = express.Router();
 
@@ -363,8 +364,8 @@ router.post('/', async (req, res) => {
       [order_id, kotNum, userId]
     );
 
-    const saved = [];
-    for (const item of items) {
+    // Insert one KOT line. Combo children pass comboParentId + isComboChild.
+    const insertItem = async (item, comboParentId, isComboChild) => {
       const prod = await tx.dbGet(`SELECT prep_time_minutes, pos_station_id FROM products WHERE id=?`, [item.product_id]);
       // Item discount: absolute per line, clamped to line value; type required with amount
       const lineValue = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
@@ -373,10 +374,10 @@ router.post('/', async (req, res) => {
       // No station = not kitchen-tracked (water, delivery charge, retail) — auto-SERVED
       // so KDS skips it and web-order progress (n/N) never stalls on it
       const stationId = prod?.pos_station_id ?? null;
-      saved.push(await tx.dbGet(
+      const row = await tx.dbGet(
         `INSERT INTO pos_kot_items
-           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, status, served_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, IF(? IS NULL, NOW(), NULL)) RETURNING *`,
+           (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, combo_parent_id, is_combo_child, status, served_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, IF(? IS NULL, NOW(), NULL)) RETURNING *`,
         [
           kot.id, item.product_id, item.variant_id ?? null, item.product_name,
           item.quantity, item.unit_price,
@@ -384,19 +385,31 @@ router.post('/', async (req, res) => {
           item.prep_time_minutes ?? prod?.prep_time_minutes ?? 10,
           stationId,
           discAmt, discType,
+          comboParentId ?? null, isComboChild ? 1 : 0,
           stationId == null ? 'SERVED' : 'ORDERSENT',
           stationId,
         ]
-      ));
+      );
       // Flag variant as dirty so triggerStockSync() will push available qty to website
       if (item.variant_id) {
         await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [item.variant_id]);
       } else {
         await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [item.product_id]);
       }
+      return row;
+    };
+
+    // Expand combos: parent line keeps price/name; children (price 0) carry the
+    // real variant_ids so KOT + inventory see the components.
+    const groups = await comboExpander.expandGroups(items);
+    const saved = [];
+    for (const g of groups) {
+      const parent = await insertItem(g.parent, null, 0);
+      saved.push(parent);
+      for (const child of g.children) saved.push(await insertItem(child, parent.id, 1));
     }
 
-    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'KOT', entityId: kot.id, action: 'CREATE', delta: { order_id, kot_number: kotNum, itemCount: items.length } });
+    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'KOT', entityId: kot.id, action: 'CREATE', delta: { order_id, kot_number: kotNum, itemCount: saved.length } });
     return { ...kot, items: saved, punched_by_emp: req.posUser.employee_id };
   });
 
@@ -424,9 +437,11 @@ router.patch('/:id/items/:itemId', async (req, res) => {
   const fields = [];
   const values = [];
 
-  // Qty only editable if not yet served/cancelled
+  // Qty only editable if not yet served/cancelled — except a combo parent, which
+  // auto-serves (no station) yet must stay editable so its child lines rescale.
   if (quantity !== undefined) {
-    if (item.status === 'SERVED' || item.status === 'CANCELLED')
+    const isComboParent = (await dbGet(`SELECT is_combo FROM products WHERE id=?`, [item.product_id]))?.is_combo === 1;
+    if (!isComboParent && (item.status === 'SERVED' || item.status === 'CANCELLED'))
       return res.status(400).json({ error: 'Cannot change quantity of a served or cancelled item' });
     if (quantity < 1) return res.status(400).json({ error: 'quantity >= 1 required' });
     fields.push('quantity = ?'); values.push(quantity);
@@ -460,6 +475,31 @@ router.patch('/:id/items/:itemId', async (req, res) => {
 
   values.push(item.id);
   await dbRun(`UPDATE pos_kot_items SET ${fields.join(', ')} WHERE id=?`, values);
+
+  // Combo parent qty changed → rescale its child component lines (qty = newQty × childQty)
+  if (quantity !== undefined) {
+    const kids = await dbAll(
+      `SELECT * FROM pos_kot_items WHERE combo_parent_id=? AND status NOT IN ('SERVED','CANCELLED')`, [item.id]);
+    if (kids.length) {
+      const comps = await comboExpander.componentsFor(item.product_id, quantity);
+      const childKot = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [item.kot_id]);
+      for (const ch of kids) {
+        const match = comps.find(c => c.product_id === ch.product_id && (c.variant_id ?? null) === (ch.variant_id ?? null));
+        if (match && match.quantity !== ch.quantity) {
+          await dbRun(`UPDATE pos_kot_items SET quantity=? WHERE id=?`, [match.quantity, ch.id]);
+          if (ch.variant_id) await dbRun(`UPDATE product_variants SET sync_status=0 WHERE id=? AND show_online=1`, [ch.variant_id]);
+          else await dbRun(`UPDATE product_variants SET sync_status=0 WHERE product_id=? AND show_online=1`, [ch.product_id]);
+          socketServer.emitItemUpdated({ // broadcast rescaled child so KDS sees new qty
+            kotId: ch.kot_id, orderId: childKot?.order_id ?? null, itemId: ch.id,
+            quantity: match.quantity, notes: ch.notes, is_home_pack: ch.is_home_pack,
+            station_id: ch.station_id ?? null,
+          });
+        }
+      }
+      triggerStockSync();
+    }
+  }
+
   audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'KOT_ITEM', entityId: item.id, action: 'EDIT', delta: { quantity, notes, is_home_pack, discount_amount, discount_type } });
 
   const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
@@ -530,6 +570,7 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
   const item = await dbGet(`SELECT * FROM pos_kot_items WHERE id=? AND kot_id=?`, [req.params.itemId, req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found' });
 
+  let cancelledKids = []; // combo children cascaded — broadcast after commit
   await transaction(async (tx) => {
     if (status === 'SERVED') {
       await tx.dbRun(`UPDATE pos_kot_items SET status='SERVED', served_at=CURRENT_TIMESTAMP WHERE id=?`, [item.id]);
@@ -548,6 +589,18 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
       } else {
         await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [item.product_id]);
       }
+      // Combo parent cancelled → cancel its child component lines too
+      const kids = await tx.dbAll(`SELECT * FROM pos_kot_items WHERE combo_parent_id=? AND status!='CANCELLED'`, [item.id]);
+      cancelledKids = kids;
+      for (const k of kids) {
+        await tx.dbRun(`UPDATE pos_kot_items SET status='CANCELLED' WHERE id=?`, [k.id]);
+        await tx.dbRun(
+          `INSERT INTO pos_cancellations (entity_type, entity_id, reason, kind, cancelled_by) VALUES ('KOT_ITEM',?,?,?,?)`,
+          [k.id, cancel_reason ?? 'combo parent cancelled', kind, req.posUser.id]
+        );
+        if (k.variant_id) await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [k.variant_id]);
+        else await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [k.product_id]);
+      }
       triggerStockSync();
     }
   });
@@ -562,6 +615,13 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
   };
   kdsEvents.broadcast('item_served', statusPayload);
   socketServer.emitItemServed(statusPayload);
+  // Cascaded combo children — broadcast their cancel so KDS drops them (socket only, no SSE dup)
+  for (const k of cancelledKids) {
+    socketServer.emitItemServed({
+      kotId: k.kot_id, orderId: kot.order_id, itemId: k.id, status: 'CANCELLED',
+      served_at: null, station_id: k.station_id ?? null, product_name: k.product_name,
+    });
+  }
   webOrderBridge.notifyKotItemProgress(kot.order_id); // web-origin orders only, no-op otherwise
   if (status === 'CANCELLED' || item.status === 'CANCELLED') // line removed/restored → mirror bill
     webOrderBridge.notifyKotItemsChanged(kot.order_id);

@@ -19,6 +19,7 @@ const PORT = envPort('PORT', 3001);
 // ── CMS routes ────────────────────────────────────────────────
 const categoriesRouter = require('./routes/categories');
 const productsRouter = require('./routes/products');
+const combosRouter = require('./routes/combos');
 const mediaRouter = require('./routes/media');
 const blogsRouter = require('./routes/blogs');
 const generateBlogRouter = require('./routes/generateBlog');
@@ -50,7 +51,12 @@ const posReportsRouter = require('./routes/pos/reports');
 const posTransactionsRouter = require('./routes/pos/transactions');
 const posWebOrdersRouter = require('./routes/pos/webOrders');
 const posScheduledRouter = require('./routes/pos/scheduled');
+const mobileRouter = require('./routes/pos/mobile');
+const companionRouter = require('./routes/pos/companion');
+const importsRouter = require('./routes/pos/imports');
 const webOrderBridge = require('./services/webOrderBridge');
+const smsGateway = require('./services/smsGateway');
+const smsService = require('./services/smsService');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { startAutoSync } = require('./services/liveShelfSync');
@@ -78,6 +84,7 @@ app.use('/api/customer', customerRouter);
 app.use('/api/ocr', ocrRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/products', productsRouter);
+app.use('/api/combos', combosRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/blogs', blogsRouter);
 app.use('/api/generate-blog', generateBlogRouter);
@@ -105,6 +112,9 @@ app.use('/api/pos/reports', posReportsRouter);
 app.use('/api/pos/transactions', posTransactionsRouter);
 app.use('/api/pos/web-orders', posWebOrdersRouter);
 app.use('/api/pos/scheduled', posScheduledRouter);
+app.use('/api/mobile', mobileRouter);
+app.use('/api/companion', companionRouter);
+app.use('/api/companion', importsRouter);
 
 // ── Cake Production PWA (own build, own path, own manifest/SW scope) ──
 // Registered before the generic SPA fallback below so /cake-app/* is never
@@ -127,6 +137,15 @@ const mainServer = http.createServer(app);
 
 const io = socketServer.init(mainServer);
 app.locals.io = io;
+
+// ── Centralized SMS gateway — raw ws channel for Android devices ──
+// Shares the main HTTP server; only /ws/sms upgrades are routed here, everything
+// else (socket.io) is left untouched by returning without touching the socket.
+smsGateway.init();
+mainServer.on('upgrade', (req, socket, head) => {
+  const { pathname } = require('url').parse(req.url);
+  if (pathname === '/ws/sms') smsGateway.handleUpgrade(req, socket, head);
+});
 
 function getNetworkIP() {
   const all = [];
@@ -151,6 +170,7 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
 
     startAutoSync(60_000);
     webOrderBridge.start();
+    smsService.start();   // background SMS engine — processes PENDING jobs
 
     console.log('');
     console.log('  ╔══════════════════════════════════════════════╗');

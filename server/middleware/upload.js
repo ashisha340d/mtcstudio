@@ -36,4 +36,19 @@ const uploadAudio = multer({
     fileFilter: audioFileFilter
 });
 
-module.exports = { upload, uploadAudio, uploadsDir };
+const callRecordingsDir = path.join(uploadsDir, 'call-recordings');
+if (!fs.existsSync(callRecordingsDir)) fs.mkdirSync(callRecordingsDir, { recursive: true });
+
+const uploadCallRecording = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => cb(null, callRecordingsDir),
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            cb(null, crypto.randomBytes(10).toString('hex') + '-' + Date.now() + ext);
+        }
+    }),
+    limits: { fileSize: (Number(process.env.MOBILE_MAX_UPLOAD_MB) || 20) * 1024 * 1024 },
+    fileFilter: audioFileFilter
+});
+
+module.exports = { upload, uploadAudio, uploadCallRecording, uploadsDir };

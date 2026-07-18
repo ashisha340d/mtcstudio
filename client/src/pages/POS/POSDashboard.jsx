@@ -16,10 +16,11 @@ import AddCustomerModal from './components/AddCustomerModal';
 import ScheduleOrderModal from './components/ScheduleOrderModal';
 import ScheduledOrderCard from './components/ScheduledOrderCard';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
+import { cakeDraftItems } from './posShared';
 import FonepayPanel from './components/FonepayPanel';
 // Lazy — shares the route chunk, idle-prefetched below
 const CakeOrderFormWindow = lazy(() => import('../CakeOrders/CakeOrderForm'));
-import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder, getBusinessDay } from '../../services/posApi';
+import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder, deleteScheduledOrder, getBusinessDay } from '../../services/posApi';
 import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
 import { nepalNow } from '../../utils/dateTime';
 import './pos.css';
@@ -134,15 +135,32 @@ export default function POSDashboard() {
       .catch(() => { });
   }, [navigate]);
 
-  // Scheduled + draft orders live in their own table — polled, not socket-driven
+  // Scheduled + draft orders — socket-driven (server fires 'scheduled-changed'
+  // when an OCR draft lands); the 30s poll stays as a safety net.
   const [schedOrders, setSchedOrders] = useState([]);
+  const [flashIds, setFlashIds] = useState(() => new Set()); // draft ids flashing ~30s
+  const [arriveId, setArriveId] = useState(null);            // clean draft playing fly-in + flowers
   const loadScheduled = useCallback(() => {
     getScheduledOrders().then(setSchedOrders).catch(() => { });
   }, []);
   useEffect(() => {
     loadScheduled();
     const id = setInterval(loadScheduled, 30000);
-    return () => clearInterval(id);
+    const onChanged = (e) => {
+      loadScheduled();
+      const sid = e?.detail?.scheduledOrderId;
+      if (!sid) return;
+      // All items resolved (review === false) → celebratory fly-in + flower burst.
+      if (e?.detail?.review === false) {
+        setArriveId(sid);
+        setTimeout(() => setArriveId(prev => (prev === sid ? null : prev)), 2600);
+      } else {
+        setFlashIds(prev => new Set(prev).add(sid));
+        setTimeout(() => setFlashIds(prev => { const n = new Set(prev); n.delete(sid); return n; }), 30000);
+      }
+    };
+    window.addEventListener('mtc:scheduled-changed', onChanged);
+    return () => { clearInterval(id); window.removeEventListener('mtc:scheduled-changed', onChanged); };
   }, [loadScheduled]);
 
   const [btnOrder, setBtnOrder] = useState(loadBtnOrder);
@@ -316,6 +334,13 @@ export default function POSDashboard() {
     loadScheduled();
   }
 
+  async function deleteScheduledRow(row) {
+    if (!window.confirm('Delete this order permanently? Use for wrong-punched orders.')) return;
+    try { await deleteScheduledOrder(row.id); notify('success', '🗑 Order deleted'); }
+    catch (e) { notify('error', e.response?.data?.error || e.message); }
+    loadScheduled();
+  }
+
   // Direct Checkout button on card → open checkout modal for that existing order.
   // Table orders are frozen (kept looking occupied) until the Payment Complete
   // modal actually finishes closing — see handleCheckoutSuccess / handleCheckoutClose.
@@ -351,6 +376,7 @@ export default function POSDashboard() {
   function handleCheckoutSuccess() {
     const meta = checkoutMetaRef.current;
     setCheckoutOrderId(null);
+    setCakeRefresh(v => v + 1); // any cake dues settled in this checkout drop off the cake window
     const table = meta?.tableId ? tables.find(t => t.id === meta.tableId) : null;
     if (table) {
       notify('success', `🎉 Table ${table.name} Checked Out`);
@@ -556,6 +582,16 @@ export default function POSDashboard() {
         <Clock />
       </div>
 
+      {/* New fully-resolved order landed — flower burst from the right corner */}
+      {arriveId && (
+        <div className="oc-arrive-fx" aria-hidden>
+          <span className="oc-arrive-fx__comet">🌸</span>
+          {['🌸', '🌼', '💐', '🌷', '🌺', '✨', '🌸', '🌼'].map((f, i) => (
+            <span key={i} className="oc-arrive-fx__petal" style={{ '--i': i }}>{f}</span>
+          ))}
+        </div>
+      )}
+
       {/* ── Desktop Workspace ───────────────────────────────── */}
       <div className="pos-dashboard">
 
@@ -583,9 +619,12 @@ export default function POSDashboard() {
                   key={`sched-${row.id}`}
                   row={row}
                   index={i}
+                  flash={flashIds.has(row.id)}
+                  arrive={arriveId === row.id}
                   onOpen={cardReorderMode ? noop : openScheduledRow}
                   onConvert={cardReorderMode ? noop : convertRowNow}
                   onCancel={cardReorderMode ? noop : cancelScheduledRow}
+                  onDelete={cardReorderMode ? noop : deleteScheduledRow}
                 />
               ))}
               {sortedOrderCards.map((o, i) => (
@@ -627,6 +666,7 @@ export default function POSDashboard() {
       {checkoutOrderId && (
         <CheckoutModal
           orderId={checkoutOrderId}
+          cakeItems={cakeDraftItems(orders[checkoutOrderId] ?? heldOrder)}
           onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />

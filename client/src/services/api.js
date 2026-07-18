@@ -35,6 +35,15 @@ export const productsApi = {
   }
 };
 
+// ── Combos ───────────────────────────────────────────────────────────────────
+export const combosApi = {
+  list:   (params) => api.get('/combos', { params }),
+  get:    (id) => api.get(`/combos/${id}`),
+  create: (data) => api.post('/combos', data),
+  update: (id, data) => api.put(`/combos/${id}`, data),
+  remove: (id) => api.delete(`/combos/${id}`),
+};
+
 // ── Food Menu lookups ──────────────────────────────────────────────────────────
 export const getFoodMenuStations = () => api.get('/food-menu/stations').then(r => r.data);
 export const getFoodMenuBadges = () => api.get('/food-menu/badges').then(r =>

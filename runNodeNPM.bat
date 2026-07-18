@@ -1,0 +1,1 @@
+start "" cmd /k "cd /d D:\mtcstudio\server && node app.js" && start "" cmd /k "cd /d D:\mtcstudio\client && npm run dev"

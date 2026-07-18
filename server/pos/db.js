@@ -448,6 +448,104 @@ async function ensureSchema() {
     sort_order INT NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // ── Mobile API (MTC Companion Android app) ──────────────────────
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_devices (
+    id                INT PRIMARY KEY AUTO_INCREMENT,
+    device_id         VARCHAR(128) NOT NULL UNIQUE,
+    device_name       TEXT,
+    restaurant_id     VARCHAR(64),
+    platform          VARCHAR(32),
+    app_version       VARCHAR(32),
+    status            VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    battery           INT,
+    wifi              TEXT,
+    network           TEXT,
+    ip_address        VARCHAR(64),
+    last_seen         DATETIME,
+    paired_by_user_id INT,
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(paired_by_user_id) REFERENCES pos_users(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_call_events (
+    id                INT PRIMARY KEY AUTO_INCREMENT,
+    device_id         VARCHAR(128) NOT NULL,
+    phone             VARCHAR(32) NOT NULL,
+    pos_customer_id   INT,
+    customer_name     TEXT,
+    status            VARCHAR(16) NOT NULL DEFAULT 'INCOMING'
+                        CHECK(status IN ('INCOMING','ANSWERED','ENDED','MISSED')),
+    start_time        DATETIME,
+    end_time          DATETIME,
+    duration_seconds  INT,
+    recording_path    TEXT,
+    transcript        LONGTEXT,
+    ai_summary        LONGTEXT,
+    created_by        INT,
+    restaurant_id     VARCHAR(64),
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(pos_customer_id) REFERENCES pos_customers(id),
+    FOREIGN KEY(created_by) REFERENCES pos_users(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pos_call_events_phone ON pos_call_events(phone)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pos_call_events_device ON pos_call_events(device_id)`);
+
+  // ── Centralized SMS Service: single queue for every module's SMS jobs ──
+  await dbRun(`CREATE TABLE IF NOT EXISTS sms_queue (
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    phone         VARCHAR(32) NOT NULL,
+    message       TEXT NOT NULL,
+    customer_id   VARCHAR(64),
+    order_id      INT,
+    template_id   VARCHAR(64),
+    priority      INT NOT NULL DEFAULT 5,
+    status        VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+                    CHECK(status IN ('PENDING','QUEUED','SENDING','SENT','DELIVERED','FAILED','CANCELLED')),
+    retry_count   INT NOT NULL DEFAULT 0,
+    max_retries   INT NOT NULL DEFAULT 3,
+    device_id     VARCHAR(128),
+    created_by    INT,
+    error_message TEXT,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    queued_at     DATETIME,
+    sending_at    DATETIME,
+    sent_at       DATETIME,
+    delivered_at  DATETIME,
+    failed_at     DATETIME
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_sms_queue_status ON sms_queue(status, priority, created_at)`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_sms_queue_device ON sms_queue(device_id)`);
+
+  await dbRun(`CREATE TABLE IF NOT EXISTS sms_logs (
+    id         INT PRIMARY KEY AUTO_INCREMENT,
+    job_id     INT,
+    event      VARCHAR(32) NOT NULL,
+    device_id  VARCHAR(128),
+    detail     TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_sms_logs_job ON sms_logs(job_id)`);
+
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_customer_addresses (
+    id         INT PRIMARY KEY AUTO_INCREMENT,
+    phone      VARCHAR(32) NOT NULL,
+    label      VARCHAR(64),
+    address    TEXT NOT NULL,
+    is_default INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pos_customer_addresses_phone ON pos_customer_addresses(phone)`);
+
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_customer_notes (
+    id         INT PRIMARY KEY AUTO_INCREMENT,
+    phone      VARCHAR(32) NOT NULL,
+    note       TEXT NOT NULL,
+    created_by INT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES pos_users(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_pos_customer_notes_phone ON pos_customer_notes(phone)`);
+
   // ── Scheduled & Draft orders — separate table so pos_orders/pos_kots
   // logic (reports, KDS, shift close) never sees them until conversion ──
   await dbRun(`CREATE TABLE IF NOT EXISTS pos_scheduled_orders (
@@ -554,6 +652,30 @@ async function ensureSchema() {
     FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // ── OCR / WhatsApp image imports (Mero Kinmel etc.) ───────────
+  // One row per received image. Draft order (if created) lives in
+  // pos_scheduled_orders(kind='DRAFT'); scheduled_order_id links to it.
+  await dbRun(`CREATE TABLE IF NOT EXISTS pos_ocr_imports (
+    id                 INT PRIMARY KEY AUTO_INCREMENT,
+    source             VARCHAR(32) NOT NULL DEFAULT 'WhatsApp Business',
+    platform           VARCHAR(64) NOT NULL DEFAULT 'Mero Kinmel',
+    image_filename     VARCHAR(255),
+    image_hash         VARCHAR(64) UNIQUE,
+    notification_ts    DATETIME,
+    ocr_ms             INT NOT NULL DEFAULT 0,
+    parser_confidence  DOUBLE NOT NULL DEFAULT 0,
+    status             VARCHAR(20) NOT NULL DEFAULT 'RECEIVED'
+                         CHECK(status IN ('RECEIVED','OCR','PARSED','DRAFTED','MANUAL_REVIEW','FAILED')),
+    raw_text           LONGTEXT,
+    parsed_json        LONGTEXT,
+    scheduled_order_id INT,
+    error              TEXT,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY(scheduled_order_id) REFERENCES pos_scheduled_orders(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_ocr_imports_status ON pos_ocr_imports(status, created_at)`);
+
   // ── Column additions on shared tables ─────────────────────────
   await dbRun(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS icon TEXT`);
 
@@ -566,12 +688,33 @@ async function ensureSchema() {
   await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS customer_visible INT NOT NULL DEFAULT 0`);
   await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS customer_max_qty INT`);
   await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS badge TEXT`);
+  // Combo meal: a combo is a normal product row flagged here; its composition
+  // lives in combo_items. Price/category/image stay on the product itself.
+  await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_combo INT NOT NULL DEFAULT 0`);
 
   await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS cake_type VARCHAR(32)`);
+
+  // Combo composition — no pricing, only which child items a combo expands into.
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS combo_items (
+      id                INT AUTO_INCREMENT PRIMARY KEY,
+      combo_product_id  INT NOT NULL,
+      child_product_id  INT NOT NULL,
+      child_variant_id  INT NULL,
+      quantity          INT NOT NULL DEFAULT 1,
+      sequence          INT NOT NULL DEFAULT 0,
+      CONSTRAINT fk_combo_parent FOREIGN KEY (combo_product_id) REFERENCES products(id) ON DELETE CASCADE,
+      CONSTRAINT fk_combo_child  FOREIGN KEY (child_product_id) REFERENCES products(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_combo_items_parent ON combo_items(combo_product_id)`);
 
   // Item-level discounts — absolute amount per line; type drives day-end section J
   await dbRun(`ALTER TABLE pos_kot_items ADD COLUMN IF NOT EXISTS discount_amount DOUBLE NOT NULL DEFAULT 0`);
   await dbRun(`ALTER TABLE pos_kot_items ADD COLUMN IF NOT EXISTS discount_type VARCHAR(16)`);
+  // Combo expansion on the order line: child KOT rows link to their combo parent
+  // row so the cashier sees one line, kitchen/inventory see the components.
+  await dbRun(`ALTER TABLE pos_kot_items ADD COLUMN IF NOT EXISTS combo_parent_id INT`);
+  await dbRun(`ALTER TABLE pos_kot_items ADD COLUMN IF NOT EXISTS is_combo_child INT NOT NULL DEFAULT 0`);
 
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS draft_items LONGTEXT`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS change_amount DOUBLE NOT NULL DEFAULT 0`);

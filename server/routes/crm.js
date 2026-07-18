@@ -46,15 +46,15 @@ router.post('/customers', async (req, res, next) => {
 // UPDATE
 router.put('/customers/:phone', async (req, res, next) => {
     try {
-        const { phone2, name, address, birthday, email, email2, loyalty_points, rewards_tier, notes, status, is_delivery_partner } = req.body;
+        const { phone2, name, address, birthday, email, email2, loyalty_points, rewards_tier, notes, status, is_delivery_partner, discount } = req.body;
         if (!name) return res.status(400).json({ error: 'name is required' });
         await dbRun(
             `UPDATE customers SET phone2=?,name=?,address=?,birthday=?,email=?,email2=?,
-             loyalty_points=?,rewards_tier=?,notes=?,status=?,is_delivery_partner=?,updated_at=CURRENT_TIMESTAMP
+             loyalty_points=?,rewards_tier=?,notes=?,status=?,is_delivery_partner=?,discount=?,updated_at=CURRENT_TIMESTAMP
              WHERE phone=?`,
             [phone2||null, name, address||null, birthday||null, email||null, email2||null,
              loyalty_points||0, rewards_tier||'standard', notes||null, status||'active',
-             is_delivery_partner ? 1 : 0, req.params.phone]
+             is_delivery_partner ? 1 : 0, Math.min(100, Math.max(0, Number(discount) || 0)), req.params.phone]
         );
         res.json({ success: true });
     } catch (e) { next(e); }

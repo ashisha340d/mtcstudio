@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { usePOS } from '../../../context/POSContext';
+import { cakeDraftItems } from '../posShared';
 import { flyToCashStack } from './flyToCashStack';
 import '../pos.css';
 
@@ -274,7 +276,7 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
 }
 
 // ── Cake Dash Card ────────────────────────────────────────────────────
-function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false }) {
+function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false, reserving = false }) {
   const navigate = useNavigate();
   const [printing, setPrinting] = useState(false);
   const cardRef = useRef(null);
@@ -303,9 +305,24 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false 
     <div
       ref={cardRef}
       className={`tc${closing ? ' tc--wiping' : ''}`}
-      style={{ minHeight: 210, cursor: 'pointer' }}
-      onClick={closing ? undefined : openOrder}
+      style={{
+        minHeight: 210, cursor: 'pointer',
+        // Added to an order's cart — shrink away; card returns if the line is removed
+        ...(reserving ? {
+          opacity: 0, transform: 'scale(0.72) translateY(-16px)',
+          transition: 'opacity 0.45s ease, transform 0.45s ease',
+          pointerEvents: 'none',
+        } : null),
+      }}
+      onClick={(closing || reserving) ? undefined : openOrder}
     >
+      {reserving && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 5, borderRadius: 'inherit',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(233,30,140,0.10)', color: '#e91e8c', fontSize: 13, fontWeight: 800,
+        }}>✓ Added to order</div>
+      )}
       {/* Order # + Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: '#c1440e', letterSpacing: '0.05em' }}>
@@ -404,6 +421,7 @@ let cakeCache = null; // { pending }
 
 // ── Main: Cake Dashboard Window ───────────────────────────────────────
 export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken = 0 }) {
+  const { orders } = usePOS();
   const [visibleOrders, setVisibleOrders] = useState(() => cakeCache?.pending ?? []);
   const [loading, setLoading] = useState(false);
   const [payTarget, setPayTarget] = useState(null);
@@ -421,7 +439,33 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
 
   useEffect(() => { load(); }, [load, refreshToken]);
 
-  const outstandingBalance = visibleOrders.reduce((s, o) => s + (o.balance_due ?? 0), 0);
+  // Cakes whose balance already sits in an open order's cart — hidden here
+  // until that line is removed (card returns) or the order pays out.
+  const reservedIds = useMemo(() => {
+    const s = new Set();
+    Object.values(orders || {}).forEach(o => {
+      if (o?.status !== 'OPEN' && o?.status !== 'SAVED') return;
+      cakeDraftItems(o).forEach(i => s.add(i.cake_order_id));
+    });
+    return s;
+  }, [orders]);
+
+  // Newly reserved ids linger 500ms in a leaving state so the card animates out
+  const [reservingIds, setReservingIds] = useState(() => new Set());
+  const prevReservedRef = useRef(null);
+  useEffect(() => {
+    const prev = prevReservedRef.current;
+    prevReservedRef.current = reservedIds;
+    if (prev === null) return; // first computation — no exit animation on mount
+    const added = [...reservedIds].filter(id => !prev.has(id));
+    if (!added.length) return;
+    setReservingIds(s => new Set([...s, ...added]));
+    const t = setTimeout(() => setReservingIds(s => { const n = new Set(s); added.forEach(id => n.delete(id)); return n; }), 500);
+    return () => clearTimeout(t);
+  }, [reservedIds]);
+
+  const shownOrders = visibleOrders.filter(o => !reservedIds.has(o.id) || reservingIds.has(o.id));
+  const outstandingBalance = shownOrders.reduce((s, o) => s + (o.balance_due ?? 0), 0);
 
   function onPaySuccess({ fullyPaid } = {}) {
     const paidId = payTarget?.id;
@@ -438,7 +482,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
   }
 
   // No pending cake orders — hide the window entirely
-  if (!loading && visibleOrders.length === 0) return null;
+  if (!loading && shownOrders.length === 0) return null;
 
   return (
     <>
@@ -461,7 +505,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
             </span>
           )}
           <span className="desktop-chrome__count">
-            {visibleOrders.length} pending
+            {shownOrders.length} pending
           </span>
         </div>
 
@@ -470,12 +514,12 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
           {loading && (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9c8870', fontSize: 12 }}>Loading…</div>
           )}
-          {!loading && visibleOrders.length === 0 && (
+          {!loading && shownOrders.length === 0 && (
             <div className="pos-empty-state">No cake orders with pending amount.</div>
           )}
-          {!loading && visibleOrders.length > 0 && (
+          {!loading && shownOrders.length > 0 && (
             <div className="table-card-grid">
-              {visibleOrders.map(o => (
+              {shownOrders.map(o => (
                 <CakeDashCard
                   key={o.id}
                   order={o}
@@ -483,6 +527,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
                   onRefresh={load}
                   onOpen={onOpenOrder}
                   closing={closingIds.has(o.id)}
+                  reserving={reservingIds.has(o.id)}
                 />
               ))}
             </div>
