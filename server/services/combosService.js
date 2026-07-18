@@ -35,7 +35,10 @@ async function getAll({ search } = {}) {
   const params = search ? [`%${search}%`] : [];
   const combos = await dbAll(
     `SELECT p.id, p.name, p.category_id, c.name AS category_name, p.pos_price,
-            p.status, p.pos_active, p.customer_visible, p.pos_station_id
+            p.status, p.pos_active, p.customer_visible, p.pos_station_id,
+            (SELECT ml.filename FROM product_images pi
+             JOIN media_library ml ON ml.id = pi.media_id
+             WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1) AS primary_image
      FROM   products p
      LEFT JOIN categories c ON c.id = p.category_id
      WHERE  COALESCE(p.is_combo,0) = 1 ${where}
@@ -46,7 +49,11 @@ async function getAll({ search } = {}) {
 
 async function getOne(id) {
   const combo = await dbGet(
-    `SELECT p.*, c.name AS category_name FROM products p
+    `SELECT p.*, c.name AS category_name,
+            (SELECT ml.filename FROM product_images pi
+             JOIN media_library ml ON ml.id = pi.media_id
+             WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1) AS primary_image
+     FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      WHERE p.id = ? AND COALESCE(p.is_combo,0) = 1`, [id]);
   if (!combo) return null;

@@ -13,7 +13,7 @@ const TESSERACT_CONFIG = {
   lang: 'eng',
   oem: 1,
   psm: 6,
-  binary: '"D:\\Program Files\\Tesseract-OCR\\tesseract.exe"'
+  binary: process.env.TESSERACT_BIN || '"D:\\Program Files\\Tesseract-OCR\\tesseract.exe"'
 };
 
 // Save uploads

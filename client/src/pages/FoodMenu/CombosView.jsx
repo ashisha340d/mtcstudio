@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { combosApi, productsApi, categoriesApi } from '../../services/api';
 import { useMsg } from '../../hooks/useApi';
+import MediaPicker from '../../components/MediaPicker/MediaPicker';
+
+function imgSrc(raw) {
+  if (!raw) return null;
+  const str = typeof raw === 'object' ? raw.filename : raw;
+  if (!str) return null;
+  if (str.startsWith('http')) return str;
+  if (str.startsWith('/uploads/')) return str;
+  const filename = str.replace(/\\/g, '/').split('/').pop();
+  return filename ? `/uploads/${filename}` : null;
+}
 
 // Load the full non-combo catalogue (with variants) for the child-item pickers.
 async function loadAllProducts() {
@@ -61,6 +72,7 @@ export default function CombosView() {
         <table className="fm-table combo-table">
           <thead>
             <tr>
+              <th style={{ width: 60 }}>Image</th>
               <th style={{ width: '26%' }}>Combo</th>
               <th style={{ width: '16%' }}>Category</th>
               <th style={{ width: '10%' }}>Price</th>
@@ -71,11 +83,16 @@ export default function CombosView() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="fm-loading">Loading…</td></tr>
+              <tr><td colSpan={7} className="fm-loading">Loading…</td></tr>
             ) : combos.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, opacity: 0.6 }}>No combos yet. Click “＋ New Combo”.</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, opacity: 0.6 }}>No combos yet. Click “＋ New Combo”.</td></tr>
             ) : combos.map(c => (
               <tr key={c.id} className="combo-row" onDoubleClick={() => setEditing(c)}>
+                <td>
+                  {imgSrc(c.primary_image)
+                    ? <img src={imgSrc(c.primary_image)} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
+                    : <span style={{ opacity: 0.4 }}>📷</span>}
+                </td>
                 <td><b>{c.name}</b></td>
                 <td>{c.category_name || '—'}</td>
                 <td>₹{Number(c.pos_price || 0).toLocaleString('en-IN')}</td>
@@ -121,6 +138,9 @@ function ComboEditorModal({ combo, products, categories, onClose, onSaved, showM
   const [price, setPrice] = useState(combo?.pos_price ?? 0);
   const [posActive, setPosActive] = useState(combo ? !!combo.pos_active : true);
   const [qrVisible, setQrVisible] = useState(combo ? !!combo.customer_visible : false);
+  const [image, setImage] = useState(combo?.primary_image || null);
+  const [mediaId, setMediaId] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [items, setItems] = useState(
     combo?.items?.length
       ? combo.items.map(it => ({ child_product_id: it.child_product_id, child_variant_id: it.child_variant_id || '', quantity: it.quantity }))
@@ -169,6 +189,7 @@ function ComboEditorModal({ combo, products, categories, onClose, onSaved, showM
     const payload = {
       name: name.trim(), category_id: categoryId || null, pos_price: Number(price) || 0,
       pos_active: posActive ? 1 : 0, customer_visible: qrVisible ? 1 : 0, items: cleanItems,
+      ...(mediaId ? { media_id: mediaId } : {}),
     };
     setSaving(true);
     try {
@@ -187,6 +208,12 @@ function ComboEditorModal({ combo, products, categories, onClose, onSaved, showM
 
         <div className="combo-modal__body">
           <div className="combo-head">
+            <div className="combo-field" onClick={() => setPickerOpen(true)} style={{ cursor: 'pointer' }} title="Click to set image">
+              <span>Image</span>
+              {imgSrc(image)
+                ? <img src={imgSrc(image)} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
+                : <div style={{ width: 56, height: 56, borderRadius: 6, background: '#f1f1f1', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>📷</div>}
+            </div>
             <label className="combo-field combo-field--wide">
               <span>Name</span>
               <input autoFocus value={name} onChange={e => setName(e.target.value)} onFocus={e => e.target.select()} placeholder="Burger + Cola Combo" />
@@ -235,6 +262,14 @@ function ComboEditorModal({ combo, products, categories, onClose, onSaved, showM
           <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Combo'}</button>
         </div>
       </div>
+
+      {pickerOpen && (
+        <MediaPicker
+          section="menu"
+          onSelect={item => { setImage(item.url || item.filename); setMediaId(item.id); setPickerOpen(false); }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
