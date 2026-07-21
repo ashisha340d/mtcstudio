@@ -10,6 +10,7 @@ const crypto  = require('crypto');
 const { dbAll, dbGet } = require('../../pos/db');       // POS DB (orders, kots, pos_customers, addresses)
 const cmsDb            = require('../../database/db');   // CMS DB (customers, menu, media, settings)
 const { requireSession } = require('../../middleware/posAuth');
+const { getNepalDayBoundsUTC } = require('../../utils/nepalDateTime');
 
 const router = express.Router();
 router.use(requireSession);
@@ -33,13 +34,15 @@ function toWebp(p) {
 router.get('/caller-status', async (req, res) => {
   const normPhone = normalizePhone(req.query.phone);
   if (!normPhone) return res.status(400).json({ error: 'phone required' });
+  const { start, end } = getNepalDayBoundsUTC(); // per-day app: never surface a stale carried-over order
 
   const [crmCustomer, posCustomer, activeOrder, cakeBalRow] = await Promise.all([
     cmsDb.dbGet(`SELECT phone, name, loyalty_points, rewards_tier, updated_at FROM customers WHERE phone=?`, [normPhone]),
     dbGet(`SELECT id, name FROM pos_customers WHERE phone=?`, [normPhone]),
     dbGet(`SELECT id, status, total_amount, paid_amount, updated_at
              FROM pos_orders WHERE customer_phone=? AND status IN ('OPEN','SAVED')
-             ORDER BY updated_at DESC LIMIT 1`, [normPhone]),
+               AND created_at >= ? AND created_at <= ?
+             ORDER BY updated_at DESC LIMIT 1`, [normPhone, start, end]),
     dbGet(`SELECT COALESCE(SUM(balance_due),0) AS bal FROM cake_orders
              WHERE phone=? AND balance_due>0 AND status NOT IN ('DELIVERED','CANCELLED','REFUNDED')`, [normPhone]),
   ]);
@@ -191,12 +194,17 @@ router.get('/sync/menu', async (req, res) => {
   }
 
   const [categories, products, variants, modifierGroups, modifiers, assignments, images] = await Promise.all([
-    cmsDb.dbAll(`SELECT id, name, slug, sort_order, status, icon FROM categories ORDER BY sort_order, id`),
+    cmsDb.dbAll(`SELECT c.id, c.name, c.slug, c.sort_order, c.status, c.icon,
+                        ml.filename AS image_url
+                   FROM categories c LEFT JOIN media_library ml ON ml.id = c.image_id
+                  ORDER BY c.sort_order, c.id`),
     cmsDb.dbAll(`SELECT id, category_id, name, short_description, pos_price, prep_time_minutes,
                         is_fast_moving, pos_active, customer_visible, badge, enable_variant_image, status, sort_order
                    FROM products WHERE pos_active=1 ORDER BY sort_order, id`),
-    cmsDb.dbAll(`SELECT id, product_id, name, sku, selling_price, unit, status, sort_order, image_id, image_url
-                   FROM product_variants ORDER BY product_id, sort_order, id`),
+    cmsDb.dbAll(`SELECT v.id, v.product_id, v.name, v.sku, v.selling_price, v.unit, v.status, v.sort_order,
+                        v.image_id, ml.filename AS image_url
+                   FROM product_variants v LEFT JOIN media_library ml ON ml.id = v.image_id
+                  ORDER BY v.product_id, v.sort_order, v.id`),
     cmsDb.dbAll(`SELECT id, name, sort_order FROM modifier_groups ORDER BY sort_order, id`),
     cmsDb.dbAll(`SELECT id, group_id, name, price, sort_order, is_active FROM shared_modifiers ORDER BY group_id, sort_order`),
     cmsDb.dbAll(`SELECT id, product_id, modifier_id FROM product_modifier_assignments`),
@@ -206,28 +214,28 @@ router.get('/sync/menu', async (req, res) => {
   ]);
   // Emit the webp stem so filenames line up with the on-disk forapp cache.
   const imagesWebp = images.map(i => ({ ...i, filename: toWebp(i.filename) }));
-  res.json({ changed: true, version, categories, products, variants, modifierGroups, modifiers, assignments, images: imagesWebp });
+  const categoriesOut = categories.map(c => ({ ...c, image_file: toWebp(c.image_url) }));
+  res.json({ changed: true, version, categories: categoriesOut, products, variants, modifierGroups, modifiers, assignments, images: imagesWebp });
 });
 
-// ── SYNC: image manifest (only product/variant files present in forapp) ──
+// ── SYNC: image manifest (only product/variant/category files present in forapp) ──
 router.get('/sync/images', async (_req, res) => {
   let onDisk = [];
   try { onDisk = fs.readdirSync(FORAPP_DIR); } catch { onDisk = []; }
   const diskSet = new Set(onDisk);
 
-  const [prodImgs, varImgs] = await Promise.all([
+  const [prodImgs, varImgs, catImgs] = await Promise.all([
     cmsDb.dbAll(`SELECT ml.filename FROM product_images pi JOIN media_library ml ON ml.id = pi.media_id`),
-    cmsDb.dbAll(`SELECT image_url, ml.filename
-                   FROM product_variants pv LEFT JOIN media_library ml ON ml.id = pv.image_id
-                  WHERE pv.image_url IS NOT NULL OR pv.image_id IS NOT NULL`),
+    cmsDb.dbAll(`SELECT ml.filename
+                   FROM product_variants pv JOIN media_library ml ON ml.id = pv.image_id`),
+    cmsDb.dbAll(`SELECT ml.filename AS image_url
+                   FROM categories c JOIN media_library ml ON ml.id = c.image_id`),
   ]);
 
   const wanted = new Set();
   for (const r of prodImgs) if (r.filename) wanted.add(toWebp(r.filename));
-  for (const r of varImgs) {
-    if (r.filename)  wanted.add(toWebp(r.filename));
-    if (r.image_url) wanted.add(toWebp(r.image_url));
-  }
+  for (const r of catImgs) if (r.image_url) wanted.add(toWebp(r.image_url));
+  for (const r of varImgs) if (r.filename) wanted.add(toWebp(r.filename));
 
   const manifest = [];
   for (const name of wanted) {

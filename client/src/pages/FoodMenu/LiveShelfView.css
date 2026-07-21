@@ -141,11 +141,34 @@
   gap: 8px;
   margin-bottom: 12px;
   padding-bottom: 6px;
-  border-bottom: 2px solid var(--t-accent);
+  border-bottom: 1px solid var(--t-border);
 }
 
-.ls-cat-name  { font-size: 14px; font-weight: 700; color: var(--t-text); }
-.ls-cat-count { font-size: 12px; color: var(--t-text-muted); }
+.ls-cat-header::before {
+  content: '';
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--t-accent), #a5380c);
+}
+
+.ls-cat-name {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t-text);
+}
+
+.ls-cat-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t-text-muted);
+  background: var(--t-surface-2);
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
 
 /* ── Grid ─────────────────────────────────────────────────────────────────── */
 .ls-grid {
@@ -157,16 +180,24 @@
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 .ls-card {
   background: var(--t-surface);
-  border-radius: 12px;
-  box-shadow: var(--t-shadow-md);
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.15s, opacity 0.15s, transform 0.1s;
+  transition: box-shadow 0.18s, opacity 0.15s, transform 0.18s cubic-bezier(.34,1.4,.4,1), border-color 0.15s;
   cursor: grab;
 }
 
-.ls-card:hover { box-shadow: var(--t-shadow-md), 0 4px 16px rgba(0,0,0,.05); }
+/* No transform here: MediaPicker (position: fixed) mounts as a DOM child of
+   .ls-card when the image is clicked, and a transformed ancestor becomes the
+   containing block for fixed descendants — combined with overflow: hidden
+   above, that clips/traps the modal inside the card instead of the viewport. */
+.ls-card:hover {
+  border-color: color-mix(in srgb, var(--t-accent) 40%, var(--t-border));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
+}
 .ls-card:active { cursor: grabbing; }
 
 .ls-card-dirty   { background: color-mix(in srgb, var(--t-warning) 10%, var(--t-surface)); box-shadow: 0 0 0 2px var(--t-warning); }

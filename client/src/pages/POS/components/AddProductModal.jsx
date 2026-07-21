@@ -215,7 +215,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '11px 13px', borderRadius: 9,
     border: `1.5px solid ${selected ? W.orange : W.borderLight}`,
-    background: selected ? 'rgba(193,68,14,0.08)' : 'rgba(255,255,255,0.65)',
+    background: selected ? W.accentSoft : W.fill2,
     cursor: 'pointer', transition: 'all 0.1s', width: '100%',
   });
 
@@ -242,12 +242,12 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
 
             {primaryImage
               ? <img src={`/uploads/${primaryImage}`} style={{ height: 52, width: 52, borderRadius: 9, objectFit: 'cover', border: `1px solid ${W.border}`, flexShrink: 0 }} alt="" />
-              : <div style={{ height: 52, width: 52, borderRadius: 9, background: 'rgba(255,255,255,0.4)', border: `1px solid ${W.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              : <div style={{ height: 52, width: 52, borderRadius: 9, background: W.fill1, border: `1px solid ${W.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <ImageIcon style={{ width: 22, height: 22, color: W.text3 }} />
               </div>
             }
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: W.text1, lineHeight: 1.3, textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>{product.name}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: W.text1, lineHeight: 1.3, textShadow: W.emboss }}>{product.name}</div>
               {product.category_name && <div style={{ fontSize: 10, color: W.text3, marginTop: 1 }}>{product.category_name}</div>}
               <div style={{ fontSize: 14, fontWeight: 800, color: W.orange, marginTop: 4 }}>{fmt(isMulti ? multiAmount : (basePrice || product.pos_price))}</div>
             </div>
@@ -325,7 +325,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
                   placeholder="e.g. Less spicy, No onion…"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  style={{ width: '100%', borderRadius: 9, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.text1, fontSize: 13, padding: '9px 11px', resize: 'none', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', borderRadius: 9, border: `1px solid ${W.borderLight}`, background: W.fill2, color: W.text1, fontSize: 13, padding: '9px 11px', resize: 'none', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
             )}
@@ -341,7 +341,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
                         padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800,
                         textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
                         border: `1.5px solid ${discType === key ? W.orange : W.borderLight}`,
-                        background: discType === key ? 'rgba(193,68,14,0.1)' : 'rgba(255,255,255,0.65)',
+                        background: discType === key ? 'rgba(193,68,14,0.1)' : W.fill2,
                         color: discType === key ? W.orange : W.text2,
                       }}>{label}</button>
                   ))}
@@ -352,11 +352,11 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
                     value={discAmt}
                     onChange={e => setDiscAmt(e.target.value)}
                     onFocus={e => e.target.select()}
-                    style={{ width: 90, padding: '7px 9px', borderRadius: 8, border: `1.5px solid ${discount > 0 ? W.orange : W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: discount > 0 ? W.orange : W.text1, fontSize: 14, fontWeight: 800, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
+                    style={{ width: 90, padding: '7px 9px', borderRadius: 8, border: `1.5px solid ${discount > 0 ? W.orange : W.borderLight}`, background: W.fill2, color: discount > 0 ? W.orange : W.text1, fontSize: 14, fontWeight: 800, outline: 'none', textAlign: 'right', boxSizing: 'border-box' }}
                   />
                   {[10, 20, 50, 100].map(p => (
                     <button key={p} onClick={() => setDiscAmt(String(Math.round(lineGross * p) / 100))}
-                      style={{ padding: '6px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.65)', color: W.text2, cursor: 'pointer', flexShrink: 0 }}>
+                      style={{ padding: '6px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, border: `1px solid ${W.borderLight}`, background: W.fill2, color: W.text2, cursor: 'pointer', flexShrink: 0 }}>
                       {p === 100 ? 'FOC' : `${p}%`}
                     </button>
                   ))}
@@ -374,7 +374,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
             )}
           </div>
 
-          <div style={{ borderTop: `1px solid ${W.border}`, padding: '12px 18px', flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
+          <div style={{ borderTop: `1px solid ${W.border}`, padding: '12px 18px', flexShrink: 0, background: W.fill1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>
@@ -389,7 +389,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
                   onChange={e => setRateInput(e.target.value)}
                   onFocus={e => { setRateFocused(true); e.target.select(); }}
                   onBlur={() => setRateFocused(false)}
-                  style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: `1.5px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.orange, fontSize: 22, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'right' }}
+                  style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: `1.5px solid ${W.borderLight}`, background: W.fill2, color: W.orange, fontSize: 22, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'right' }}
                 />
               </div>
               {!isMulti && (
@@ -416,7 +416,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
                   width: '100%', padding: '11px 13px', borderRadius: 9, marginBottom: 10,
                   display: 'flex', alignItems: 'center', gap: 10,
                   border: `1.5px solid ${homePack ? W.orange : W.borderLight}`,
-                  background: homePack ? 'rgba(193,68,14,0.08)' : 'rgba(255,255,255,0.65)',
+                  background: homePack ? W.accentSoft : W.fill2,
                   cursor: 'pointer', transition: 'all 0.1s',
                 }}
               >

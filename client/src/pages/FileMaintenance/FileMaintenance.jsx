@@ -10,6 +10,7 @@ import CakeProductsTab     from './tabs/CakeProductsTab';
 import TableTagsTab        from './tabs/TableTagsTab';
 import KDSSoundSettingsTab from './tabs/KDSSoundSettingsTab';
 import WeatherRecommendsTab from './tabs/WeatherRecommendsTab';
+import MeroKinmelTab       from './tabs/MeroKinmelTab';
 import './fm.css';
 
 const TABS = [
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'table-tags',   label: '🏷 Table Tags'         },
   { key: 'kds-sound',    label: '🔔 Alert Sounds'       },
   { key: 'weather',      label: '🌤️ Weather Recommends' },
+  { key: 'mero-kinmel',  label: '🛵 Mero Kinmel'        },
 ];
 
 export default function FileMaintenance() {
@@ -63,6 +65,7 @@ export default function FileMaintenance() {
       {active === 'cake-products' && <CakeProductsTab />}
       {active === 'kds-sound'     && <KDSSoundSettingsTab />}
       {active === 'weather'       && <WeatherRecommendsTab />}
+      {active === 'mero-kinmel'   && <MeroKinmelTab />}
     </div>
   );
 }

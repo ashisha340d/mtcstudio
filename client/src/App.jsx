@@ -73,7 +73,7 @@ function POSRoot({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<div style={{ height: '100vh', background: '#ddd5c4' }} />}>
+      <Suspense fallback={<div style={{ height: '100vh', background: 'var(--desktop-bg, #ddd5c4)' }} />}>
       <Routes>
         {/* ── Customer QR ordering (no auth, public) ── */}
         <Route path="/menu/:tableId" element={<CustomerMenu />} />

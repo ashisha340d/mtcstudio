@@ -221,7 +221,7 @@ router.get('/products', async (req, res) => {
               pv.id AS variant_id, pv.name AS variant_name,
               pv.cake_type AS variant_cake_type,
               pv.selling_price AS rate, pv.unit,
-              pv.image_url AS variant_image,
+              (SELECT ml.filename FROM media_library ml WHERE ml.id = pv.image_id) AS variant_image,
               (SELECT ml.filename FROM product_images pi JOIN media_library ml ON ml.id = pi.media_id
                WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1) AS product_image
        FROM   products p

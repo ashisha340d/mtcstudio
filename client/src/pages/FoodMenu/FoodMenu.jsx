@@ -53,13 +53,27 @@ function VariantImageCell({ product, variant, onPick }) {
   );
 }
 
-function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onAdd, makeKeyHandler, enableImage, onPickImage }) {
+function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onAdd, makeKeyHandler, enableImage, onPickImage, onReorder }) {
   const variants = product.variants || [];
+  const [vDrag, setVDrag] = useState(null);
+  const [vOver, setVOver] = useState(null);
+
+  function dropVariant(e, idx) {
+    e.preventDefault();
+    if (vDrag === null || vDrag === idx) { setVDrag(null); setVOver(null); return; }
+    const arr = [...variants];
+    const [moved] = arr.splice(vDrag, 1);
+    arr.splice(idx, 0, moved);
+    onReorder(product.id, arr);
+    setVDrag(null); setVOver(null);
+  }
+
   return (
     <div className="fm-variant-wrap" >
       <table className="fm-variant-table">
         <thead>
           <tr>
+            <th style={{ width: 28 }} title="Drag to reorder"></th>
             <th style={{ minWidth: 100 }}>Name</th>
             <th style={{ width: 80 }}>Price</th>
             <th style={{ width: 80 }}>Status</th>
@@ -69,10 +83,27 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
           </tr>
         </thead>
         <tbody>
-          {variants.map(v => {
+          {variants.map((v, vIdx) => {
             const isDirty = dirtyVariantIds?.has(v.id);
+            const isDragOv = vOver === vIdx && vDrag !== vIdx;
             return (
-              <tr key={v.id} className={isDirty ? 'fm-row-dirty' : ''}>
+              <tr
+                key={v.id}
+                className={isDirty ? 'fm-row-dirty' : ''}
+                style={{
+                  ...(vDrag === vIdx ? { opacity: 0.4 } : {}),
+                  ...(isDragOv ? { outline: '2px solid #2563eb', outlineOffset: -2 } : {}),
+                }}
+                onDragOver={e => { e.preventDefault(); if (vOver !== vIdx) setVOver(vIdx); }}
+                onDragEnd={() => { setVDrag(null); setVOver(null); }}
+                onDrop={e => dropVariant(e, vIdx)}
+              >
+                <td
+                  draggable
+                  onDragStart={e => { setVDrag(vIdx); e.dataTransfer.effectAllowed = 'move'; }}
+                  title="Drag to reorder"
+                  style={{ cursor: 'grab', textAlign: 'center', color: '#9ca3af', userSelect: 'none' }}
+                >⠿</td>
                 {V_COLS.map((col, ci) => {
                   const refKey = `v-${v.id}-${ci}`;
                   if (col === 'status') return (
@@ -125,7 +156,7 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
             );
           })}
           {!variants.length && (
-            <tr><td colSpan={enableImage ? 6 : 5} className="fm-variant-empty">No variants — add one below</td></tr>
+            <tr><td colSpan={enableImage ? 7 : 6} className="fm-variant-empty">No variants — add one below</td></tr>
           )}
         </tbody>
       </table>
@@ -586,10 +617,29 @@ export default function FoodMenu() {
     }));
   }
 
+  function reorderVariants(productId, newVariants) {
+    const ordered = newVariants.map((v, i) => ({ ...v, sort_order: i + 1 }));
+    setItems(prev => prev.map(p => p.id !== productId ? p : { ...p, variants: ordered }));
+    setDirtyVariants(prev => ({
+      ...prev,
+      [productId]: new Set([...(prev[productId] || []), ...ordered.map(v => v.id)]),
+    }));
+  }
+
   function onVariantImageSelect(item) {
     if (!variantPickerFor) return;
     const { productId, variantId } = variantPickerFor;
-    updateVariant(productId, variantId, 'image_url', item.url || item.filename);
+    // image_id is what persists (media library FK); image_url is display-only
+    // and gets re-resolved from that FK on the next load.
+    setItems(prev => prev.map(p => p.id !== productId ? p : {
+      ...p, variants: p.variants?.map(v => v.id === variantId
+        ? { ...v, image_id: item.id, image_url: item.url || item.filename }
+        : v),
+    }));
+    setDirtyVariants(prev => ({
+      ...prev,
+      [productId]: new Set([...(prev[productId] || []), variantId]),
+    }));
     setVariantPickerFor(null);
   }
 
@@ -947,9 +997,14 @@ export default function FoodMenu() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="fm-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
+    <div className="fm-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}
+      onFocusCapture={e => {
+        const t = e.target;
+        const isText = (t.tagName === 'INPUT' && ['text', 'number', 'search'].includes(t.type)) || t.tagName === 'TEXTAREA';
+        if (isText && t.value) requestAnimationFrame(() => { try { t.select(); } catch { /* ignore */ } });
+      }}>
 
-      {/* ── Tab bar — navigation between Food Menu sub-modules ── */}
+      {/* ── Row 1 (fixed): sub-module tabs + Sync All ── */}
       <div className="fm-tabbar">
         <div className="fm-view-seg">
           <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} title="Food menu table">☰ Food Menu</button>
@@ -958,51 +1013,48 @@ export default function FoodMenu() {
           <button className={viewMode === 'combos' ? 'active' : ''} onClick={() => setViewMode('combos')} title="Combo meals — expand into child items">🍔 Combos</button>
           <button className={viewMode === 'category' ? 'active' : ''} onClick={() => setViewMode('category')} title="Product categories">📂 Category</button>
         </div>
-        <button className="btn btn-primary fm-sync-btn" disabled={opsDisabled} onClick={handleSyncAll} title="Sync live shelf, store hours & catalogue to website">⇅ Sync All</button>
-        {msg && <span className={`msg msg-${msg.ok ? 'ok' : 'err'}`} style={{ marginLeft: 'auto' }}>{msg.text}</span>}
+        <div className="fm-tabbar-right">
+          {msg && <span className={`msg msg-${msg.ok ? 'ok' : 'err'}`} style={{ whiteSpace: 'nowrap' }}>{msg.text}</span>}
+          <button className="btn btn-primary fm-sync-btn" disabled={opsDisabled} onClick={handleSyncAll} title="Sync live shelf, store hours & catalogue to website">⇅ Sync All</button>
+        </div>
       </div>
 
-      {/* ── Toolbar — filter / search / operations (Live Shelf & Category render theirs in the same slot).
-             Sort Orders keeps the row for uniformity but all controls are disabled. ── */}
+      {/* ── Row 2 (fixed): ops toolbar — sub-views render their own toolbar in this slot ── */}
       {productView && (
-        <div className="toolbar fm-toolbar">
-          <div className="fm-tb-left">
-            <button
-              className={`btn btn-clear${filterPanelOpen ? ' active' : ''}`}
-              onClick={() => setFilterPanelOpen(o => !o)}
+        <div className="fm-toolbar-row">
+          <button
+            className={`btn btn-clear${filterPanelOpen ? ' active' : ''}`}
+            onClick={() => setFilterPanelOpen(o => !o)}
+            disabled={opsDisabled}
+            title="Toggle filter panel"
+          >☰ Filters</button>
+          <form className="fm-search-form" onSubmit={doSearch}>
+            <input
+              type="text" value={search}
+              onChange={e => setSearch(e.target.value)}
               disabled={opsDisabled}
-              title="Toggle filter panel"
-            >☰ Filters</button>
-            <form className="fm-search-form" onSubmit={doSearch}>
-              <input
-                type="text" value={search}
-                onChange={e => setSearch(e.target.value)}
-                disabled={opsDisabled}
-                placeholder="Search name, SKU, description…"
-              />
-              <button type="submit" className="btn btn-primary" disabled={opsDisabled}>Search</button>
-              {search && (
-                <button type="button" className="btn btn-clear" disabled={opsDisabled} onClick={() => { setSearch(''); load({ search: '' }); }}>✕</button>
-              )}
-            </form>
-          </div>
-          <div className="fm-tb-right">
-            <button className="btn btn-clear" disabled={opsDisabled} onClick={() => expandedIds.size > 0 ? collapseAll() : expandAll()} title="Toggle all rows">
-              {expandedIds.size > 0 ? '⊖ Collapse All' : '⊕ Expand All'}
-            </button>
-            <button className="btn btn-add" disabled={opsDisabled} onClick={addRow}>+ Add Item</button>
-            <button
-              className="btn btn-save"
-              onClick={saveAll}
-              disabled={dirtyCount === 0 || opsDisabled}
-              style={{ opacity: dirtyCount === 0 || opsDisabled ? 0.5 : 1 }}
-            >
-              Save All{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
-            </button>
-            <input ref={importFile} type="file" accept=".csv,.xlsx" style={{ display: 'none' }} onChange={handleImportFile} />
-            <button className="btn btn-clear" disabled={opsDisabled} onClick={() => importFile.current?.click()} title="Import CSV">↑ Import</button>
-            <button className="btn btn-clear" disabled={opsDisabled} onClick={handleExport} title="Export CSV">↓ Export</button>
-          </div>
+              placeholder="Search name, SKU, description…"
+            />
+            <button type="submit" className="btn btn-primary" disabled={opsDisabled}>Search</button>
+            {search && (
+              <button type="button" className="btn btn-clear" disabled={opsDisabled} onClick={() => { setSearch(''); load({ search: '' }); }}>✕</button>
+            )}
+          </form>
+          <button className="btn btn-clear" disabled={opsDisabled} onClick={() => expandedIds.size > 0 ? collapseAll() : expandAll()} title="Toggle all rows">
+            {expandedIds.size > 0 ? '⊖ Collapse' : '⊕ Expand'}
+          </button>
+          <button className="btn btn-add" disabled={opsDisabled} onClick={addRow}>+ Add Item</button>
+          <button
+            className="btn btn-save"
+            onClick={saveAll}
+            disabled={dirtyCount === 0 || opsDisabled}
+            style={{ opacity: dirtyCount === 0 || opsDisabled ? 0.5 : 1 }}
+          >
+            Save All{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+          </button>
+          <input ref={importFile} type="file" accept=".csv,.xlsx" style={{ display: 'none' }} onChange={handleImportFile} />
+          <button className="btn btn-clear" disabled={opsDisabled} onClick={() => importFile.current?.click()} title="Import CSV">↑ Import</button>
+          <button className="btn btn-clear" disabled={opsDisabled} onClick={handleExport} title="Export CSV">↓ Export</button>
         </div>
       )}
 
@@ -1056,7 +1108,7 @@ export default function FoodMenu() {
           ) : loading ? (
             <div className="fm-loading">Loading…</div>
           ) : viewMode === 'table' ? (
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', width: '100%' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', margin: '10px 12px', border: '1px solid var(--t-border)', borderRadius: 12, background: 'var(--t-surface)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <table className="fm-table">
                 <thead>
                   <tr>
@@ -1209,6 +1261,14 @@ export default function FoodMenu() {
                               <input type="checkbox" checked={!!p.customer_visible}
                                 onChange={e => updateProduct(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> QR Menu
                             </label>
+                            <label className="fm-mini-toggle" title="Added automatically as a default item when a table order is created">
+                              <input type="checkbox" checked={(p.variants || []).some(v => !!v.auto_entry)}
+                                onChange={e => (p.variants || []).forEach(v => updateVariant(p.id, v.id, 'auto_entry', e.target.checked ? 1 : 0))} /> Auto Entry
+                            </label>
+                            <label className="fm-mini-toggle" title="At table checkout, warn if this item is missing from the bill">
+                              <input type="checkbox" checked={(p.variants || []).some(v => !!v.check_on_bill)}
+                                onChange={e => (p.variants || []).forEach(v => updateVariant(p.id, v.id, 'check_on_bill', e.target.checked ? 1 : 0))} /> Check on Bill
+                            </label>
                           </div>
                         </td>
 
@@ -1297,6 +1357,7 @@ export default function FoodMenu() {
                               makeKeyHandler={makeVariantKeyHandler}
                               enableImage={!!p.enable_variant_image}
                               onPickImage={(productId, variantId) => setVariantPickerFor({ productId, variantId })}
+                              onReorder={reorderVariants}
                             />
                           </td>
                         </tr>

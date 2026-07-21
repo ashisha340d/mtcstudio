@@ -174,6 +174,21 @@ router.post('/products/bulk', async (req, res) => {
 });
 
 // GET /api/food-menu/products/:id/variants  — ALL variants (active + inactive)
+// GET /api/food-menu/flagged-variants — variants tagged Auto Entry / Check on Bill
+// (POS table orders: auto_entry rows pre-fill the cart, check_on_bill rows are
+// verified present on the bill at checkout)
+router.get('/flagged-variants', async (req, res) => {
+  const rows = await dbAll(
+    `SELECT v.id, v.product_id, v.name AS variant_name, v.selling_price,
+            v.auto_entry, v.check_on_bill, p.name AS product_name
+     FROM   product_variants v
+     JOIN   products p ON p.id = v.product_id
+     WHERE  (v.auto_entry = 1 OR v.check_on_bill = 1)
+       AND  v.status = 'active' AND p.status = 'active'`
+  );
+  res.json(rows);
+});
+
 router.get('/products/:id/variants', async (req, res) => {
   const variants = await dbAll(
     `SELECT id, product_id, name, sku, selling_price, cost_price, stock, unit, status, sort_order, show_online, sync_status

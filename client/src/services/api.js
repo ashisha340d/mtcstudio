@@ -59,6 +59,7 @@ export const mediaApi = {
   remove:     (id)       => api.delete(`/media/${id}`),
   bulkDelete: (ids)      => api.post('/media/bulk-delete', { ids }),
   sync:       ()         => api.post('/media/sync'),
+  makeForApp: ()         => api.post('/media/make-forapp'),
 };
 
 // ── Blogs ────────────────────────────────────────────────────────────────────

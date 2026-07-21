@@ -28,10 +28,10 @@ const ORDER_TYPES = [
 ];
 
 const STATUS_COLOR = {
-  ORDERSENT: '#c1440e',
-  IN_PROGRESS: '#a16207',
-  SERVED: '#2d7a2d',
-  CANCELLED: '#c0392b',
+  ORDERSENT: 'var(--orange)',
+  IN_PROGRESS: 'var(--yellow)',
+  SERVED: 'var(--green)',
+  CANCELLED: 'var(--red)',
 };
 
 const canEdit = () => true;
@@ -105,7 +105,7 @@ function RemoveItemModal({ item, onConfirm, onClose }) {
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
                 padding: '10px 12px', borderRadius: 9, cursor: 'pointer', transition: 'all 0.1s',
                 border: `1.5px solid ${kind === k.key ? W.orange : W.borderLight}`,
-                background: kind === k.key ? 'rgba(193,68,14,0.08)' : 'rgba(255,255,255,0.65)',
+                background: kind === k.key ? W.accentSoft : W.fill2,
               }}>
               <span style={{ fontSize: 17, flexShrink: 0 }}>{k.icon}</span>
               <span style={{ flex: 1 }}>
@@ -119,10 +119,10 @@ function RemoveItemModal({ item, onConfirm, onClose }) {
             placeholder={needReason ? 'Reason (required)…' : 'Reason (optional)…'}
             value={reason}
             onChange={e => setReason(e.target.value)}
-            style={{ width: '100%', marginTop: 3, borderRadius: 8, border: `1px solid ${needReason && !reason.trim() ? W.red : W.borderLight}`, background: 'rgba(255,255,255,0.75)', color: W.text1, fontSize: 12, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', marginTop: 3, borderRadius: 8, border: `1px solid ${needReason && !reason.trim() ? W.red : W.borderLight}`, background: W.fill2, color: W.text1, fontSize: 12, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }}
           />
         </div>
-        <div style={{ display: 'flex', gap: 8, padding: '11px 16px', borderTop: `1px solid ${W.border}`, background: 'rgba(255,255,255,0.4)' }}>
+        <div style={{ display: 'flex', gap: 8, padding: '11px 16px', borderTop: `1px solid ${W.border}`, background: W.fill1 }}>
           <button onClick={onClose}
             style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${W.border}`, background: 'transparent', color: W.text2, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             Keep Item
@@ -158,7 +158,7 @@ function ProductCard({ product, cartQty, onClick }) {
         display: 'flex', flexDirection: 'column',
         textAlign: 'left',
         borderRadius: 10,
-        background: cartQty > 0 ? 'rgba(193,68,14,0.07)' : 'rgba(255,255,255,0.65)',
+        background: cartQty > 0 ? W.accentSoft : W.fill2,
         border: cartQty > 0 ? `2px solid ${W.orange}` : `1px solid ${W.borderLight}`,
         overflow: 'hidden',
         cursor: 'pointer',
@@ -168,13 +168,13 @@ function ProductCard({ product, cartQty, onClick }) {
       className="active:scale-95"
       onMouseEnter={e => {
         if (cartQty === 0) {
-          e.currentTarget.style.background = 'rgba(255,255,255,0.92)';
+          e.currentTarget.style.background = W.fill3;
           e.currentTarget.style.boxShadow = '0 4px 16px rgba(80,50,20,0.16)';
         }
       }}
       onMouseLeave={e => {
         if (cartQty === 0) {
-          e.currentTarget.style.background = 'rgba(255,255,255,0.65)';
+          e.currentTarget.style.background = W.fill2;
           e.currentTarget.style.boxShadow = '0 1px 4px rgba(80,50,20,0.09)';
         }
       }}
@@ -237,7 +237,7 @@ function QuickCard({ product, cartQty, onClick }) {
         display: 'flex', flexDirection: 'column',
         textAlign: 'left',
         borderRadius: 9,
-        background: cartQty > 0 ? 'rgba(193,68,14,0.07)' : 'rgba(255,255,255,0.65)',
+        background: cartQty > 0 ? W.accentSoft : W.fill2,
         border: cartQty > 0 ? `2px solid ${W.orange}` : `1px solid ${W.borderLight}`,
         overflow: 'hidden',
         cursor: 'pointer',
@@ -247,14 +247,14 @@ function QuickCard({ product, cartQty, onClick }) {
       }}
       onMouseEnter={e => {
         if (cartQty === 0) {
-          e.currentTarget.style.background = 'rgba(255,255,255,0.92)';
+          e.currentTarget.style.background = W.fill3;
           e.currentTarget.style.boxShadow = '0 4px 16px rgba(80,50,20,0.16)';
           e.currentTarget.style.transform = 'translateY(-1px)';
         }
       }}
       onMouseLeave={e => {
         if (cartQty === 0) {
-          e.currentTarget.style.background = 'rgba(255,255,255,0.65)';
+          e.currentTarget.style.background = W.fill2;
           e.currentTarget.style.boxShadow = '0 1px 4px rgba(80,50,20,0.09)';
           e.currentTarget.style.transform = 'none';
         }
@@ -343,7 +343,7 @@ function QuickAccessRail({ items, qtyByProduct, onPick, side }) {
       style={{
         height: 16, minWidth: 16, padding: '0 3px',
         borderRadius: 4, border: `1px solid ${cols === n ? W.orange : W.borderLight}`,
-        background: cols === n ? W.orange : 'rgba(255,255,255,0.55)',
+        background: cols === n ? W.orange : W.fill1,
         color: cols === n ? '#fff' : W.text3,
         fontSize: 7, fontWeight: 900, letterSpacing: 1,
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -438,7 +438,7 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
           >{expanded ? '▾' : '▸'} {comboChildren.length}</button>
         )}
         {item.discount_amount > 0 && (
-          <span style={{ fontSize: 9, fontWeight: 800, color: '#2d7a2d', background: 'rgba(45,122,45,0.12)', padding: '2px 6px', borderRadius: 20, flexShrink: 0 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: W.green, background: 'var(--tint-ok-1)', padding: '2px 6px', borderRadius: 20, flexShrink: 0 }}>
             −{fmt(item.discount_amount)} {item.discount_type ?? ''}
           </span>
         )}
@@ -490,7 +490,7 @@ function KotItemRow({ item, onQtyChange, onCancel, onNotesChange, onEdit, onHome
           value={item.notes ?? ''}
           onChange={e => onNotesChange(e.target.value)}
           onClick={e => e.stopPropagation()}
-          style={{ flex: 1, fontSize: 11, color: W.text2, background: 'rgba(255,255,255,0.55)', border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
+          style={{ flex: 1, fontSize: 11, color: W.text2, background: W.fill1, border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
 
@@ -544,7 +544,7 @@ function CartLine({ item, isLatest, onQty, onRemove, onNotesChange, onDoubleClic
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{label}</p>
         {item.discount_amount > 0 && (
-          <span style={{ fontSize: 9, fontWeight: 800, color: '#2d7a2d', background: 'rgba(45,122,45,0.12)', padding: '2px 6px', borderRadius: 20, flexShrink: 0 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: W.green, background: 'var(--tint-ok-1)', padding: '2px 6px', borderRadius: 20, flexShrink: 0 }}>
             −{fmt(item.discount_amount)} {item.discount_type ?? ''}
           </span>
         )}
@@ -591,7 +591,7 @@ function CartLine({ item, isLatest, onQty, onRemove, onNotesChange, onDoubleClic
           value={item.notes ?? ''}
           onChange={e => onNotesChange(item._id, e.target.value)}
           onClick={e => e.stopPropagation()}
-          style={{ flex: 1, fontSize: 11, color: W.text2, background: 'rgba(255,255,255,0.55)', border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
+          style={{ flex: 1, fontSize: 11, color: W.text2, background: W.fill1, border: `1px solid ${W.borderLight}`, borderRadius: 6, padding: '4px 8px', outline: 'none', boxSizing: 'border-box' }}
         />
       </div>
     </div>
@@ -609,7 +609,7 @@ function CakePendingCard({ cake, leaving, onClick }) {
         display: 'flex', flexDirection: 'column', textAlign: 'left',
         borderRadius: 10, overflow: 'hidden', padding: 0,
         border: `1.5px solid rgba(233,30,140,0.4)`,
-        background: 'rgba(255,255,255,0.75)',
+        background: W.fill2,
         boxShadow: '0 1px 4px rgba(80,50,20,0.09)',
         cursor: leaving ? 'default' : 'pointer',
         opacity: leaving ? 0 : 1,
@@ -700,7 +700,7 @@ function PanelDivider({ onMouseDown }) {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, pointerEvents: 'none' }}>
         {[0, 1, 2, 3].map(i => (
-          <div key={i} style={{ width: 2, height: 2, borderRadius: '50%', background: hov ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)' }} />
+          <div key={i} style={{ width: 2, height: 2, borderRadius: '50%', background: hov ? W.fill3 : W.fill1 }} />
         ))}
       </div>
     </div>
@@ -838,6 +838,36 @@ export default function POS() {
     initState.orderNotes ?? scheduleMeta?.orderNotes ?? scheduledRow?.order_notes ?? ''
   );
   const [cart, setCart] = useState(_initCart);
+
+  // New table order → pre-fill cart with variants tagged "Auto Entry" in Food Menu.
+  // Fresh DINE_IN only — never on existing orders, drafts or scheduled edits.
+  const autoEntryDoneRef = useRef(false);
+  useEffect(() => {
+    if (autoEntryDoneRef.current) return;
+    if (orderType !== 'DINE_IN' || existingOrderId || schedMode || _initCart.length) return;
+    autoEntryDoneRef.current = true;
+    fetch(`${API}/food-menu/flagged-variants`)
+      .then(r => r.json())
+      .then(rows => {
+        const autoRows = (Array.isArray(rows) ? rows : []).filter(v => v.auto_entry);
+        if (!autoRows.length) return;
+        setCart(prev => [
+          ...autoRows
+            .filter(v => !prev.some(i => i.product_id === v.product_id && (i.variant_id ?? null) === v.id))
+            .map(v => ({
+              _id: newId(),
+              product_id: v.product_id, product_name: v.product_name,
+              variant_id: v.id, variant_name: cleanVariantName(v.variant_name, v.product_name),
+              unit_price: Number(v.selling_price) || 0,
+              quantity: 1, modifiers: [], notes: null,
+            })),
+          ...prev,
+        ]);
+      })
+      .catch(() => { });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [productModal, setProductModal] = useState(null);
   const [custModal, setCustModal] = useState(false);
   const [checkoutModal, setCheckoutModal] = useState(false);
@@ -1505,7 +1535,7 @@ export default function POS() {
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
           </div>
           <span style={{ fontSize: 10, fontWeight: 800, color: W.blue, letterSpacing: '0.02em', flexShrink: 0 }}>{todayStr}</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: '0 1px 0 rgba(255,255,255,0.45)', flex: 1, textAlign: 'right' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: W.text1, letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: W.emboss, flex: 1, textAlign: 'right' }}>
             {schedMode
               ? `${scheduledRow ? 'Edit' : 'New'} ${kindIsScheduled ? 'Scheduled Order' : 'Draft'}`
               : existingOrderId ? 'Edit Order' : 'New Order'} — {orderLabel}
@@ -1525,7 +1555,7 @@ export default function POS() {
                 flex: 1, padding: '5px 4px',
                 border: `1.5px solid ${orderType === t.key ? W.orange : W.borderLight}`,
                 borderRadius: 6,
-                background: orderType === t.key ? W.orange : 'rgba(255,255,255,0.5)',
+                background: orderType === t.key ? W.orange : W.fill1,
                 color: orderType === t.key ? '#fff' : W.text2,
                 fontSize: 10, fontWeight: 700,
                 cursor: existingOrderId ? 'default' : 'pointer',
@@ -1549,7 +1579,7 @@ export default function POS() {
             value={activeTable}
             onChange={e => handleTableSelect(e.target.value)}
             disabled={!!existingOrderId}
-            style={{ width: '100%', height: 34, borderRadius: 7, border: `1px solid ${W.borderLight}`, background: 'rgba(255,255,255,0.7)', padding: '0 10px', fontSize: 12, color: W.text1, marginTop: 8, outline: 'none', cursor: existingOrderId ? 'not-allowed' : 'pointer' }}
+            style={{ width: '100%', height: 34, borderRadius: 7, border: `1px solid ${W.borderLight}`, background: W.fill2, padding: '0 10px', fontSize: 12, color: W.text1, marginTop: 8, outline: 'none', cursor: existingOrderId ? 'not-allowed' : 'pointer' }}
           >
             <option value="">Select Table…</option>
             {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -1569,7 +1599,7 @@ export default function POS() {
           borderBottom: `1px solid ${W.borderLight}`,
           transition: 'background 0.1s', width: '100%',
         }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.5)'}
+        onMouseEnter={e => e.currentTarget.style.background = W.fill1}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         <div style={{ height: 30, width: 30, borderRadius: '50%', background: 'rgba(193,68,14,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1646,7 +1676,7 @@ export default function POS() {
       </div>
 
       {/* Action buttons */}
-      <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderTop: `1px solid ${W.border}`, flexShrink: 0, background: 'rgba(255,255,255,0.4)' }}>
+      <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderTop: `1px solid ${W.border}`, flexShrink: 0, background: W.fill1 }}>
         {schedMode ? (
           <button
             onClick={handleSaveScheduled}
@@ -1703,7 +1733,7 @@ export default function POS() {
   const renderCatPanel = (panelId, panelStyle, onCtx) => (
     <div key={panelId} style={{
       ...panelStyle,
-      background: 'linear-gradient(180deg, #c8bba8 0%, #b5a892 100%)',
+      background: W.chrome,
       borderRight: `1px solid ${W.border}`,
       gap: 0,
       boxShadow: '2px 0 8px rgba(80,50,20,0.1)',
@@ -1712,7 +1742,7 @@ export default function POS() {
         onContextMenu={onCtx}
         style={{ padding: '10px 10px 8px', flexShrink: 0, borderBottom: `1px solid rgba(0,0,0,0.1)` }}
       >
-        <p style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(74,56,40,0.7)', margin: 0, textAlign: 'center' }}>Categories</p>
+        <p style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: W.text2, margin: 0, textAlign: 'center' }}>Categories</p>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1720,9 +1750,9 @@ export default function POS() {
           onClick={() => { setActiveCat(ALL_CAT); setSearch(''); }}
           style={{
             width: '100%', padding: '10px 8px', borderRadius: 8,
-            border: `1.5px solid ${activeCat === ALL_CAT ? W.orange : 'rgba(255,255,255,0.3)'}`,
-            background: activeCat === ALL_CAT ? W.orange : 'rgba(255,255,255,0.25)',
-            color: activeCat === ALL_CAT ? '#fff' : '#4a3828',
+            border: `1.5px solid ${activeCat === ALL_CAT ? W.orange : W.fill1}`,
+            background: activeCat === ALL_CAT ? W.orange : W.fill1,
+            color: activeCat === ALL_CAT ? '#fff' : W.text1,
             fontSize: 12, fontWeight: 800,
             cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
             transition: 'all 0.12s',
@@ -1737,7 +1767,7 @@ export default function POS() {
               position: 'relative',
               width: '100%', padding: '10px 8px', borderRadius: 8,
               border: `1.5px solid ${activeCat === CAKE_CAT ? CAKE_PINK : 'rgba(233,30,140,0.5)'}`,
-              background: activeCat === CAKE_CAT ? CAKE_PINK : 'rgba(255,255,255,0.25)',
+              background: activeCat === CAKE_CAT ? CAKE_PINK : W.fill1,
               color: activeCat === CAKE_CAT ? '#fff' : CAKE_PINK,
               fontSize: 11, fontWeight: 800,
               cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -1762,9 +1792,9 @@ export default function POS() {
             onClick={() => { setActiveCat(cat.id); setSearch(''); }}
             style={{
               width: '100%', padding: '10px 8px', borderRadius: 8,
-              border: `1.5px solid ${activeCat === cat.id ? W.orange : 'rgba(255,255,255,0.3)'}`,
-              background: activeCat === cat.id ? W.orange : 'rgba(255,255,255,0.25)',
-              color: activeCat === cat.id ? '#fff' : '#4a3828',
+              border: `1.5px solid ${activeCat === cat.id ? W.orange : W.fill1}`,
+              background: activeCat === cat.id ? W.orange : W.fill1,
+              color: activeCat === cat.id ? '#fff' : W.text1,
               fontSize: 11, fontWeight: 700,
               cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
               transition: 'all 0.12s', textAlign: 'center',
@@ -1813,14 +1843,14 @@ export default function POS() {
                   fontSize: 9, fontWeight: 800, lineHeight: 1,
                   display: 'flex', alignItems: 'center', gap: 3,
                   border: `1px solid ${quickOn ? W.orange : 'rgba(0,0,0,0.18)'}`,
-                  background: quickOn ? W.orange : 'rgba(255,255,255,0.35)',
-                  color: quickOn ? '#fff' : '#4a3828',
+                  background: quickOn ? W.orange : W.fill1,
+                  color: quickOn ? '#fff' : W.text1,
                   boxShadow: quickOn ? '0 1px 5px rgba(193,68,14,0.35)' : 'none',
                   transition: 'all 0.15s',
                 }}
               >⚡</button>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#4a3828', letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1, textAlign: 'center', textShadow: '0 1px 0 rgba(255,255,255,0.45)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: W.text1, letterSpacing: '0.06em', textTransform: 'uppercase', flex: 1, textAlign: 'center', textShadow: W.emboss }}>
               Menu
             </span>
             <SocketStatus socket={socketRef.current} style={{ flexDirection: 'row', color: W.text3, fontSize: 10 }} />
@@ -1839,18 +1869,18 @@ export default function POS() {
                     paddingLeft: 40, paddingRight: 14, height: 44, width: '100%',
                     fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
                     borderRadius: 9, border: `1.5px solid ${W.borderLight}`,
-                    background: 'rgba(255,255,255,0.75)', color: W.text1,
+                    background: W.fill2, color: W.text1,
                     outline: 'none', boxSizing: 'border-box',
                     transition: 'border-color 0.12s, background 0.12s',
                   }}
-                  onFocus={e => { e.target.style.borderColor = W.orange; e.target.style.background = 'rgba(255,255,255,0.95)'; }}
-                  onBlur={e => { e.target.style.borderColor = W.borderLight; e.target.style.background = 'rgba(255,255,255,0.75)'; }}
+                  onFocus={e => { e.target.style.borderColor = W.orange; e.target.style.background = W.fill3; }}
+                  onBlur={e => { e.target.style.borderColor = W.borderLight; e.target.style.background = W.fill2; }}
                 />
               </div>
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  style={{ fontSize: 12, fontWeight: 700, borderRadius: 8, background: 'rgba(255,255,255,0.6)', border: `1px solid ${W.borderLight}`, color: W.text2, padding: '6px 12px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
+                  style={{ fontSize: 12, fontWeight: 700, borderRadius: 8, background: W.fill2, border: `1px solid ${W.borderLight}`, color: W.text2, padding: '6px 12px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
                 >Clear</button>
               )}
             </div>

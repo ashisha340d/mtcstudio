@@ -10,6 +10,7 @@ const { validateSplitTender }         = require('../../pos/splitTender');
 const webOrderBridge                  = require('../../services/webOrderBridge');
 
 const { requireOpenDay }              = require('../../middleware/posDayGuard');
+const { getNepalDateStr }             = require('../../utils/nepalDateTime');
 
 const router = express.Router();
 router.use(requireSession);
@@ -21,8 +22,9 @@ router.get('/active', async (req, res) => {
     `SELECT o.*, t.name AS table_name
      FROM   pos_orders o
      LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
-     WHERE  o.status IN ('OPEN','SAVED')
-     ORDER  BY o.created_at`
+     WHERE  o.status IN ('OPEN','SAVED') AND DATE(o.created_at) = ?
+     ORDER  BY o.created_at`,
+    [getNepalDateStr()]
   );
 
   if (!orders.length) return res.json({ orders: [], kots: [] });
@@ -128,6 +130,23 @@ router.patch('/:id/serve-all', async (req, res) => {
 });
 
 // PATCH /api/pos/orders/:id/status
+// PATCH /api/pos/orders/:id/request-bill — waiter flags the table for billing.
+// Order stays OPEN (status CHECK allows only OPEN/SAVED/CLOSED/CANCELLED), so the
+// table keeps showing on the floor and POS still sees it in /active.
+router.patch('/:id/request-bill', async (req, res) => {
+  const { clear = false } = req.body ?? {};
+  const order = await dbGet(`SELECT * FROM pos_orders WHERE id = ?`, [req.params.id]);
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  await dbRun(
+    `UPDATE pos_orders SET bill_requested_at = ${clear ? 'NULL' : 'NOW()'} WHERE id = ?`,
+    [order.id]
+  );
+  const updated = await dbGet(`SELECT * FROM pos_orders WHERE id = ?`, [order.id]);
+  audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'ORDER', entityId: order.id, action: 'BILL_REQUEST', delta: { clear } });
+  socketServer.emitOrderUpdated(updated);
+  res.json(updated);
+});
+
 router.patch('/:id/status', async (req, res) => {
   const { status } = req.body;
   const order = await dbGet(`SELECT * FROM pos_orders WHERE id = ?`, [req.params.id]);

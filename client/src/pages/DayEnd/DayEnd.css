@@ -70,20 +70,20 @@
   margin-bottom: 16px;
   border: 1px solid var(--t-border-strong);
 }
-.de-status--open   { background: #fffbeb; border-color: #f59e0b; }
-.de-status--closed { background: #f0fdf4; border-color: #16a34a; }
+.de-status--open   { background: var(--t-warning-bg, rgba(245,158,11,.12)); border-color: var(--t-warning); }
+.de-status--closed { background: var(--t-success-bg); border-color: var(--t-success); }
 .de-status-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
   font-weight: 700;
-  color: #374151;
+  color: var(--t-text-muted);
   margin-bottom: 8px;
 }
 .de-verdict { font-size: 11px; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; }
-.de-verdict--ok  { background: #16a34a; color: #fff; }
-.de-verdict--bad { background: #dc2626; color: #fff; }
+.de-verdict--ok  { background: var(--t-success); color: #fff; }
+.de-verdict--bad { background: var(--t-danger); color: #fff; }
 
 .de-flags { display: flex; flex-wrap: wrap; gap: 6px; }
 .de-flag {
@@ -92,8 +92,8 @@
   padding: 3px 10px;
   border-radius: 20px;
 }
-.de-flag--yes { background: #dcfce7; color: #166534; }
-.de-flag--no  { background: #fee2e2; color: #991b1b; }
+.de-flag--yes { background: var(--t-success-bg); color: var(--t-success-text); }
+.de-flag--no  { background: var(--t-danger-bg); color: var(--t-danger-text); }
 
 /* ── Sections grid ── */
 .de-grid {

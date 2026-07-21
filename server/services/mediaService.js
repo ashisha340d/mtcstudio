@@ -2,7 +2,29 @@ const { dbAll, dbGet, dbRun } = require('../database/db');
 const fs = require('fs');
 const path = require('path');
 const sizeOf = require('image-size');
+const sharp = require('sharp');
 const { uploadsDir } = require('../middleware/upload');
+
+// Raster formats only — svg is vector, gif may be animated, both would break on re-encode.
+const COMPRESSIBLE = ['.jpg', '.jpeg', '.png', '.webp'];
+
+// Compress in place and normalize to webp so every media-library file matches
+// the forapp export pipeline. No resize — quality-only compression.
+async function compressToWebp(file) {
+    const ext = path.extname(file.filename).toLowerCase();
+    if (!COMPRESSIBLE.includes(ext)) return file;
+
+    const webpName = file.filename.replace(/\.[^.]+$/, '.webp');
+    const webpPath = path.join(uploadsDir, webpName);
+    const tmpPath = webpPath + '.tmp';
+
+    await sharp(file.path).webp({ quality: 82 }).toFile(tmpPath);
+    fs.unlinkSync(file.path);
+    fs.renameSync(tmpPath, webpPath);
+
+    const { size } = fs.statSync(webpPath);
+    return { ...file, filename: webpName, path: webpPath, mimetype: 'image/webp', size };
+}
 
 // "sections" reflects real, current usage (not a stored tag) so it can never go
 // stale — removing an image from a product/blog/design drops the badge immediately.
@@ -71,18 +93,19 @@ async function getList({ search, unassigned, section, page, perPage }) {
 }
 
 async function saveFileEntry(file) {
+    const f = await compressToWebp(file);
     let w = null, h = null;
     try {
-        const dim = sizeOf(file.path);
+        const dim = sizeOf(f.path);
         w = dim.width; h = dim.height;
     } catch (e) {}
     const title = path.basename(file.originalname, path.extname(file.originalname))
         .replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const result = await dbRun(
         `INSERT INTO media_library (filename,original_name,title,alt_text,file_type,file_size,width,height) VALUES (?,?,?,?,?,?,?,?)`,
-        [file.filename, file.originalname, title, title, file.mimetype, file.size, w, h]
+        [f.filename, file.originalname, title, title, f.mimetype, f.size, w, h]
     );
-    return { id: result.insertId, filename: file.filename, title };
+    return { id: result.insertId, filename: f.filename, title };
 }
 
 async function update(id, { title, alt_text, caption }) {
@@ -111,4 +134,45 @@ async function bulkDelete(ids) {
     return rows.length;
 }
 
-module.exports = { getAll, getList, saveFileEntry, update, remove, bulkDelete };
+// ── "Make For App" — rebuild uploads/forapp from scratch: wipe, then export
+// ONLY product (menu) + category images as compressed webp, max 512×512.
+// Filenames keep the source basename stem + .webp so the companion app's
+// /sync/images manifest lines up.
+const FORAPP_DIR = path.join(__dirname, '..', 'uploads', 'forapp');
+
+async function makeForApp() {
+    fs.mkdirSync(FORAPP_DIR, { recursive: true });
+    for (const f of fs.readdirSync(FORAPP_DIR)) {
+        try { fs.unlinkSync(path.join(FORAPP_DIR, f)); } catch (e) {}
+    }
+
+    const [prodImgs, catImgs] = await Promise.all([
+        dbAll(`SELECT ml.filename FROM product_images pi JOIN media_library ml ON ml.id = pi.media_id`),
+        dbAll(`SELECT ml.filename AS image_url
+                 FROM categories c JOIN media_library ml ON ml.id = c.image_id`),
+    ]);
+
+    const names = new Set();
+    for (const r of prodImgs) if (r.filename) names.add(r.filename);
+    for (const r of catImgs) {
+        const base = String(r.image_url).replace(/\\/g, '/').split('/').pop();
+        if (base) names.add(base);
+    }
+
+    let exported = 0, missing = 0, failed = 0;
+    for (const name of names) {
+        const src = path.join(uploadsDir, name);
+        if (!fs.existsSync(src)) { missing++; continue; }
+        const out = path.join(FORAPP_DIR, name.replace(/\.[^.]+$/, '.webp'));
+        try {
+            await sharp(src)
+                .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toFile(out);
+            exported++;
+        } catch (e) { failed++; }
+    }
+    return { exported, missing, failed, total: names.size };
+}
+
+module.exports = { getAll, getList, saveFileEntry, update, remove, bulkDelete, makeForApp };

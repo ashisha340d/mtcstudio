@@ -1,12 +1,16 @@
 /* MTC Waiter — Service Worker */
-const CACHE_NAME = 'waiter-v1';
+// Bumped on redesign — the activate handler drops every older cache, so the
+// old terracotta shell/assets can't survive on an installed device.
+const CACHE_NAME = 'waiter-v3';
+// Menu photos downloaded for offline browsing — survives app-shell cache bumps.
+const MENU_IMG_CACHE = 'waiter-menu-images';
 
 // Assets to pre-cache for offline support
 const PRECACHE_URLS = [
   '/waiter',
   '/waiter-manifest.json',
-  '/waiter-icon-192.svg',
-  '/waiter-icon-512.svg',
+  '/waiter-icon-192.png',
+  '/waiter-icon-512.png',
 ];
 
 // Install: pre-cache shell
@@ -23,7 +27,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        keys.filter(k => k !== CACHE_NAME && k !== MENU_IMG_CACHE).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );

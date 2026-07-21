@@ -11,6 +11,17 @@ router.post('/bulk-delete', ctrl.bulkDelete);
 router.put('/:id', ctrl.update);
 router.delete('/:id', ctrl.remove);
 
+router.post('/make-forapp', async (req, res) => {
+    try {
+        const svc = require('../services/mediaService');
+        const result = await svc.makeForApp();
+        res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('[Make ForApp Route]', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 router.post('/sync', async (req, res) => {
     try {
         const result = await syncMedia();

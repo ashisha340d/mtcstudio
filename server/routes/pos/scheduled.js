@@ -241,3 +241,6 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Exposed so the OCR auto-convert path (and tests) reuse the exact same
+// conversion logic instead of duplicating KOT creation.
+module.exports.convertRow = convertRow;

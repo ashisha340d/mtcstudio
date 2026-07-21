@@ -24,8 +24,8 @@
   height: 38px;
   padding: 0 12px;
   flex-shrink: 0;
-  background: #1c1208;
-  border-bottom: 1px solid #0a0804;
+  background: var(--menubar-bg, #1c1208);
+  border-bottom: 1px solid var(--menubar-border, #0a0804);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 12px rgba(0, 0, 0, 0.5);
   z-index: 9000;
 }
@@ -38,7 +38,7 @@
   border-radius: 6px;
   border: none;
   background: rgba(255, 255, 255, 0.08);
-  color: #e8d8c0;
+  color: var(--menubar-text, #e8d8c0);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -113,7 +113,7 @@
 }
 
 .os-menubar__nav-item--active {
-  color: #f8d8a0;
+  color: var(--menubar-accent, #f8d8a0);
 }
 
 .os-menubar__shortcut {

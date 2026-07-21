@@ -61,6 +61,7 @@ const smsService = require('./services/smsService');
 const { errorHandler } = require('./middleware/errorHandler');
 const { startAutoSync } = require('./services/liveShelfSync');
 const systemRouter = require('./routes/system');
+const wifiRouter = require('./routes/wifi');
 const customerRouter = require('./routes/customer');
 const googleRouter = require('./routes/google');
 
@@ -118,6 +119,11 @@ app.use('/api/companion', companionRouter);
 app.use('/api/companion', importsRouter);
 app.use('/', googleRouter);
 
+// ── Wi-Fi captive portal (MikroTik hotspot landing page) ──────
+// Server-rendered, registered before the SPA fallback so /wifi/* is not
+// swallowed by the POS catch-all.
+app.use('/wifi', wifiRouter);
+
 // ── Cake Production PWA (own build, own path, own manifest/SW scope) ──
 // Registered before the generic SPA fallback below so /cake-app/* is never
 // swallowed by the POS SPA's catch-all.
@@ -145,7 +151,7 @@ app.locals.io = io;
 // else (socket.io) is left untouched by returning without touching the socket.
 smsGateway.init();
 mainServer.on('upgrade', (req, socket, head) => {
-  const { pathname } = require('url').parse(req.url);
+  const { pathname } = new URL(req.url, 'http://localhost');
   if (pathname === '/ws/sms') smsGateway.handleUpgrade(req, socket, head);
 });
 

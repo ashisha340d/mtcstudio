@@ -104,6 +104,57 @@ router.post('/cake-slip', async (req, res, next) => {
     } catch (e) { next(e); }
 });
 
+// ── Mero Kinmel OCR Import Config ─────────────────────────────
+// Controls what an incoming Mero Kinmel slip becomes: a DRAFT the cashier
+// confirms, or a live ORDER fired straight to the kitchen. Auto-ordering only
+// happens when the import is trustworthy — otherwise it always lands as an
+// MK-REVIEW draft, never as an order.
+
+const MERO_KEYS = [
+    'mk_import_mode',          // 'DRAFT' | 'ORDER'
+    'mk_min_confidence',       // 0..1
+    'mk_require_total_match',  // '1' | '0' — computed total must equal slip total
+    'mk_require_all_matched',  // '1' | '0' — no unmatched items allowed
+];
+const MERO_DEFAULTS = {
+    mk_import_mode: 'DRAFT',
+    mk_min_confidence: '0.6',
+    mk_require_total_match: '1',
+    mk_require_all_matched: '1',
+};
+
+router.get('/mero-kinmel', async (req, res, next) => {
+    try {
+        const rows = await dbAll(`SELECT \`key\`, value FROM receipt_config WHERE \`key\` LIKE 'mk_%'`);
+        const cfg = { ...MERO_DEFAULTS };
+        rows.forEach(r => cfg[r.key] = r.value);
+        res.json(cfg);
+    } catch (e) { next(e); }
+});
+
+router.post('/mero-kinmel', async (req, res, next) => {
+    try {
+        const body = req.body;
+        if (body.mk_import_mode !== undefined &&
+            !['DRAFT', 'ORDER'].includes(String(body.mk_import_mode))) {
+            return res.status(400).json({ error: 'mk_import_mode must be DRAFT or ORDER' });
+        }
+        if (body.mk_min_confidence !== undefined) {
+            const n = Number(body.mk_min_confidence);
+            if (!(n >= 0 && n <= 1)) return res.status(400).json({ error: 'mk_min_confidence must be 0..1' });
+        }
+        for (const key of MERO_KEYS) {
+            if (body[key] === undefined) continue;
+            await dbRun(
+                `INSERT INTO receipt_config (\`key\`, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+                 ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = CURRENT_TIMESTAMP`,
+                [key, String(body[key])]
+            );
+        }
+        res.json({ success: true });
+    } catch (e) { next(e); }
+});
+
 // ── KDS Sound Config ──────────────────────────────────────────
 // Centrally configured alert sounds for KDS, Waiter App & POS — replaces the
 // old per-browser localStorage upload so every screen plays the same sound.

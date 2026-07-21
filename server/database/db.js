@@ -283,11 +283,18 @@ async function ensureSchema() {
 
     await dbRun(`ALTER TABLE cake_designs ADD COLUMN IF NOT EXISTS prep_time_hours INT DEFAULT 24`);
     await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS menu_section_id INT`);
+    // Category photos live in media_library, referenced only through image_id.
+    await dbRun(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_id INT`);
+    await dbRun(`ALTER TABLE categories DROP COLUMN IF EXISTS image_url`);
     await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS storefront_category TEXT`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS show_online INT DEFAULT 0`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_id INT`);
-    await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)`);
+    await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS auto_entry TINYINT DEFAULT 0`);
+    await dbRun(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS check_on_bill TINYINT DEFAULT 0`);
+    // image_url (denormalised filename) dropped — variant photos live in
+    // media_library and are referenced only through image_id.
+    await dbRun(`ALTER TABLE product_variants DROP COLUMN IF EXISTS image_url`);
     await dbRun(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_variant_image TINYINT DEFAULT 0`);
     await dbRun(`ALTER TABLE media_library ADD COLUMN IF NOT EXISTS sync_status INT DEFAULT 0`);
     await dbRun(`ALTER TABLE cake_design_media ADD COLUMN IF NOT EXISTS media_id INT`);

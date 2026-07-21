@@ -1,6 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { categoriesApi } from '../../services/api';
 import { useMsg } from '../../hooks/useApi';
+import MediaPicker from '../../components/MediaPicker/MediaPicker';
+
+function imgSrc(raw) {
+  if (!raw) return null;
+  const str = typeof raw === 'object' ? raw.filename : raw;
+  if (!str) return null;
+  if (str.startsWith('http')) return str;
+  if (str.startsWith('/uploads/')) return str;
+  const filename = str.replace(/\\/g, '/').split('/').pop();
+  if (!filename) return null;
+  return `/uploads/${filename}`;
+}
 
 const COLS = ['name', 'slug', 'description', 'sort_order', 'status'];
 
@@ -9,10 +21,14 @@ export default function CategoriesView() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('sort_order');
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('fm_cat_view') || 'table'; } catch { return 'table'; }
+  });
   const [dirtyIds, setDirtyIds] = useState(new Set());
   const [activeCell, setActiveCell] = useState(null); // { rowIdx, colIdx }
   const [dragSrc, setDragSrc] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [pickerFor, setPickerFor] = useState(null); // category id awaiting image pick
   const { msg, showMsg } = useMsg();
   const searchRef = useRef(null);
   // cellRefs[rowIdx][colIdx] = DOM element
@@ -32,6 +48,8 @@ export default function CategoriesView() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => { try { localStorage.setItem('fm_cat_view', viewMode); } catch {} }, [viewMode]);
 
   // Ctrl/Cmd+S → Save All
   useEffect(() => {
@@ -114,7 +132,7 @@ export default function CategoriesView() {
   }
 
   function addRow() {
-    const newRow = { id: 'new', name: '', slug: '', description: '', sort_order: 0, status: 'active' };
+    const newRow = { id: 'new', name: '', slug: '', description: '', sort_order: 0, status: 'active', image_id: null, image_url: null };
     setCategories(prev => [newRow, ...prev]);
     setDirtyIds(prev => new Set([...prev, 'new']));
     setTimeout(() => focusCell(0, 0), 50);
@@ -251,6 +269,10 @@ export default function CategoriesView() {
         </form>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+          <div className="fm-view-seg">
+            <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} title="Table view">☰ Table</button>
+            <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')} title="Card view">▦ Cards</button>
+          </div>
           <button className="btn btn-add" onClick={addRow}>+ Add Category</button>
           <button
             className="btn btn-save"
@@ -264,13 +286,68 @@ export default function CategoriesView() {
         {msg && <span className={`msg msg-${msg.ok ? 'ok' : 'err'}`}>{msg.text}</span>}
       </div>
 
-      <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 0 }}>
-        {loading ? <p style={{ padding: 16 }}>Loading…</p> : (
-          <table>
+      <div className="table-wrap" style={viewMode === 'card'
+        ? { flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }
+        : { flex: 1, minHeight: 0, overflow: 'auto', margin: '10px 12px', border: '1px solid var(--t-border)', borderRadius: 12, background: 'var(--t-surface)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        {loading ? <p style={{ padding: 16 }}>Loading…</p> : viewMode === 'card' ? (
+          <div className="cat-card-grid">
+            {categories.map((cat, idx) => {
+              const isDirty = dirtyIds.has(cat.id);
+              const isDragSrc = dragSrc === idx;
+              const isDragOv = dragOver === idx && dragSrc !== idx;
+              return (
+                <div
+                  key={cat.id}
+                  className={[
+                    'cat-card',
+                    isDirty ? 'cat-card-dirty' : '',
+                    isDragSrc ? 'dragging' : '',
+                    isDragOv ? 'dragover' : '',
+                  ].filter(Boolean).join(' ')}
+                  onDragOver={e => onDragOver(e, idx)}
+                  onDragEnd={onDragEnd}
+                  onDrop={e => onDrop(e, idx)}
+                >
+                  <div className="cat-card-drag" draggable onDragStart={e => onDragStart(e, idx)} title="Drag to reorder">⠿</div>
+                  <div
+                    className="cat-card-img"
+                    onClick={() => setPickerFor(cat.id)}
+                    title={cat.image_url ? 'Click to replace image' : 'Click to add image'}
+                  >
+                    {imgSrc(cat.image_url)
+                      ? <img src={imgSrc(cat.image_url)} alt="" />
+                      : <span className="cat-card-noimg">📷</span>}
+                  </div>
+                  <input
+                    className="cat-card-name"
+                    value={cat.name}
+                    placeholder="Category name"
+                    onChange={e => updateField(cat.id, 'name', e.target.value)}
+                  />
+                  <select
+                    className="cat-card-status"
+                    value={cat.status}
+                    onChange={e => updateField(cat.id, 'status', e.target.value)}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                  <div className="cat-card-actions">
+                    <button className="btn btn-sm btn-save" onClick={() => saveRow(cat)}>Save</button>
+                    <button className="btn btn-sm btn-delete" onClick={() => deleteRow(cat.id)}>Delete</button>
+                  </div>
+                </div>
+              );
+            })}
+            {!categories.length && <p style={{ padding: 8, color: 'var(--t-text-muted)' }}>No categories</p>}
+          </div>
+        ) : (
+          <table className="fm-table">
             <thead>
               <tr>
                 <th style={{ width: 32 }} title="Drag to reorder"></th>
                 <th className="col-id">ID</th>
+                <th style={{ width: 56 }}>Image</th>
                 <SortTh col="name" label="Name" />
                 <SortTh col="slug" label="Slug" />
                 <th>Description</th>
@@ -309,6 +386,17 @@ export default function CategoriesView() {
                       }}
                     >⠿</td>
                     <td className="col-id">{cat.id === 'new' ? '–' : cat.id}</td>
+
+                    {/* Image */}
+                    <td
+                      onClick={() => setPickerFor(cat.id)}
+                      title={cat.image_url ? 'Click to replace image' : 'Click to add image'}
+                      style={{ cursor: 'pointer', textAlign: 'center', width: 56 }}
+                    >
+                      {imgSrc(cat.image_url)
+                        ? <img src={imgSrc(cat.image_url)} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
+                        : <span style={{ color: '#9ca3af', fontSize: 18 }}>📷</span>}
+                    </td>
 
                     {/* Name */}
                     <td>
@@ -386,6 +474,22 @@ export default function CategoriesView() {
           </table>
         )}
       </div>
+
+      {pickerFor !== null && (
+        <MediaPicker
+          section="menu"
+          onSelect={item => {
+            // image_id persists (media library FK); image_url is display-only
+            // and gets re-resolved from that FK on the next load.
+            setCategories(prev => prev.map(c => c.id === pickerFor
+              ? { ...c, image_id: item.id, image_url: item.url || item.filename }
+              : c));
+            setDirtyIds(prev => new Set([...prev, pickerFor]));
+            setPickerFor(null);
+          }}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
 
       <div className="pager" style={{ flexShrink: 0 }}>
         Showing {categories.length} categor{categories.length === 1 ? 'y' : 'ies'}

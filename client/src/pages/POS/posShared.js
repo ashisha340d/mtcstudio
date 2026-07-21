@@ -1,19 +1,26 @@
 export const API = import.meta.env.VITE_API_URL || '/api';
 
 export const W = {
-  desktopBg: '#ddd5c4',
-  windowBg: '#fdf9f4',
-  windowBg2: '#f5ece0',
-  chrome: 'linear-gradient(180deg, #d2c6b2 0%, #b8a890 100%)',
-  border: '#a89880',
-  borderLight: '#c4b49c',
-  text1: '#2a1f12',
-  text2: '#6b5640',
-  text3: '#9c8870',
-  orange: '#c1440e',
-  green: '#2d7a2d',
-  red: '#c0392b',
-  blue: '#1d4ed8',
+  desktopBg: 'var(--desktop-bg)',
+  windowBg: 'var(--window-bg)',
+  windowBg2: 'var(--bg-card-2)',
+  chrome: 'linear-gradient(180deg, var(--window-chrome) 0%, var(--window-chrome-2) 100%)',
+  border: 'var(--window-border)',
+  borderLight: 'var(--window-border-light)',
+  text1: 'var(--text-1)',
+  text2: 'var(--text-2)',
+  text3: 'var(--text-3)',
+  orange: 'var(--orange)',
+  green: 'var(--green)',
+  red: 'var(--red)',
+  blue: 'var(--blue)',
+  // Panel fills layered over window chrome, subtle → solid.
+  // Dark theme re-maps these three; nothing here needs a per-widget patch.
+  fill1: 'var(--fill-1)',
+  fill2: 'var(--fill-2)',
+  fill3: 'var(--fill-3)',
+  accentSoft: 'var(--accent-soft)',
+  emboss: 'var(--text-emboss)',
 };
 
 export const fmt = (n) =>

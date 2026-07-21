@@ -155,6 +155,7 @@ function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, de
       style={frozen ? { pointerEvents: 'none', opacity: 0.85 } : undefined}
       onClick={frozen ? undefined : () => onClick(table)}
     >
+      {order.bill_requested_at && <div className="tc__bill-req-ribbon">BILL REQ</div>}
       <div className="tc__header">
         <span className="tc__name">{table.name}</span>
         <span className="tc__timer">{fmtDuration(derived.occupiedMs)}</span>

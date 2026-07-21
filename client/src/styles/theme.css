@@ -5,6 +5,39 @@
    those render on separate route trees and never carry this class.
    ══════════════════════════════════════════════════════════════ */
 
+/* ── Dark palette primitives — THE single source of truth ───────
+   Global :root so both theme layers can alias them:
+     admin shell  → .desktop-root[data-theme="dark"]  (below)
+     POS windows  → :root[data-ui-theme="dark"]       (pos.css)
+   Change a colour here and every MTC Studio surface follows.
+   Waiter / KDS / Cake keep their own palettes and never read these. */
+:root {
+  --dk-bg: #0b0f16;
+  --dk-surface: #121822;
+  --dk-surface-2: #172030;
+  --dk-surface-3: #1e2838;
+  --dk-chrome-1: #1a2231;
+  --dk-chrome-2: #121927;
+  --dk-border: #232d3d;
+  --dk-border-strong: #35435a;
+  --dk-text-1: #eef2f7;
+  --dk-text-2: #9aa7ba;
+  --dk-text-3: #6b7a90;
+  --dk-accent: #f0802f;
+  --dk-accent-hover: #ff9450;
+  --dk-accent-soft: rgba(240, 128, 47, .14);
+  --dk-success: #4ade80;
+  --dk-success-soft: rgba(74, 222, 128, .14);
+  --dk-danger: #f87171;
+  --dk-danger-soft: rgba(248, 113, 113, .14);
+  --dk-warning: #fbbf24;
+  --dk-info: #60a5fa;
+  --dk-purple: #a78bfa;
+  /* Neutral fill for controls that used translucent white on warm chrome */
+  --dk-fill: rgba(255, 255, 255, .045);
+  --dk-fill-strong: rgba(255, 255, 255, .08);
+}
+
 /* ── Tokens: warm (default, matches the pre-existing look) ───── */
 .desktop-root,
 .desktop-root[data-theme="warm"] {
@@ -66,34 +99,38 @@
   --t-chrome-2: #dfe3e7;
 }
 
-/* ── Tokens: dark ──────────────────────────────────────────────── */
+/* ── Tokens: dark — pure aliases of the --dk-* primitives ─────── */
 .desktop-root[data-theme="dark"] {
-  --t-bg: #14120f;
-  --t-surface: #1c1a17;
-  --t-surface-2: #242019;
-  --t-surface-3: #2c271e;
-  --t-border: #34302a;
-  --t-border-strong: #46403a;
-  --t-text: #f1ede6;
-  --t-text-muted: #a39a8c;
-  --t-text-soft: #8a8074;
-  --t-accent: #ff7a3d;
-  --t-accent-hover: #ff9260;
-  --t-accent-soft: rgba(255, 122, 61, 0.14);
-  --t-success: #4ade80;
-  --t-success-bg: rgba(74, 222, 128, 0.16);
-  --t-success-text: #4ade80;
-  --t-danger: #f87171;
-  --t-danger-bg: rgba(248, 113, 113, 0.16);
-  --t-danger-text: #f87171;
-  --t-warning: #fbbf24;
-  --t-radius-sm: 6px;
-  --t-radius-md: 10px;
-  --t-radius-lg: 14px;
-  --t-shadow-sm: 0 1px 6px rgba(0, 0, 0, .35);
-  --t-shadow-md: 0 4px 14px rgba(0, 0, 0, .4);
-  --t-chrome-1: #2c2822;
-  --t-chrome-2: #201d18;
+  --t-bg: var(--dk-bg);
+  --t-surface: var(--dk-surface);
+  --t-surface-2: var(--dk-surface-2);
+  --t-surface-3: var(--dk-surface-3);
+  --t-border: var(--dk-border);
+  --t-border-strong: var(--dk-border-strong);
+  --t-text: var(--dk-text-1);
+  --t-text-muted: var(--dk-text-2);
+  --t-text-soft: var(--dk-text-3);
+  --t-accent: var(--dk-accent);
+  --t-accent-hover: var(--dk-accent-hover);
+  --t-accent-soft: var(--dk-accent-soft);
+  --t-success: var(--dk-success);
+  --t-success-bg: var(--dk-success-soft);
+  --t-success-text: var(--dk-success);
+  --t-danger: var(--dk-danger);
+  --t-danger-bg: var(--dk-danger-soft);
+  --t-danger-text: var(--dk-danger);
+  --t-warning: var(--dk-warning);
+  --t-radius-sm: 8px;
+  --t-radius-md: 12px;
+  --t-radius-lg: 16px;
+  --t-shadow-sm: 0 1px 6px rgba(0, 0, 0, .45);
+  --t-shadow-md: 0 6px 20px rgba(0, 0, 0, .5);
+  --t-chrome-1: var(--dk-chrome-1);
+  --t-chrome-2: var(--dk-chrome-2);
+  --menubar-bg: var(--dk-chrome-2);
+  --menubar-border: #000;
+  --menubar-text: var(--dk-text-1);
+  --menubar-accent: var(--dk-accent);
 }
 
 /* ── Tokens: slate (cool neutral minimalist) ──────────────────── */
@@ -136,8 +173,14 @@
 }
 .desktop-root[data-theme="dark"] { color-scheme: dark; }
 
+/* Zero-specificity baseline (:where) so any module rule still wins —
+   this is what stops every page from needing its own dark-mode patch. */
 .desktop-root :where(input, select, textarea) {
+  background: var(--t-surface);
   color: var(--t-text);
+}
+.desktop-root :where(input, select, textarea)::placeholder {
+  color: var(--t-text-soft);
 }
 
 /* ── Legacy-class overrides (Categories, Food Menu & older CRUD

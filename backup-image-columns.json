@@ -1,0 +1,773 @@
+{
+  "takenAt": "2026-07-21T08:35:24.582Z",
+  "product_variants": [
+    {
+      "id": 170,
+      "product_id": 170,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "1763ebaaa40d26635b32-1781807160669.jpg"
+    },
+    {
+      "id": 171,
+      "product_id": 171,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "38b8ddffd97a6d1a2582-1781807160672.jpg"
+    },
+    {
+      "id": 172,
+      "product_id": 172,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "87a3ff24670e9f6854a3-1781807160675.jpg"
+    },
+    {
+      "id": 173,
+      "product_id": 176,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "f8b2650e734c961d9455-1781807181603.jpg"
+    },
+    {
+      "id": 174,
+      "product_id": 177,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "b60f0260011f010ea748-1781807181629.jpg"
+    },
+    {
+      "id": 176,
+      "product_id": 179,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "a55dec977b9749d018e0-1781807181638.jpg"
+    },
+    {
+      "id": 178,
+      "product_id": 181,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "7ef13d5b05eaef2bfb71-1781807181647.jpg"
+    },
+    {
+      "id": 179,
+      "product_id": 182,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "22eba5c42d605eb92ff2-1781855143794.jpg"
+    },
+    {
+      "id": 180,
+      "product_id": 183,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "70943215ffcd275cd683-1781807181602.jpg"
+    },
+    {
+      "id": 181,
+      "product_id": 184,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "58ea9b4a6fb46afdc8e3-1781855143795.jpg"
+    },
+    {
+      "id": 182,
+      "product_id": 185,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "ff6bd108db5c90977f03-1781855143789.jpg"
+    },
+    {
+      "id": 183,
+      "product_id": 186,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "976946de43d5092df7d6-1781855143789.jpg"
+    },
+    {
+      "id": 184,
+      "product_id": 187,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "d14d2162417cbc645693-1781855143789.jpg"
+    },
+    {
+      "id": 185,
+      "product_id": 188,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "08542bbf2fed415b80e6-1781855143788.jpg"
+    },
+    {
+      "id": 186,
+      "product_id": 189,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "5cd1bf2716d49cba2e5f-1781855143792.jpg"
+    },
+    {
+      "id": 187,
+      "product_id": 190,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "223db9213e8367bdc4eb-1781855143790.jpg"
+    },
+    {
+      "id": 188,
+      "product_id": 191,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "9be29935de4e1b934561-1781855143788.jpg"
+    },
+    {
+      "id": 189,
+      "product_id": 192,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "39595f2b2c5d639162c4-1781855143791.jpg"
+    },
+    {
+      "id": 190,
+      "product_id": 193,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "07d782edcd248aa3c8b1-1781855143791.jpg"
+    },
+    {
+      "id": 191,
+      "product_id": 194,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "01f5aebe083d68f0f1be-1781855143791.jpg"
+    },
+    {
+      "id": 192,
+      "product_id": 195,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "a3906bed79b5164572de-1781855143789.jpg"
+    },
+    {
+      "id": 193,
+      "product_id": 196,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e3ca839e382e7c3c4fd2-1781855143785.jpg"
+    },
+    {
+      "id": 194,
+      "product_id": 197,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "355c13b0b3014084d414-1781855143795.jpg"
+    },
+    {
+      "id": 195,
+      "product_id": 198,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "88eb4072fcfd620c134e-1781855143795.jpg"
+    },
+    {
+      "id": 196,
+      "product_id": 199,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "4f76ab0eaef80370f666-1781855143785.jpg"
+    },
+    {
+      "id": 197,
+      "product_id": 200,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "7698186e83ee1106a4d5-1781855143790.jpg"
+    },
+    {
+      "id": 198,
+      "product_id": 201,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "ff16bba4b6a20a2dd172-1781855143791.jpg"
+    },
+    {
+      "id": 199,
+      "product_id": 202,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "daa53c2aeb228f95f24d-1782898848605.jpg"
+    },
+    {
+      "id": 201,
+      "product_id": 204,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "cca3caaeff337c9d7a13-1781807149835.jpg"
+    },
+    {
+      "id": 202,
+      "product_id": 205,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "6988a9ea35047ee08a8f-1781807149830.jpg"
+    },
+    {
+      "id": 203,
+      "product_id": 206,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "7434e77b2a881502c33e-1781807149825.jpg"
+    },
+    {
+      "id": 204,
+      "product_id": 207,
+      "name": "Regular 8 pcs",
+      "image_id": null,
+      "image_url": "db115b2598b58a65ad85-1781807149828.jpg"
+    },
+    {
+      "id": 205,
+      "product_id": 208,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e79b65f5017cc473459a-1781807149817.jpg"
+    },
+    {
+      "id": 206,
+      "product_id": 175,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "0b53bf814e9a00f43495-1781807160662.jpg"
+    },
+    {
+      "id": 207,
+      "product_id": 210,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "72911e8da7fc1b7679cf-1781807170089.jpg"
+    },
+    {
+      "id": 208,
+      "product_id": 211,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "fa7f82f79050de1358f9-1781807170089.jpg"
+    },
+    {
+      "id": 209,
+      "product_id": 212,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "a7adb685b6ea177a96ce-1781807170073.jpg"
+    },
+    {
+      "id": 210,
+      "product_id": 213,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "a7adb685b6ea177a96ce-1781807170073.jpg"
+    },
+    {
+      "id": 211,
+      "product_id": 214,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "fdfac88822e109e84d17-1781807170113.jpg"
+    },
+    {
+      "id": 213,
+      "product_id": 216,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "15f4f189a2ed208465b2-1781807170119.jpg"
+    },
+    {
+      "id": 216,
+      "product_id": 219,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e43d3eb4e5cd28e0c3f7-1781807149813.jpg"
+    },
+    {
+      "id": 217,
+      "product_id": 220,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "faeb6930b58aa850ad68-1781807160654.jpg"
+    },
+    {
+      "id": 218,
+      "product_id": 221,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "ce19f83216b10c9f2428-1781807160657.jpg"
+    },
+    {
+      "id": 219,
+      "product_id": 222,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "a5e104abff59c0443553-1781807149819.jpg"
+    },
+    {
+      "id": 220,
+      "product_id": 223,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "549bc8312a3e19b5d541-1781855143786.jpg"
+    },
+    {
+      "id": 221,
+      "product_id": 209,
+      "name": "Medium 9\"",
+      "image_id": null,
+      "image_url": "136613e632db2df44a9d-1781807170087.jpg"
+    },
+    {
+      "id": 222,
+      "product_id": 173,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "162bc095aebcb06216d6-1781807181601.jpg"
+    },
+    {
+      "id": 223,
+      "product_id": 174,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "230fba8f4e1ef1db60f1-1781807181649.jpg"
+    },
+    {
+      "id": 224,
+      "product_id": 224,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "0d1f3590f80651d613b7-1781871758815.jpg"
+    },
+    {
+      "id": 238,
+      "product_id": 203,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "fed713fbdba65aae0620-1782911042197.jpg"
+    },
+    {
+      "id": 240,
+      "product_id": 225,
+      "name": "Veg Chowmein",
+      "image_id": null,
+      "image_url": "3df42808fd3f8f80158f-1781872395473.jpg"
+    },
+    {
+      "id": 248,
+      "product_id": 178,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "bc2bf2070d4b0f4b4d77-1781807181636.jpg"
+    },
+    {
+      "id": 263,
+      "product_id": 228,
+      "name": "Regular",
+      "image_id": 131,
+      "image_url": "202d8d1ad84263a02417-1782228912902.jpg"
+    },
+    {
+      "id": 264,
+      "product_id": 232,
+      "name": "Mini Vanilla Muffin",
+      "image_id": 124,
+      "image_url": "2d7d466f1902e782db48-1781901769042.jpg"
+    },
+    {
+      "id": 268,
+      "product_id": 232,
+      "name": "Jumbo Muffin",
+      "image_id": 126,
+      "image_url": null
+    },
+    {
+      "id": 271,
+      "product_id": 233,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "f3fd1e18ae19c0f2bd7d-1782371826677.webp"
+    },
+    {
+      "id": 272,
+      "product_id": 234,
+      "name": "SINGLE SMASH BURGER",
+      "image_id": null,
+      "image_url": "ec96f97487e10f94beb0-1781892149390.jpg"
+    },
+    {
+      "id": 276,
+      "product_id": 235,
+      "name": "Plain",
+      "image_id": null,
+      "image_url": "f4053b3c7728a8dde379-1782490409180.jpg"
+    },
+    {
+      "id": 279,
+      "product_id": 237,
+      "name": "Candel",
+      "image_id": null,
+      "image_url": "7c9c41836b7e488781b4-1782489421511.jpg"
+    },
+    {
+      "id": 286,
+      "product_id": 241,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "ad13588e77f42b36676d-1782646621274.jpg"
+    },
+    {
+      "id": 287,
+      "product_id": 242,
+      "name": "Espresso",
+      "image_id": null,
+      "image_url": "16ed2299e53312c11b21-1782645555181.jpg"
+    },
+    {
+      "id": 291,
+      "product_id": 243,
+      "name": "Iced Americano",
+      "image_id": null,
+      "image_url": "c62c5dd77e7c62326c92-1782646272803.jpg"
+    },
+    {
+      "id": 297,
+      "product_id": 226,
+      "name": "Buff Gravy Keema Noodles",
+      "image_id": null,
+      "image_url": "779a5481a8f9866bb17c-1781872276988.jpg"
+    },
+    {
+      "id": 300,
+      "product_id": 245,
+      "name": "Bolognese Chicken & Mushroom & Veg",
+      "image_id": null,
+      "image_url": "1c6871755ebd36189b48-1782915617716.jpg"
+    },
+    {
+      "id": 304,
+      "product_id": 247,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "0b55044e5335f35cb7f0-1782714436916.jpg"
+    },
+    {
+      "id": 306,
+      "product_id": 249,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "b672a5c730757b79de13-1782914589543.jpg"
+    },
+    {
+      "id": 307,
+      "product_id": 250,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "d899173334e4b6aa5515-1782726171480.jpg"
+    },
+    {
+      "id": 308,
+      "product_id": 251,
+      "name": "Chocolate Cream Donut",
+      "image_id": null,
+      "image_url": "33ac6979c7d417df3bb2-1782722062203.jpg"
+    },
+    {
+      "id": 311,
+      "product_id": 252,
+      "name": "White Bread",
+      "image_id": null,
+      "image_url": "29c24a31a90c4c81ff9e-1782720936109.jpg"
+    },
+    {
+      "id": 312,
+      "product_id": 252,
+      "name": "Brown Bread",
+      "image_id": null,
+      "image_url": "29c24a31a90c4c81ff9e-1782720936109.jpg"
+    },
+    {
+      "id": 313,
+      "product_id": 252,
+      "name": "Burger Bun",
+      "image_id": 133,
+      "image_url": null
+    },
+    {
+      "id": 314,
+      "product_id": 252,
+      "name": "Yellow Burger Bun",
+      "image_id": 133,
+      "image_url": "f3fd1e18ae19c0f2bd7d-1782371826677.webp"
+    },
+    {
+      "id": 317,
+      "product_id": 253,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "af2e6a478fa5e430f7d6-1782724854897.jpg"
+    },
+    {
+      "id": 318,
+      "product_id": 254,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "6a6392293db0025ccb02-1782724862976.jpg"
+    },
+    {
+      "id": 320,
+      "product_id": 256,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "feea97abe85339524c19-1782724895870.jpg"
+    },
+    {
+      "id": 321,
+      "product_id": 257,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "d899173334e4b6aa5515-1782726171480.jpg"
+    },
+    {
+      "id": 322,
+      "product_id": 258,
+      "name": "Black Forest",
+      "image_id": null,
+      "image_url": "79276f2cc2a3d1c2bdf4-1781901612338.jpg"
+    },
+    {
+      "id": 330,
+      "product_id": 259,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "2c53bfaf9f863b0dd788-1782910980907.jpg"
+    },
+    {
+      "id": 331,
+      "product_id": 260,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e1d66ccaa7f1273764ac-1782910974662.jpg"
+    },
+    {
+      "id": 332,
+      "product_id": 261,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "5eb15fb8a5ae46d654e8-1782910961635.jpg"
+    },
+    {
+      "id": 333,
+      "product_id": 262,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "a7edc57ee103046a8c9d-1782910954073.jpg"
+    },
+    {
+      "id": 334,
+      "product_id": 264,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "a01d4af31537eeb1fc56-1782910931405.jpg"
+    },
+    {
+      "id": 335,
+      "product_id": 263,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "cbe455e038e5a3c82606-1782910940317.jpg"
+    },
+    {
+      "id": 336,
+      "product_id": 265,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "9195ca591d589849f54b-1783916687640.jpg"
+    },
+    {
+      "id": 340,
+      "product_id": 277,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e093714c419fc9e884f1-1783933335977.png"
+    },
+    {
+      "id": 342,
+      "product_id": 278,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "b2abd4f86e60396f56ea-1783871378972.jpg"
+    },
+    {
+      "id": 350,
+      "product_id": 281,
+      "name": "Large 12\"",
+      "image_id": null,
+      "image_url": "090db070095bb94efae1-1783863008079.jpg"
+    },
+    {
+      "id": 354,
+      "product_id": 282,
+      "name": "4 pcs",
+      "image_id": null,
+      "image_url": "e464db32f4b8e0983c50-1783930342866.jpg"
+    },
+    {
+      "id": 356,
+      "product_id": 283,
+      "name": "BBQ Sausage 2 pcs",
+      "image_id": null,
+      "image_url": "563d968588b46115dced-1783930446475.jpg"
+    },
+    {
+      "id": 357,
+      "product_id": 284,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "d587074c9d5df5f8c5b9-1783929597084.jpg"
+    },
+    {
+      "id": 358,
+      "product_id": 285,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "e89eeb5111bcb859502b-1783929735975.jpg"
+    },
+    {
+      "id": 359,
+      "product_id": 286,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "87fede1d7aa2105de3de-1783929707883.jpg"
+    },
+    {
+      "id": 360,
+      "product_id": 288,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "8197fc623bdf1e038474-1784009169066.jpg"
+    },
+    {
+      "id": 361,
+      "product_id": 287,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "9abc45adb0b536ab4ceb-1783928342882.jpg"
+    },
+    {
+      "id": 366,
+      "product_id": 291,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "adb29dae66d0d8aef30c-1783934122981.jpg"
+    },
+    {
+      "id": 367,
+      "product_id": 292,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "8efd1688ae5b95845687-1783934108227.jpg"
+    },
+    {
+      "id": 368,
+      "product_id": 289,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "26bf627f5b87632571a3-1783934132577.jpg"
+    },
+    {
+      "id": 369,
+      "product_id": 293,
+      "name": "Large 12\"",
+      "image_id": null,
+      "image_url": "1476f1846d986b0ce436-1781807170114.jpg"
+    },
+    {
+      "id": 371,
+      "product_id": 294,
+      "name": "Large 12 \"",
+      "image_id": null,
+      "image_url": "549788cab11338282a49-1784009013544.jpg"
+    },
+    {
+      "id": 373,
+      "product_id": 295,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "997e2969575e01e21312-1784009072968.jpg"
+    },
+    {
+      "id": 376,
+      "product_id": 296,
+      "name": "Regular",
+      "image_id": null,
+      "image_url": "d587074c9d5df5f8c5b9-1783929597084.jpg"
+    },
+    {
+      "id": 382,
+      "product_id": 298,
+      "name": "200 ml - Glass bottle",
+      "image_id": null,
+      "image_url": "e464db32f4b8e0983c50-1783930342866.jpg"
+    },
+    {
+      "id": 386,
+      "product_id": 300,
+      "name": "Regular 12\"",
+      "image_id": null,
+      "image_url": "997e2969575e01e21312-1784009072968.jpg"
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Desserts",
+      "image_url": "0d12c6ad401838d72cd9-1784524213892.webp"
+    },
+    {
+      "id": 2,
+      "name": "Wood Fired Pizza",
+      "image_url": "7864d29731b3071227a4-1784524213902.webp"
+    },
+    {
+      "id": 3,
+      "name": "Burgers & Dogs",
+      "image_url": "c4446780106d45798bfb-1784524213884.webp"
+    },
+    {
+      "id": 4,
+      "name": "Sides",
+      "image_url": "2a80f0808027d591610e-1784524213895.webp"
+    },
+    {
+      "id": 5,
+      "name": "Drinks",
+      "image_url": "ef96178c4eb0aa2e3156-1784524213893.webp"
+    },
+    {
+      "id": 6,
+      "name": "Momo",
+      "image_url": "e18b61a3ac56a452ffcf-1784524213897.webp"
+    },
+    {
+      "id": 8,
+      "name": "Retail",
+      "image_url": "13adf99b537dcc00871f-1784524213901.webp"
+    },
+    {
+      "id": 10,
+      "name": "Chilly Stir Fried",
+      "image_url": "fb11f34d46369e29985f-1784524213887.webp"
+    },
+    {
+      "id": 11,
+      "name": "Catering",
+      "image_url": "d89fe10a655fc6ddb6f3-1784524213899.webp"
+    }
+  ]
+}

@@ -88,7 +88,9 @@ async function getAll({ search, category, statusFilter, featuredFilter, station,
     const ph = ids.map(() => '?').join(',');
 
     const variants = await dbAll(
-        `SELECT * FROM product_variants WHERE product_id IN (${ph}) ORDER BY product_id, sort_order`, ids
+        `SELECT v.*, ml.filename AS image_url FROM product_variants v
+          LEFT JOIN media_library ml ON ml.id = v.image_id
+          WHERE v.product_id IN (${ph}) ORDER BY v.product_id, v.sort_order`, ids
     );
     const varMap = {};
     variants.forEach(v => { if (!varMap[v.product_id]) varMap[v.product_id] = []; varMap[v.product_id].push(v); });
@@ -112,7 +114,9 @@ async function getById(id) {
     if (!product) return null;
 
     const [variants, images, cats] = await Promise.all([
-        dbAll(`SELECT * FROM product_variants WHERE product_id=? ORDER BY sort_order`, [id]),
+        dbAll(`SELECT v.*, ml.filename AS image_url FROM product_variants v
+                LEFT JOIN media_library ml ON ml.id = v.image_id
+                WHERE v.product_id=? ORDER BY v.sort_order`, [id]),
         dbAll(`SELECT pi.*, ml.filename, ml.alt_text, ml.title FROM product_images pi JOIN media_library ml ON pi.media_id=ml.id WHERE pi.product_id=? ORDER BY pi.sort_order`, [id]),
         dbAll(`SELECT id,name FROM categories ORDER BY sort_order`)
     ]);
@@ -159,9 +163,10 @@ async function remove(id) {
 async function addVariant(productId, body) {
     const b = body;
     const result = await dbRun(
-        `INSERT INTO product_variants (product_id,name,sku,selling_price,cost_price,stock,reorder_level,unit,status,sort_order,show_online,image_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO product_variants (product_id,name,sku,selling_price,cost_price,stock,reorder_level,unit,status,sort_order,show_online,image_id,auto_entry,check_on_bill) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [productId, b.name || 'Regular', b.sku || null, b.selling_price || 0, b.cost_price || 0,
-         b.stock || 0, b.reorder_level || 0, b.unit || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_url || null]
+         b.stock || 0, b.reorder_level || 0, b.unit || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_id || null,
+         b.auto_entry ? 1 : 0, b.check_on_bill ? 1 : 0]
     );
     return result.insertId;
 }
@@ -169,9 +174,10 @@ async function addVariant(productId, body) {
 async function updateVariant(productId, variantId, body) {
     const b = body;
     await dbRun(
-        `UPDATE product_variants SET name=?,sku=?,selling_price=?,cost_price=?,stock=?,reorder_level=?,unit=?,barcode=?,status=?,sort_order=?,show_online=?,image_url=? WHERE id=? AND product_id=?`,
+        `UPDATE product_variants SET name=?,sku=?,selling_price=?,cost_price=?,stock=?,reorder_level=?,unit=?,barcode=?,status=?,sort_order=?,show_online=?,image_id=?,auto_entry=?,check_on_bill=? WHERE id=? AND product_id=?`,
         [b.name || 'Regular', b.sku || null, b.selling_price || 0, b.cost_price || 0, b.stock || 0,
-         b.reorder_level || 0, b.unit || null, b.barcode || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_url || null,
+         b.reorder_level || 0, b.unit || null, b.barcode || null, b.status || 'active', b.sort_order || 0, b.show_online ? 1 : 0, b.image_id || null,
+         b.auto_entry ? 1 : 0, b.check_on_bill ? 1 : 0,
          variantId, productId]
     );
 }

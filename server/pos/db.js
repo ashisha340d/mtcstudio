@@ -722,6 +722,9 @@ async function ensureSchema() {
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS table_tags TEXT`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_caption VARCHAR(64)`);
   await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS order_notes TEXT`);
+  // Waiter "request bill" — a flag, not a status: the order must stay OPEN so it
+  // keeps showing on the floor and the status CHECK constraint stays satisfied.
+  await dbRun(`ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS bill_requested_at DATETIME`);
   await dbRun(`ALTER TABLE cake_orders ADD COLUMN IF NOT EXISTS advance_method VARCHAR(16) NOT NULL DEFAULT 'CASH'`);
 
   // Modifiers went multi-select — widen from single INT id to a comma-separated VARCHAR of ids

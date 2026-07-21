@@ -68,7 +68,7 @@ export default function CombosView() {
         </div>
       </div>
 
-      <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflow: 'auto', margin: '10px 12px', border: '1px solid var(--t-border)', borderRadius: 12, background: 'var(--t-surface)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <table className="fm-table combo-table">
           <thead>
             <tr>
@@ -202,7 +202,7 @@ function ComboEditorModal({ combo, products, categories, onClose, onSaved, showM
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
       <div className="combo-modal" onClick={e => e.stopPropagation()} onKeyDown={handleEnterNext} ref={rootRef}>
         <div className="combo-modal__title">{combo ? 'Edit Combo' : 'New Combo'}</div>
 

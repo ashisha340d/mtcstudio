@@ -3,80 +3,193 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-/* ── Tab bar (top navigation row) ────────────────────────────────────────────── */
+/* ── Top bar (fixed: filter/search/ops left, sub-module tabs right) ──────────── */
 .fm-tabbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: var(--t-surface-2);
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 3px 8px;
+  min-height: 38px;
+  background: var(--t-surface);
   border-bottom: 1px solid var(--t-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  user-select: none;
+  position: relative;
+  z-index: 12;
+}
+
+/* Compact controls inside the top bar */
+.fm-tabbar .btn {
+  height: 30px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.fm-tabbar .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+
+.fm-tabbar input[type="text"] {
+  height: 30px;
+  box-sizing: border-box;
+  font-size: 13px;
+  border-radius: 10px;
+  border: 1.5px solid var(--t-border);
+  background: var(--t-surface-2);
+  padding: 0 12px;
+  color: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fm-tabbar input[type="text"]:focus {
+  border-color: var(--t-accent);
+  background: var(--t-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-accent) 16%, transparent);
+}
+
+/* Row 2 — fixed ops toolbar (Food Menu / Sort Orders); scrolls internally */
+.fm-toolbar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.fm-toolbar-row::-webkit-scrollbar { display: none; }
+
+/* Right-aligned handle bar (fixed position): tabs + status + Sync All */
+.fm-tabbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 /* Sync All — sits beside the Category tab, visible on every tab */
 .fm-tabbar .fm-sync-btn {
-  height: 35px;
+  height: 30px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  padding: 0 18px;
-  font-size: 14px;
+  gap: 4px;
+  padding: 0 16px;
+  font-size: 12.5px;
   font-weight: 700;
-  border-radius: var(--t-radius-sm);
+  letter-spacing: 0.02em;
+  border-radius: 999px;
   white-space: nowrap;
+  background: linear-gradient(135deg, var(--t-accent), #a5380c);
+  border: none;
+  color: #fff;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--t-accent) 40%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
-/* ── Toolbar (filter / search / operations row) ──────────────────────────────── */
+.fm-tabbar .fm-sync-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--t-accent) 50%, transparent);
+}
+
+.fm-tabbar .fm-sync-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+/* ── Toolbar (filter / search / operations row — media-picker toolbar style) ─── */
 .fm-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  justify-content: space-between;
   padding: 8px 12px;
   background: var(--t-surface);
   border-bottom: 1px solid var(--t-border);
 }
 
-/* Uniform toolbar row — Live Shelf & Category views render their own toolbar
-   in the same slot; keep padding, background and control heights identical. */
+/* Uniform toolbar row — Live Shelf, Combos & Category views render their own
+   toolbar in the same slot; keep padding, background and control heights identical. */
 .fm-root .toolbar,
-.fm-root .ls-toolbar {
+.fm-root .ls-toolbar,
+.fm-root .fm-toolbar-row {
   padding: 8px 12px;
   gap: 8px;
-  background: var(--t-surface);
+  background: color-mix(in srgb, var(--t-surface) 88%, transparent);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--t-border);
-  backdrop-filter: none;
+  position: sticky;
+  top: 0;
+  z-index: 11;
+  flex-shrink: 0;
 }
 
 .fm-root .toolbar .btn,
-.fm-root .ls-toolbar .btn-toolbar {
-  height: 32px;
+.fm-root .ls-toolbar .btn-toolbar,
+.fm-root .fm-toolbar-row .btn {
+  height: 34px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 10px;
   white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.fm-root .toolbar .btn:hover:not(:disabled),
+.fm-root .ls-toolbar .btn-toolbar:hover:not(:disabled),
+.fm-root .fm-toolbar-row .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
 
 .fm-root .toolbar input[type="text"],
 .fm-root .toolbar input[type="number"],
 .fm-root .toolbar select,
+.fm-root .fm-toolbar-row input[type="text"],
 .fm-root .ls-toolbar .ls-search-input,
 .fm-root .ls-toolbar .ls-cat-select {
-  height: 32px;
+  height: 34px;
   box-sizing: border-box;
   font-size: 13px;
-  border-radius: 7px;
+  border-radius: 10px;
+  border: 1.5px solid var(--t-border);
+  background: var(--t-surface-2);
+  padding: 0 12px;
+  color: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fm-root .toolbar input[type="text"]:focus,
+.fm-root .toolbar select:focus,
+.fm-root .fm-toolbar-row input[type="text"]:focus,
+.fm-root .ls-toolbar .ls-search-input:focus,
+.fm-root .ls-toolbar .ls-cat-select:focus {
+  border-color: var(--t-accent);
+  background: var(--t-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-accent) 16%, transparent);
 }
 
 .fm-tb-left,
@@ -87,18 +200,28 @@
   align-items: center;
 }
 
+/* Search fills leftover space like the media-picker search box */
+.fm-tb-left {
+  flex: 1;
+  min-width: 240px;
+}
+
+.fm-tb-right {
+  margin-left: auto;
+}
+
 .fm-search-form {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
+  flex: 1;
+  max-width: 340px;
 }
 
 .fm-search-form input {
-  width: 200px;
-  padding: 5px 8px;
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-sm);
-  font-size: 14px;
+  flex: 1;
+  width: auto;
+  min-width: 140px;
 }
 
 .fm-toolbar select {
@@ -110,33 +233,39 @@
   cursor: pointer;
 }
 
-/* View toggle segment (navigation tabs) */
+/* View toggle segment (navigation tabs — segmented pill control) */
 .fm-view-seg {
   display: flex;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-sm);
-  overflow: hidden;
+  border-radius: 999px;
+  background: var(--t-surface-2);
 }
 
 .fm-view-seg button {
-  padding: 8px 20px;
-  font-size: 14px;
+  padding: 5px 13px;
+  font-size: 12.5px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   border: none;
-  background: var(--t-surface);
+  border-radius: 999px;
+  background: transparent;
   cursor: pointer;
   color: var(--t-text-muted);
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
   white-space: nowrap;
 }
 
-.fm-view-seg button + button {
-  border-left: 1px solid var(--t-border);
+.fm-view-seg button:hover:not(.active) {
+  color: var(--t-text);
+  background: color-mix(in srgb, var(--t-accent) 9%, transparent);
 }
 
 .fm-view-seg button.active {
-  background: var(--t-accent);
+  background: linear-gradient(135deg, var(--t-accent), #a5380c);
   color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--t-accent) 45%, transparent);
 }
 
 /* Keyboard hint icon */
@@ -158,9 +287,9 @@
   gap: 8px;
   align-items: center;
   padding: 8px 12px;
-  background: #fff8e1;
-  border-bottom: 1px solid #ffe082;
-  font-size: 14px;
+  background: var(--t-accent-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--t-accent) 30%, transparent);
+  font-size: 13px;
 }
 
 .fm-bulk-count {
@@ -261,6 +390,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--t-surface-2);
 }
 
 .fm-body-main {
@@ -340,12 +470,13 @@
 .fm-table thead th {
   background: var(--t-surface-2);
   color: var(--t-text-muted);
-  padding: 10px 8px;
+  box-shadow: 0 1px 0 var(--t-border);
+  padding: 9px 8px;
   text-align: left;
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: 700;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   white-space: nowrap;
   user-select: none;
   position: sticky;
@@ -354,22 +485,14 @@
 }
 
 .fm-table tbody td {
-  padding: 6px 8px;
+  padding: 8px;
   border-bottom: 1px solid var(--t-border);
   vertical-align: top;
+  transition: background 0.12s ease;
 }
 
 .fm-table tbody tr:hover td {
-  background: var(--t-surface-2);
-}
-
-.fm-table td:nth-child(even) {
-  background: var(--t-surface-2);
-}
-
-.fm-table tbody tr:hover td:nth-child(even) {
-  background: var(--t-surface-2);
-  filter: brightness(0.97);
+  background: color-mix(in srgb, var(--t-accent) 4%, var(--t-surface));
 }
 
 /* Column widths */
@@ -806,11 +929,33 @@
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 8px 12px;
+  justify-content: space-between;
+  padding: 6px 16px;
   border-top: 1px solid var(--t-border);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--t-text-muted);
-  background: var(--t-surface);
+  background: color-mix(in srgb, var(--t-surface) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.fm-pager .btn {
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+/* ── Slim scrollbars across all Food Menu views ──────────────────────────────── */
+.fm-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.fm-root ::-webkit-scrollbar-track { background: transparent; }
+.fm-root ::-webkit-scrollbar-thumb {
+  background: var(--t-border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.fm-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--t-text-muted);
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 .fm-pages {
@@ -960,16 +1105,16 @@
 .fm-web-card {
   background: var(--t-surface);
   border: 1px solid var(--t-border);
-  border-radius: 10px;
+  border-radius: 14px;
   overflow: hidden;
   cursor: grab;
-  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+  transition: transform 0.18s cubic-bezier(.34,1.4,.4,1), border-color 0.15s, box-shadow 0.18s;
 }
 
 .fm-web-card:hover {
-  border-color: var(--t-accent);
-  transform: translateY(-2px);
-  box-shadow: var(--t-shadow-md);
+  border-color: color-mix(in srgb, var(--t-accent) 45%, var(--t-border));
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
 }
 
 .fm-web-card.dragging { opacity: 0.4; cursor: grabbing; }
@@ -1019,16 +1164,96 @@
   padding: 10px 2px;
 }
 
+/* ── Category card view ────────────────────────────────────── */
+.cat-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.cat-card {
+  position: relative;
+  background: var(--t-surface);
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.18s cubic-bezier(.34,1.4,.4,1), border-color 0.15s, box-shadow 0.18s, opacity 0.12s;
+}
+
+.cat-card:hover {
+  border-color: color-mix(in srgb, var(--t-accent) 45%, var(--t-border));
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
+}
+.cat-card.dragging { opacity: 0.4; }
+.cat-card.dragover { border-color: var(--t-accent); box-shadow: 0 0 0 2px var(--t-accent); }
+.cat-card.cat-card-dirty { background: #f0f7ff; }
+
+.cat-card-drag {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  border-radius: 5px;
+  cursor: grab;
+  font-size: 13px;
+  z-index: 2;
+}
+
+.cat-card-img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  background: var(--t-accent-soft);
+  display: flex; align-items: center; justify-content: center;
+}
+
+.cat-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-card-noimg { font-size: 26px; color: var(--t-text-muted); }
+
+.cat-card-name {
+  border: none;
+  border-top: 1px solid var(--t-border);
+  padding: 8px 10px 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t-text);
+  background: transparent;
+  outline: none;
+}
+
+.cat-card-status {
+  margin: 0 10px 6px;
+  border: 1px solid var(--t-border);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 2px 4px;
+  background: var(--t-surface);
+  color: var(--t-text-muted);
+}
+
+.cat-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 10px;
+  margin-top: auto;
+}
+
 /* ── Combos tab ─────────────────────────────────────────────── */
 .combo-table .combo-contains { white-space: normal; }
 .combo-chip {
   display: inline-block;
-  background: var(--t-surface-2);
-  border: 1px solid var(--t-border);
+  background: color-mix(in srgb, var(--t-accent) 7%, var(--t-surface));
+  border: 1px solid color-mix(in srgb, var(--t-accent) 22%, var(--t-border));
   border-radius: 999px;
-  padding: 1px 8px;
+  padding: 2px 9px;
   margin: 2px 4px 2px 0;
   font-size: 11px;
+  font-weight: 600;
   color: var(--t-text-muted);
 }
 .combo-row:hover { background: var(--t-surface-2); cursor: default; }

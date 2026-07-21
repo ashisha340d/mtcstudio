@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { createSocket } from '../../socket';
+import { imgSrc } from './lib/img';
 import { createAlertPlayer } from '../../utils/alertSound';
 import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
+import BottomNav from './components/BottomNav';
+import FloorGrid from './components/FloorGrid';
+import OpenOrders from './components/OpenOrders';
+import ServeBoard from './components/ServeBoard';
+import MotionArt from './components/MotionArt';
+import Thumb from './components/Thumb';
+import Icon from './components/Icon';
+import SettingsSheet from './components/SettingsSheet';
+import NewOrderSheet from './components/NewOrderSheet';
+import { usePullToRefresh } from './lib/usePullToRefresh';
+import { initRipple } from './lib/ripple';
+import { tapLight, tapMedium, tapSuccess, tapWarn, tapCall, setHapticsEnabled } from './lib/haptics';
+import { getSettings, saveSettings, resetSettings, applySettings } from './lib/waiterSettings';
 import './waiter.css';
 
 // ── Session keys ──────────────────────────────────────────────────────
@@ -11,8 +25,15 @@ const U_KEY  = 'waiter_user';
 const Q_KEY  = 'waiter_offline_queue';
 const API    = import.meta.env.VITE_API_URL || '/api';
 
+// ── Offline menu cache keys ──────────────────────────────────────────
+const MK_CAT     = 'waiter_menu_categories';
+const MK_PROD    = 'waiter_menu_products';
+const MK_MOD     = 'waiter_menu_modifiers';
+const MK_SYNCED  = 'waiter_menu_synced_at';
+const MENU_IMG_CACHE = 'waiter-menu-images'; // must match sw.js
+
 // ── Axios instance ────────────────────────────────────────────────────
-const api = axios.create({ baseURL: API });
+export const api = axios.create({ baseURL: API });
 api.interceptors.request.use(cfg => {
   const t = localStorage.getItem(S_KEY);
   if (t) cfg.headers['X-Session-ID'] = t;
@@ -28,12 +49,13 @@ api.interceptors.response.use(r => r, err => {
 
 // ── PWA ───────────────────────────────────────────────────────────────
 function bootPWA() {
+  initRipple();
   if (!document.querySelector('link[href="/waiter-manifest.json"]')) {
     document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'manifest', href: '/waiter-manifest.json' }));
   }
   let tc = document.querySelector('meta[name="theme-color"]');
   if (!tc) { tc = Object.assign(document.createElement('meta'), { name: 'theme-color' }); document.head.appendChild(tc); }
-  tc.content = '#c1440e';
+  tc.content = '#131317';   /* M3 --surface */
   ['apple-mobile-web-app-capable','apple-mobile-web-app-status-bar-style'].forEach((n,i) => {
     if (!document.querySelector(`meta[name="${n}"]`))
       document.head.appendChild(Object.assign(document.createElement('meta'), { name: n, content: i ? 'black-translucent' : 'yes' }));
@@ -86,6 +108,15 @@ function timeClass(createdAt) {
 
 // TABLE_TAGS now loaded from lookup_master (TABLE_TAG type) via /api/pos/waiter/table-tags
 
+// Header/label text for a non-table order in progress (see orderMode state).
+// null (DINE_IN via selectedTable) never reaches this map.
+const ORDER_MODE_LABEL = {
+  TAKEAWAY:  'Take away',
+  DELIVERY:  'Delivery',
+  DRAFT:     'Draft order',
+  SCHEDULED: 'Scheduled order',
+};
+
 // ═══════════════════════════════════════════════════════════════════
 //  ROOT
 // ═══════════════════════════════════════════════════════════════════
@@ -97,20 +128,40 @@ export default function WaiterApp() {
   const [loginErr,  setLoginErr]  = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
 
+  // ── Offline menu sync ──────────────────────────────────────────────
+  const [syncProgress, setSyncProgress] = useState({ stage: 'Menu', done: 0, total: 1 });
+  const [syncing,      setSyncing]      = useState(false); // header spin, silent resync
+
   // ── Navigation ──────────────────────────────────────────────────
   const [screen, setScreen] = useState('login');
+  const [homeTab, setHomeTab] = useState('floor');      // floor | open | serve
+  const [floorFilter, setFloorFilter] = useState('all'); // all | occupied
 
   // ── Master data ─────────────────────────────────────────────────
   const [tables,       setTables]       = useState([]);
   const [activeOrders, setActiveOrders] = useState({ orders: [], kots: [] });
   const [categories,   setCategories]   = useState([]);
   const [products,     setProducts]     = useState([]);
+  const [stations,     setStations]     = useState([]);
+  const [scheduled,    setScheduled]    = useState([]);
+
+  // ── Variants flagged Auto Entry / Check on Bill (floor-table logic only) ──
+  const [flaggedVariants, setFlaggedVariants] = useState([]);
+  const [forgotList,      setForgotList]      = useState(null); // check_on_bill misses, null = no prompt
 
   // ── Working state ────────────────────────────────────────────────
   const [selectedTable,    setSelectedTable]    = useState(null);
   const [tableOrder,       setTableOrder]       = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart,             setCart]             = useState([]);
+
+  // Non-table order in progress — Takeaway / Delivery / Draft / Scheduled.
+  // Mutually exclusive with selectedTable: starting one clears the other.
+  // { menuType, orderType, kind, label, customerName, customerPhone,
+  //   scheduledFor, notifyBeforeMin } | null
+  const [orderMode,    setOrderMode]    = useState(null);
+  const [showNewOrder, setShowNewOrder] = useState(false);
+  const [schedDetail,  setSchedDetail]  = useState(null); // scheduled/draft row opened from Open Orders
 
   // ── Table setup (per visit) ──────────────────────────────────────
   const [paxCount,  setPaxCount]  = useState(0);
@@ -161,6 +212,47 @@ export default function WaiterApp() {
   const selfCreatedOrdersRef = useRef(new Set());
   const touchStart = useRef({ x: 0, y: 0 });
 
+  // ── Settings ─────────────────────────────────────────────────────
+  const [settings,     setSettings]     = useState(getSettings);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const updateSettings = useCallback((patch) => setSettings(saveSettings(patch)), []);
+  const restoreDefaults = useCallback(() => setSettings(resetSettings()), []);
+
+  // Each screen returns its own .waiter-app root, so there is no single
+  // element to hang a ref on. Re-querying on screen change costs one DOM
+  // lookup per navigation and keeps the 7 render branches untouched.
+  useEffect(() => {
+    applySettings(document.querySelector('.waiter-app'), settings);
+  }, [settings, screen, showSettings]);
+
+  useEffect(() => { setHapticsEnabled(settings.haptics); }, [settings.haptics]);
+
+  // Screen Wake Lock — the single biggest reason this needed to be a native
+  // app. Chrome drops the sentinel whenever the tab is hidden, so it is
+  // re-acquired on every visibilitychange rather than held once.
+  useEffect(() => {
+    if (!settings.keepAwake || !('wakeLock' in navigator)) return;
+    let sentinel = null, cancelled = false;
+
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const s = await navigator.wakeLock.request('screen');
+        if (cancelled) { s.release(); return; }
+        sentinel = s;
+      } catch { /* denied, low battery, or no permission — not fatal */ }
+    };
+
+    acquire();
+    document.addEventListener('visibilitychange', acquire);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', acquire);
+      sentinel?.release().catch(() => {});
+    };
+  }, [settings.keepAwake]);
+
   // ── Timer tick every 30s ────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 30000);
@@ -171,7 +263,13 @@ export default function WaiterApp() {
   useEffect(() => {
     bootPWA();
     const sid = localStorage.getItem(S_KEY), usr = localStorage.getItem(U_KEY);
-    if (sid && usr) { try { setUser(JSON.parse(usr)); setScreen('tables'); } catch { localStorage.removeItem(S_KEY); localStorage.removeItem(U_KEY); } }
+    if (sid && usr) {
+      try {
+        setUser(JSON.parse(usr));
+        if (hydrateMenu()) { setScreen('tables'); syncMenu({ silent: true }); }
+        else syncMenu();
+      } catch { localStorage.removeItem(S_KEY); localStorage.removeItem(U_KEY); }
+    }
   }, []);
 
   // ── Load active waiter calls on mount ───────────────────────────
@@ -235,29 +333,43 @@ export default function WaiterApp() {
       const res = await axios.post(`${API}/auth/pin`, { pin: pinStr });
       const { sessionId, user: u } = res.data;
       localStorage.setItem(S_KEY, sessionId); localStorage.setItem(U_KEY, JSON.stringify(u));
-      setUser(u); setPin(''); setScreen('tables');
+      setUser(u); setPin('');
+      if (hydrateMenu()) { setScreen('tables'); syncMenu({ silent: true }); }
+      else await syncMenu();
     } catch (err) { setLoginErr(err.response?.data?.error || 'Invalid PIN'); setPin(''); }
     finally { setLoginBusy(false); }
   };
   const handleLogout = async () => {
     try { await api.post('/auth/logout', { sessionId: localStorage.getItem(S_KEY) }); } catch {}
     localStorage.removeItem(S_KEY); localStorage.removeItem(U_KEY);
-    setUser(null); setCart([]); setSelectedTable(null); setTableOrder(null); setScreen('login');
+    setUser(null); setCart([]); setSelectedTable(null); setTableOrder(null); setOrderMode(null); setScreen('login');
   };
 
   // ── Data loaders ───────────────────────────────────────────────
   const loadOrders = useCallback(async () => {
     try { const r = await api.get('/pos/orders/active'); setActiveOrders(r.data); } catch {}
   }, []);
+  const loadScheduled = useCallback(async () => {
+    try { const r = await api.get('/pos/scheduled'); setScheduled(Array.isArray(r.data) ? r.data : (r.data?.rows ?? [])); }
+    catch { /* queue tab just stays empty */ }
+  }, []);
   const loadTables = useCallback(async () => {
     setTablesLoading(true);
     try {
       const [tr, or] = await Promise.all([api.get('/pos/tables'), api.get('/pos/orders/active')]);
       setTables(tr.data); setActiveOrders(or.data);
+      loadScheduled();
     } catch { showToast('⚠ Failed to load tables'); }
     finally { setTablesLoading(false); }
-  }, []);
+  }, [loadScheduled]);
   useEffect(() => { if (screen === 'tables') loadTables(); }, [screen, loadTables]);
+
+  // Station names for the बाकी board, and the Auto Entry / Check on Bill variant list.
+  useEffect(() => {
+    if (!user) return;
+    api.get('/pos/stations').then(r => setStations(r.data)).catch(() => {});
+    api.get('/food-menu/flagged-variants').then(r => setFlaggedVariants(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, [user]);
 
   const loadOrdersRef = useRef(loadOrders);
   useEffect(() => { loadOrdersRef.current = loadOrders; });
@@ -277,7 +389,7 @@ export default function WaiterApp() {
         return;
       }
       const who = payload?.table_name ? `Table ${payload.table_name}` : (payload?.customer_name || `Order #${payload?.id ?? ''}`);
-      if (navigator.vibrate) navigator.vibrate(150);
+      tapSuccess();
       newOrderPlayerRef.current.play();
       showToast(`🧾 New order — ${who}`, 'success');
     });
@@ -290,7 +402,7 @@ export default function WaiterApp() {
       if (status !== 'SERVED' || !product_name) return;
       const who = table_name ? `Table ${table_name}` : (customer_name || `Order #${orderId}`);
       const closed = order_status === 'CLOSED' || order_status === 'CANCELLED';
-      if (navigator.vibrate) navigator.vibrate(150);
+      tapSuccess();
       alertPlayerRef.current.play();
       showToast(closed
         ? `🍽️ ${product_name} ready for ${who} — already checked out, please deliver!`
@@ -300,7 +412,7 @@ export default function WaiterApp() {
     socket.on('reconnect',          () => { reload(); drainOfflineQueue(); });
     socket.on('waiter-call', payload => {
       setCalls(prev => [...prev.filter(c => c.table_id !== payload.table_id), payload]);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      tapCall();
       showToast(`📢 Table ${payload.table_name} needs assistance!`);
     });
     socket.on('waiter-call-resolved', payload => {
@@ -335,7 +447,10 @@ export default function WaiterApp() {
       try {
         let orderId = item.orderId;
         if (!orderId) {
-          const r = await api.post('/pos/orders', { order_type: 'DINE_IN', table_id: item.tableId, status: 'OPEN', pax_count: item.paxCount, table_tags: item.tags });
+          const payload = item.tableId != null
+            ? { order_type: 'DINE_IN', table_id: item.tableId, status: 'OPEN', pax_count: item.paxCount, table_tags: item.tags }
+            : { order_type: item.orderType, customer_name: item.customerName || null, customer_phone: item.customerPhone || null, status: 'OPEN' };
+          const r = await api.post('/pos/orders', payload);
           orderId = r.data.id;
         }
         selfCreatedOrdersRef.current.add(orderId);
@@ -362,7 +477,7 @@ export default function WaiterApp() {
   function getTableStatus(t) {
     const o = getOrderForTable(t);
     if (!o) return 'vacant';
-    if (o.status === 'BILL_REQUESTED') return 'bill_req';
+    if (o.bill_requested_at) return 'bill_req';
     return 'occupied';
   }
   function getSentItems(order) {
@@ -375,26 +490,69 @@ export default function WaiterApp() {
     const order = getOrderForTable(t);
     const status = getTableStatus(t);
     const hasCall = calls.some(c => c.table_id === t.id);
-    if (!order) return { status, hasCall, timer: null, tClass: '', amount: 0, sentCount: 0, readyCount: 0 };
+    if (!order) return { status, hasCall, timer: null, tClass: '', heat: 'ok', billAsked: false, amount: 0, sentCount: 0, readyCount: 0 };
     const items = getSentItems(order);
     const sentCount = items.reduce((s, i) => s + i.quantity, 0);
     const readyCount = items.filter(i => i._served).reduce((s, i) => s + i.quantity, 0);
-    return { status, hasCall, timer: elapsedDisplay(order.created_at), tClass: timeClass(order.created_at), amount: order.total_amount || 0, sentCount, readyCount, order };
+    const tClass = timeClass(order.created_at);
+    return {
+      status, hasCall,
+      timer: elapsedDisplay(order.created_at),
+      tClass,
+      heat: tClass === 'tc-green' ? 'ok' : tClass === 'tc-orange' ? 'warm' : 'hot',
+      billAsked: !!order.bill_requested_at,
+      amount: order.total_amount || 0, sentCount, readyCount, order,
+    };
   }
 
   // ── Quick bill (swipe left) ──────────────────────────────────────
   const quickBillTable = async t => {
     const o = getOrderForTable(t);
-    if (!o || o.status === 'BILL_REQUESTED') return;
+    if (!o || o.bill_requested_at) return;
     try {
-      await api.patch(`/pos/orders/${o.id}/status`, { status: 'BILL_REQUESTED' });
+      await api.patch(`/pos/orders/${o.id}/request-bill`);
+      tapSuccess();
       showToast(`🧾 Bill requested for ${t.name}`);
       loadOrders();
-    } catch { showToast('⚠ Failed'); }
+    } catch { tapWarn(); showToast('⚠ Failed'); }
+  };
+
+  // ── Serve a pending item straight off the बाकी board ─────────────
+  const serveItem = async (kotId, itemId) => {
+    try { await api.patch(`/pos/kots/${kotId}/items/${itemId}/serve`); await loadOrders(); }
+    catch { tapWarn(); showToast('⚠ Could not mark served'); }
   };
   const dismissCall = async call => {
     try { await api.patch(`/pos/waiter/calls/${call.id}/resolve`); } catch {}
     setCalls(prev => prev.filter(c => c.id !== call.id));
+  };
+
+  // ── Open Orders tab → tap a card ─────────────────────────────────
+  // Live Takeaway/Delivery orders reopen straight into the cart to add a
+  // round; scheduled/draft rows open a read-only detail sheet instead —
+  // editing their items is a till job, this just needs Convert/Cancel.
+  const openOrderCard = (row, isScheduled) => {
+    tapLight();
+    if (isScheduled) { setSchedDetail(row); return; }
+    reopenNonTableOrder(row);
+  };
+
+  const convertScheduled = async row => {
+    try {
+      await api.post(`/pos/scheduled/${row.id}/convert`);
+      tapSuccess();
+      showToast(row.kind === 'SCHEDULED' ? '🔥 Sent to kitchen' : '▶ Draft processed', 'success');
+    } catch (e) { tapWarn(); showToast(e.response?.data?.error || '⚠ Failed'); }
+    setSchedDetail(null);
+    loadScheduled(); loadOrders();
+  };
+
+  const cancelScheduled = async row => {
+    if (!window.confirm(`Cancel this ${row.kind === 'SCHEDULED' ? 'scheduled order' : 'draft'}?`)) return;
+    try { await api.post(`/pos/scheduled/${row.id}/cancel`); showToast('Cancelled'); }
+    catch { tapWarn(); showToast('⚠ Failed'); }
+    setSchedDetail(null);
+    loadScheduled();
   };
 
   // ── Menu ────────────────────────────────────────────────────────
@@ -407,11 +565,92 @@ export default function WaiterApp() {
     } catch { showToast('⚠ Failed to load menu'); }
   }, []);
 
+  // ── Offline menu: local persistence ──────────────────────────────
+  function persistMenu(cats, prods, mods) {
+    try {
+      localStorage.setItem(MK_CAT, JSON.stringify(cats));
+      localStorage.setItem(MK_PROD, JSON.stringify(prods));
+      localStorage.setItem(MK_MOD, JSON.stringify(mods));
+      localStorage.setItem(MK_SYNCED, String(Date.now()));
+    } catch {}
+  }
+  function hydrateMenu() {
+    try {
+      const cats  = JSON.parse(localStorage.getItem(MK_CAT)  || 'null');
+      const prods = JSON.parse(localStorage.getItem(MK_PROD) || 'null');
+      if (!cats || !prods) return false;
+      setCategories(cats); setProducts(prods);
+      modCache.current = JSON.parse(localStorage.getItem(MK_MOD) || '{}');
+      menuLoaded.current = true;
+      return true;
+    } catch { return false; }
+  }
+  async function cacheMenuImages(urls, onProgress) {
+    if (!('caches' in window) || !urls.length) return;
+    try {
+      const cache = await caches.open(MENU_IMG_CACHE);
+      let done = 0;
+      await Promise.all(urls.map(async url => {
+        try { if (!(await cache.match(url))) { const res = await fetch(url); if (res.ok) await cache.put(url, res); } }
+        catch {}
+        done++; onProgress?.(done);
+      }));
+    } catch {}
+  }
+
+  // ── Offline menu: download categories/products/modifiers/images ────
+  const syncMenu = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) { setSyncProgress({ stage: 'Menu', done: 0, total: 1 }); setScreen('downloading'); }
+    else setSyncing(true);
+    try {
+      const [cr, pr] = await Promise.all([api.get('/pos/categories'), api.get('/pos/products')]);
+      const cats = cr.data, prods = pr.data;
+
+      const needMods = prods.filter(p => p.has_modifiers);
+      const mods = {};
+      let modDone = 0;
+      if (!silent) setSyncProgress({ stage: 'Options', done: 0, total: needMods.length || 1 });
+      await Promise.all(needMods.map(async p => {
+        try { const r = await api.get(`/pos/products/${p.id}/modifiers`); mods[p.id] = r.data; }
+        catch { mods[p.id] = []; }
+        modDone++; if (!silent) setSyncProgress({ stage: 'Options', done: modDone, total: needMods.length });
+      }));
+
+      const imgUrls = [...new Set([
+        ...cats.map(c => imgSrc(c.image_url)),
+        ...prods.map(p => imgSrc(p.image_url)),
+        ...prods.flatMap(p => (p.variants || []).map(v => imgSrc(v.image_url))),
+      ].filter(Boolean))];
+      if (!silent) setSyncProgress({ stage: 'Photos', done: 0, total: imgUrls.length || 1 });
+      await cacheMenuImages(imgUrls, done => { if (!silent) setSyncProgress(p => ({ ...p, done })); });
+
+      setCategories(cats); setProducts(prods); modCache.current = mods;
+      menuLoaded.current = true;
+      persistMenu(cats, prods, mods);
+      if (silent) showToast('🔄 Menu synced');
+    } catch {
+      if (!silent) showToast('⚠ Sync failed — using saved menu');
+    } finally {
+      if (!silent) setScreen('tables');
+      setSyncing(false);
+    }
+  }, []);
+
   // ── Select table ─────────────────────────────────────────────────
   const handleTableSelect = t => {
     const order = getOrderForTable(t);
+    setOrderMode(null);
     setSelectedTable(t); setTableOrder(order);
-    setCart([]); setItemSearch(''); setSelectedCategory(null);
+    // Fresh table visit → pre-fill the cart with every "Auto Entry" variant.
+    // Existing order = later round, those items are already on the bill.
+    setCart(order ? [] : autoEntryVariants().map(v => ({
+      key: cartKey(v.product_id, v.id),
+      product_id: v.product_id, variant_id: v.id,
+      product_name: `${v.product_name} (${v.variant_name})`,
+      unit_price: Number(v.selling_price) || 0,
+      quantity: 1, notes: '', modifiers: [], is_homepack: false,
+    })));
+    setItemSearch(''); setSelectedCategory(null);
     setShowCurrentOrder(false); setQuickCat(null);
     setPaxCount(order?.pax_count || 0);
     setTableTags(order?.table_tags ? order.table_tags.split(',').filter(Boolean) : []);
@@ -419,6 +658,33 @@ export default function WaiterApp() {
   };
   const handleCategorySelect = cat => {
     setSelectedCategory(cat); setQuickCat(cat); setItemSearch(''); setShowSideMenu(false); setScreen('items');
+  };
+
+  // ── Start a non-table order (Takeaway / Delivery / Draft / Scheduled) ──
+  // Same categories → items → review screens as a table, minus everything
+  // that only makes sense at a physical table (pax count, tags, bill request,
+  // Auto Entry pre-fill — see the comment on autoEntryVariants below).
+  const startNewOrder = mode => {
+    setShowNewOrder(false);
+    setOrderMode(mode);
+    setSelectedTable(null); setTableOrder(null);
+    setCart([]); setPaxCount(0); setTableTags([]);
+    setItemSearch(''); setSelectedCategory(null); setShowCurrentOrder(false); setQuickCat(null);
+    loadMenu(); setScreen('categories');
+  };
+
+  // Reopen an in-flight (already-punched) Takeaway/Delivery order from the
+  // Open Orders tab to add another round — mirrors handleTableSelect for
+  // the table case, minus pax/tags which don't apply off a table.
+  const reopenNonTableOrder = order => {
+    setOrderMode({
+      menuType: order.order_type, orderType: order.order_type, kind: null,
+      label: ORDER_MODE_LABEL[order.order_type] || order.order_type,
+      customerName: order.customer_name || '', customerPhone: order.customer_phone || '',
+    });
+    setSelectedTable(null); setTableOrder(order);
+    setCart([]); setItemSearch(''); setSelectedCategory(null); setShowCurrentOrder(false); setQuickCat(null);
+    loadMenu(); setScreen('categories');
   };
 
   // Load TABLE_TAG items once from lookup_master
@@ -503,45 +769,125 @@ export default function WaiterApp() {
   const updateHomePack  = (key, val)   => setCart(p => p.map(i => i.key === key ? { ...i, is_homepack: val } : i));
 
   // ── Send order ────────────────────────────────────────────────────
+  // Shape shared by the immediate KOT post and the offline-queue payload —
+  // one definition so the two can never drift apart.
+  const kotItemsPayload = () => cart.map(i => ({
+    product_id: i.product_id, variant_id: i.variant_id ?? null, product_name: i.product_name,
+    quantity: i.quantity, unit_price: i.unit_price, is_home_pack: i.is_homepack ? 1 : 0,
+    notes: [i.notes, ...(i.modifiers?.map(m => m.name) || [])].filter(Boolean).join(', ') || null,
+  }));
+
+  const resetOrderContext = () => { setSelectedTable(null); setTableOrder(null); setOrderMode(null); };
+
   const sendOrder = async () => {
     if (!cart.length || sending) return;
     setSending(true);
     try {
       let orderId = tableOrder?.id;
       if (!orderId) {
-        const r = await api.post('/pos/orders', { order_type: 'DINE_IN', table_id: selectedTable.id, status: 'OPEN', pax_count: paxCount, table_tags: tableTags.join(',') });
+        const payload = orderMode
+          ? { order_type: orderMode.orderType, customer_name: orderMode.customerName || null, customer_phone: orderMode.customerPhone || null, status: 'OPEN' }
+          : { order_type: 'DINE_IN', table_id: selectedTable.id, status: 'OPEN', pax_count: paxCount, table_tags: tableTags.join(',') };
+        const r = await api.post('/pos/orders', payload);
         orderId = r.data.id;
-      } else if (paxCount > 0 || tableTags.length > 0) {
+      } else if (!orderMode && (paxCount > 0 || tableTags.length > 0)) {
         // Only patch if there's actual meta to save (avoids "Nothing to update" error)
         await api.patch(`/pos/orders/${orderId}`, { pax_count: paxCount, table_tags: tableTags.join(',') });
       }
       selfCreatedOrdersRef.current.add(orderId);
       setTimeout(() => selfCreatedOrdersRef.current.delete(orderId), 5000);
-      await api.post('/pos/kots', {
-        order_id: orderId, punched_by: user?.id,
-        items: cart.map(i => ({ product_id: i.product_id, variant_id: i.variant_id ?? null, product_name: i.product_name, quantity: i.quantity, unit_price: i.unit_price, is_home_pack: i.is_homepack ? 1 : 0, notes: [i.notes, ...(i.modifiers?.map(m => m.name) || [])].filter(Boolean).join(', ') || null })),
-      });
+      await api.post('/pos/kots', { order_id: orderId, punched_by: user?.id, items: kotItemsPayload() });
       setCart([]);
       setScreen('success');
-      setTimeout(() => { setSelectedTable(null); setTableOrder(null); setScreen('tables'); }, 2200);
+      setTimeout(() => { resetOrderContext(); setScreen('tables'); }, 2200);
     } catch (err) {
       if (!navigator.onLine) {
-        saveToQueue({ tableId: selectedTable.id, orderId: tableOrder?.id ?? null, items: cart.map(i => ({ product_id: i.product_id, variant_id: i.variant_id ?? null, product_name: i.product_name, quantity: i.quantity, unit_price: i.unit_price, is_home_pack: i.is_homepack ? 1 : 0, notes: [i.notes, ...(i.modifiers?.map(m => m.name)||[])].filter(Boolean).join(', ')||null })), paxCount, tags: tableTags.join(',') });
+        saveToQueue(orderMode
+          ? { orderType: orderMode.orderType, customerName: orderMode.customerName, customerPhone: orderMode.customerPhone, orderId: tableOrder?.id ?? null, items: kotItemsPayload() }
+          : { tableId: selectedTable.id, orderId: tableOrder?.id ?? null, items: kotItemsPayload(), paxCount, tags: tableTags.join(',') });
         showToast('📦 Offline — order queued');
-        setCart([]); setScreen('tables');
+        setCart([]); resetOrderContext(); setScreen('tables');
       } else {
         showToast(err.response?.data?.error || '⚠ Failed to send order');
       }
     } finally { setSending(false); }
   };
 
+  // ── Save Draft / Scheduled order ─────────────────────────────────
+  // Writes into pos_scheduled_orders instead of a live order — no KOT until
+  // the till (or the scheduler, for SCHEDULED) converts it. Requires being
+  // online: a draft that only exists in an offline queue would never show
+  // up for anyone else to process.
+  const saveDraftOrSchedule = async () => {
+    if (!cart.length || sending || !orderMode?.kind) return;
+    setSending(true);
+    try {
+      await api.post('/pos/scheduled', {
+        kind: orderMode.kind,
+        order_type: orderMode.orderType,
+        customer_name: orderMode.customerName || null,
+        customer_phone: orderMode.customerPhone || null,
+        scheduled_for: orderMode.scheduledFor ?? null,
+        notify_before_min: orderMode.notifyBeforeMin ?? 30,
+        items: cart.map(i => ({
+          product_id: i.product_id, variant_id: i.variant_id ?? null, product_name: i.product_name,
+          quantity: i.quantity, unit_price: i.unit_price, is_homepack: !!i.is_homepack,
+          notes: [i.notes, ...(i.modifiers?.map(m => m.name) || [])].filter(Boolean).join(', ') || null,
+        })),
+        total_amount: cartTotal,
+      });
+      tapSuccess();
+      showToast(orderMode.kind === 'SCHEDULED' ? '⏰ Order scheduled' : '📝 Draft saved', 'success');
+      setCart([]); resetOrderContext();
+      setHomeTab('open'); setScreen('tables');
+    } catch (e) {
+      tapWarn();
+      showToast(e.response?.data?.error || '⚠ Failed to save');
+    } finally { setSending(false); }
+  };
+
   // ── Bill request ──────────────────────────────────────────────────
-  const requestBill = async () => {
+  const requestBill = async (skipCheck = false) => {
     if (!tableOrder?.id || billBusy) return;
+    // "Check on Bill" variants must be on the bill before it goes out — prompt once.
+    if (!skipCheck) {
+      const missing = missingCheckOnBill();
+      if (missing.length) { tapWarn(); setForgotList(missing); return; }
+    }
     setBillBusy(true);
-    try { await api.patch(`/pos/orders/${tableOrder.id}/status`, { status: 'BILL_REQUESTED' }); showToast('🧾 Bill requested!'); await loadTables(); setScreen('tables'); setSelectedTable(null); setTableOrder(null); }
-    catch { showToast('⚠ Failed'); }
+    try {
+      await api.patch(`/pos/orders/${tableOrder.id}/request-bill`);
+      tapSuccess();
+      showToast('🧾 Bill requested!');
+      await loadTables();
+      setScreen('tables'); setSelectedTable(null); setTableOrder(null);
+    }
+    catch { tapWarn(); showToast('⚠ Failed'); }
     finally { setBillBusy(false); }
+  };
+
+  // ── Auto Entry / Check on Bill (product_variants flags) ─────────────
+  // Floor-table logic only: never applied to take-away, delivery or drafts.
+  const autoEntryVariants  = () => flaggedVariants.filter(v => v.auto_entry);
+  const checkOnBillVariants = () => flaggedVariants.filter(v => v.check_on_bill);
+
+  // Variants flagged check_on_bill that appear neither in the cart nor already sent.
+  function missingCheckOnBill() {
+    const flagged = checkOnBillVariants();
+    if (!flagged.length) return [];
+    const sentIds = new Set(getSentItems(tableOrder).map(i => i.variant_id).filter(Boolean));
+    const cartIds = new Set(cart.map(i => i.variant_id).filter(Boolean));
+    return flagged.filter(v => !sentIds.has(v.id) && !cartIds.has(v.id));
+  }
+
+  const addFlaggedToCart = list => {
+    for (const v of list) {
+      addCartItem({
+        product_id: v.product_id, variant_id: v.id,
+        product_name: `${v.product_name} (${v.variant_name})`,
+        unit_price: Number(v.selling_price) || 0, modifiers: [],
+      });
+    }
   };
 
   // ── Swipe handlers ────────────────────────────────────────────────
@@ -560,7 +906,29 @@ export default function WaiterApp() {
   // Items for current quickCat or selectedCategory
   const activeCat    = quickCat || selectedCategory;
   const catProducts  = activeCat ? products.filter(p => p.category_id === activeCat.id) : products;
-  const filteredProducts = itemSearch.trim() ? catProducts.filter(p => p.name.toLowerCase().includes(itemSearch.toLowerCase())) : catProducts;
+  // A query searches the WHOLE menu, not just the open category — matching on
+  // the item name, its category and any variant name. Clearing it drops back
+  // to the selected category.
+  const q = itemSearch.trim().toLowerCase();
+  const searching = q.length > 0;
+  const filteredProducts = searching
+    ? products.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.category_name || '').toLowerCase().includes(q) ||
+        (p.variants || []).some(v => v.name.toLowerCase().includes(q)))
+    : catProducts;
+
+  // ── Home scroller + pull-to-refresh (hooks must run before any early return) ──
+  const homeScrollRef = useRef(null);
+  const refreshHome = useCallback(async () => { await loadTables(); }, [loadTables]);
+  const ptr = usePullToRefresh(homeScrollRef, refreshHome);
+
+  // Pending (punched, not yet served) item count — drives the बाकी tab badge.
+  const pendingCount = (activeOrders.kots || []).reduce(
+    (s, k) => s + (k.items || []).filter(i => !['SERVED', 'CANCELLED'].includes(i.status)).length, 0
+  );
+  const openCount = (activeOrders.orders || []).filter(o => o.order_type !== 'DINE_IN').length
+    + (scheduled || []).filter(s => !['CONVERTED', 'CANCELLED'].includes(s.status)).length;
 
   // ─────────────────────────────────────────────────────────────────
   // RENDER
@@ -572,11 +940,35 @@ export default function WaiterApp() {
     </div>
   );
 
+  if (screen === 'downloading') {
+    const p = Math.min(1, syncProgress.done / (syncProgress.total || 1));
+    return (
+      <div className="waiter-app">
+        <div className="w-content" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div
+            className="w-downloading"
+            role="progressbar"
+            aria-valuenow={Math.round(p * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Downloading menu"
+          >
+            <MotionArt kind="download" size={96} />
+            <div className="w-dl-title">Downloading menu…</div>
+            <div className="w-dl-sub">{syncProgress.stage} · {syncProgress.done}/{syncProgress.total}</div>
+            {/* scaleX on a composited layer — never animates width */}
+            <div className="w-dl-bar"><div className="w-dl-bar-fill" style={{ '--p': p }} /></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (screen === 'success') return (
     <div className="waiter-app">
       <div className="w-content" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div className="w-success">
-          <div className="w-success-icon">✅</div>
+          <MotionArt kind="success" size={104} />
           <div className="w-success-title">Order Sent!</div>
           <div className="w-success-sub">Kitchen notified</div>
         </div>
@@ -584,117 +976,179 @@ export default function WaiterApp() {
     </div>
   );
 
-  // ── TABLES ─────────────────────────────────────────────────────────
+  // ── HOME — Floor / Open orders / बाकी ───────────────────────────────
   if (screen === 'tables') {
-    const grouped = {};
-    for (const t of tables) (grouped[t.section || 'Hall'] ??= []).push(t);
-    const sections = Object.keys(grouped);
     return (
       <div className="waiter-app">
-        <header className="w-header">
-          <span className="w-header-title">🍽 Tables</span>
-          {queueCount > 0 && <span className="w-offline-badge" title="Queued offline orders">{queueCount} queued</span>}
-          <button className="w-header-btn" onClick={openStats}>📊</button>
-          <span className="w-chip">{user?.name?.split(' ')[0] || 'Waiter'}</span>
-          <button className="w-header-btn" onClick={handleLogout}>Logout</button>
+        <header className="w-top">
+          <span className="w-top-title">
+            {homeTab === 'floor' ? 'Floor' : homeTab === 'open' ? 'Open orders' : 'बाकी'}
+          </span>
+          {queueCount > 0 && <span className="w-pill warn" title="Queued offline orders">{queueCount} queued</span>}
+          <button className="w-icon-btn" onClick={() => { tapLight(); syncMenu({ silent: true }); }} disabled={syncing} aria-label="Sync menu">
+            <span className={syncing ? 'w-sync-spin' : ''}><Icon name="refresh" /></span>
+          </button>
+          <button className="w-icon-btn" onClick={() => { tapLight(); openStats(); }} aria-label="My stats">
+            <Icon name="insights" />
+          </button>
+          <button className="w-icon-btn" onClick={() => { tapLight(); setShowSettings(true); }} aria-label="Settings">
+            <Icon name="settings" />
+          </button>
+          <button className="w-icon-btn" onClick={handleLogout} aria-label="Log out">
+            <Icon name="power" />
+          </button>
         </header>
 
-        <div className="w-content">
-          {/* Call alerts banner */}
-          {calls.length > 0 && (
-            <div className="w-call-banner">
-              {calls.map(c => (
-                <div key={c.id} className="w-call-item">
-                  <span>📢 <strong>{c.table_name}</strong> needs assistance</span>
-                  <button className="w-call-dismiss" onClick={() => dismissCall(c)}>✓ Done</button>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Waiter calls stay pinned above the tabs — they outrank whatever is on screen */}
+        {calls.length > 0 && (
+          <div className="w-calls">
+            {calls.map(c => (
+              <div key={c.id} className="w-call">
+                <Icon name="bell" size={22} />
+                <span className="w-call-txt"><b>{c.table_name}</b> needs assistance</span>
+                <button className="w-call-ok" onClick={() => { tapMedium(); dismissCall(c); }}>Done</button>
+              </div>
+            ))}
+          </div>
+        )}
 
-          <div className="w-legend">
-            <span className="w-legend-item"><span className="w-legend-dot vacant"/>Vacant</span>
-            <span className="w-legend-item"><span className="w-legend-dot occupied"/>Occupied</span>
-            <span className="w-legend-item"><span className="w-legend-dot bill"/>Bill</span>
+        <div className="w-scroll" ref={homeScrollRef}>
+          <div
+            className="w-ptr"
+            style={{ transform: `translate3d(0,${ptr.distance}px,0)`, opacity: ptr.distance ? 1 : 0 }}
+          >
+            <span className={`w-ptr-spin${ptr.refreshing ? ' is-spinning' : ptr.armed ? ' is-armed' : ''}`} />
           </div>
 
-          {tablesLoading ? (
-            <div className="w-loading"><div className="w-spinner"/><span>Loading…</span></div>
-          ) : sections.map(sec => (
-            <div key={sec}>
-              {sections.length > 1 && <div className="w-section-label">{sec}</div>}
-              <div className="w-table-grid">
-                {grouped[sec].map(t => {
-                  const d = getTableData(t);
-                  return (
-                    <div
-                      key={t.id}
-                      className={`w-table-card ${d.status} ${d.status !== 'vacant' ? d.tClass : ''} ${d.hasCall ? 'has-call' : ''}`}
-                      onTouchStart={onTouchStart}
-                      onTouchEnd={e => onTouchEnd(e, t, d.status)}
-                      onClick={() => handleTableSelect(t)}
-                    >
-                      {d.hasCall && <div className="w-call-dot">📢</div>}
-                      <div className="w-table-emoji">
-                        {d.status === 'vacant' ? '🟢' : d.status === 'bill_req' ? '🧾' : '🟠'}
-                      </div>
-                      <div className="w-table-name">{t.name}</div>
-                      {d.status !== 'vacant' ? (
-                        <div className="w-table-meta">
-                          {d.timer && <span className="w-table-timer">{d.timer}</span>}
-                          {d.amount > 0 && <span className="w-table-amt">{fmt(d.amount)}</span>}
-                          {d.sentCount > 0 && (
-                            <span className={`w-ready-dot${d.readyCount === d.sentCount ? ' w-ready-all' : d.readyCount > 0 ? ' w-ready-partial' : ' w-ready-none'}`}>
-                              {d.readyCount}/{d.sentCount} READY
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-table-badge">Vacant</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <div
+            className="w-pane"
+            key={homeTab}
+            style={{ transform: `translate3d(0,${ptr.distance}px,0)` }}
+          >
+            {homeTab === 'floor' && (
+              <FloorGrid
+                tables={tables}
+                dataFor={getTableData}
+                filter={floorFilter}
+                onFilterChange={setFloorFilter}
+                loading={tablesLoading && !tables.length}
+                onSelect={handleTableSelect}
+                onSwipeBill={quickBillTable}
+              />
+            )}
 
-          <div style={{ height: 20 }} />
+            {homeTab === 'open' && (
+              <OpenOrders
+                activeOrders={activeOrders}
+                scheduled={scheduled}
+                loading={tablesLoading && !activeOrders.orders.length}
+                onOpen={openOrderCard}
+              />
+            )}
+
+            {homeTab === 'serve' && (
+              <ServeBoard
+                activeOrders={activeOrders}
+                stations={stations}
+                onServe={serveItem}
+                loading={tablesLoading && !activeOrders.kots.length}
+              />
+            )}
+          </div>
         </div>
 
-        {/* Stats modal */}
+        {/* New non-table order — Takeaway / Delivery / Draft / Scheduled.
+            Floor tab only: Open Orders and बाकी have nothing to launch it onto. */}
+        {homeTab === 'floor' && (
+          <button className="w-fab" onClick={() => { tapMedium(); setShowNewOrder(true); }} aria-label="New order">
+            <Icon name="add" size={26} />
+          </button>
+        )}
+
+        <BottomNav
+          tab={homeTab}
+          onChange={setHomeTab}
+          badges={{ open: openCount, serve: pendingCount }}
+        />
+
+        {showNewOrder && (
+          <NewOrderSheet
+            api={api}
+            onConfirm={startNewOrder}
+            onClose={() => setShowNewOrder(false)}
+          />
+        )}
+
+        {schedDetail && (
+          <div className="w-sheet-wrap" onClick={() => setSchedDetail(null)}>
+            <div className="w-sheet" onClick={e => e.stopPropagation()}>
+              <div className="w-sheet-grab" />
+              <div className="w-set-head">
+                <span className="w-sheet-title">{schedDetail.kind === 'SCHEDULED' ? 'Scheduled order' : 'Draft order'}</span>
+                <button className="w-icon-btn" onClick={() => setSchedDetail(null)} aria-label="Close"><Icon name="close" /></button>
+              </div>
+              <div className="w-sheet-sub">
+                {schedDetail.customer_name || 'No name'}{schedDetail.customer_phone ? ` · ${schedDetail.customer_phone}` : ''}
+              </div>
+              {schedDetail.kind === 'SCHEDULED' && schedDetail.scheduled_for && (
+                <div className="w-hours-note">
+                  <Icon name="schedule" size={16} /> Fires at {schedDetail.scheduled_for}
+                </div>
+              )}
+              <ul className="w-forgot">
+                {(() => {
+                  let items = [];
+                  try { items = JSON.parse(schedDetail.items_json || '[]'); } catch { items = []; }
+                  return items.map((it, i) => (
+                    <li key={i}>
+                      <span>×{it.quantity} {it.product_name}{it.variant_name ? ` (${it.variant_name})` : ''}</span>
+                      <b>{fmt(it.unit_price * it.quantity)}</b>
+                    </li>
+                  ));
+                })()}
+              </ul>
+              <div className="w-review-total">
+                <span className="w-review-total-label">Total</span>
+                <span className="w-review-total-val">{fmt(schedDetail.total_amount)}</span>
+              </div>
+              <div className="w-sheet-actions">
+                <button className="w-btn ghost" onClick={() => cancelScheduled(schedDetail)}>Cancel order</button>
+                <button className="w-btn" onClick={() => convertScheduled(schedDetail)}>
+                  {schedDetail.kind === 'SCHEDULED' ? '🔥 Send now' : '▶ Process'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSettings && (
+          <SettingsSheet
+            settings={settings}
+            onChange={updateSettings}
+            onReset={restoreDefaults}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+
         {showStats && (
-          <div className="w-modal-overlay" onClick={() => setShowStats(false)}>
-            <div className="w-modal-sheet" onClick={e => e.stopPropagation()}>
-              <div className="w-modal-header">
-                <div className="w-modal-title">📊 My Performance Today</div>
-                <div className="w-modal-subtitle">{user?.name}</div>
-              </div>
-              <div className="w-modal-body">
-                {statsLoading ? (
-                  <div className="w-loading"><div className="w-spinner"/></div>
-                ) : stats ? (
-                  <div className="w-stats-grid">
-                    <div className="w-stat-card">
-                      <div className="w-stat-val">{stats.ordersToday}</div>
-                      <div className="w-stat-label">Orders Today</div>
-                    </div>
-                    <div className="w-stat-card">
-                      <div className="w-stat-val">{stats.tablesServed}</div>
-                      <div className="w-stat-label">Tables Served</div>
-                    </div>
-                    <div className="w-stat-card">
-                      <div className="w-stat-val">{stats.avgServiceMin != null ? `${stats.avgServiceMin}m` : '—'}</div>
-                      <div className="w-stat-label">Avg Service Time</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-empty"><div className="w-empty-text">No data yet today</div></div>
-                )}
-              </div>
-              <div className="w-modal-footer">
-                <button className="w-btn" style={{ flex:1 }} onClick={() => setShowStats(false)}>Close</button>
-              </div>
+          <div className="w-sheet-wrap" onClick={() => setShowStats(false)}>
+            <div className="w-sheet" onClick={e => e.stopPropagation()}>
+              <div className="w-sheet-grab" />
+              <div className="w-sheet-title">Today · {user?.name}</div>
+              {statsLoading ? (
+                <div className="w-stats">
+                  {Array.from({ length: 3 }).map((_, i) => <div key={i} className="w-stat is-skeleton"><span className="w-sk w-sk-line" /></div>)}
+                </div>
+              ) : stats ? (
+                <div className="w-stats">
+                  <div className="w-stat"><b>{stats.ordersToday}</b><span>orders</span></div>
+                  <div className="w-stat"><b>{stats.tablesServed}</b><span>tables</span></div>
+                  <div className="w-stat"><b>{stats.avgServiceMin != null ? `${stats.avgServiceMin}m` : '—'}</b><span>avg service</span></div>
+                </div>
+              ) : (
+                <div className="w-empty"><div className="w-empty-title">No data yet today</div></div>
+              )}
+              <button className="w-btn ghost" onClick={() => setShowStats(false)}>Close</button>
             </div>
           </div>
         )}
@@ -719,48 +1173,65 @@ export default function WaiterApp() {
     return (
       <div className="waiter-app">
         <header className="w-header">
-          <button className="w-header-back" onClick={() => setScreen('tables')}>‹</button>
-          <span className="w-header-title">{selectedTable?.name}</span>
-          {tableOrder && <span className="w-chip" style={{ fontSize:11 }}>{tableOrder.status === 'BILL_REQUESTED' ? '🧾 Bill' : '● Open'}</span>}
-          {/* ≡ three-dot / hamburger → side menu */}
-          <button className="w-header-btn" style={{ fontSize:18, padding:'4px 10px' }} onClick={() => setShowSideMenu(true)}>☰</button>
+          <span className="w-header-title" style={{ paddingLeft: 16 }}>
+            {selectedTable ? selectedTable.name : orderMode?.label}
+          </span>
+          {orderMode && (
+            <span className={`w-chip w-chip--${orderMode.menuType.toLowerCase()}`}>
+              <Icon name={orderMode.kind ? (orderMode.kind === 'SCHEDULED' ? 'schedule' : 'edit') : (orderMode.menuType === 'DELIVERY' ? 'moped' : 'pack')} size={14} />
+              {orderMode.customerName || orderMode.customerPhone || orderMode.label}
+            </span>
+          )}
+          {tableOrder && !orderMode && (
+            <span className="w-chip">
+              {tableOrder.bill_requested_at ? <><Icon name="receipt" size={16} />Bill</> : <><span className="w-dot" />Open</>}
+            </span>
+          )}
+          {!orderMode && (
+            <button className="w-icon-btn" onClick={() => setShowSideMenu(true)} aria-label="Table menu">
+              <Icon name="menu" />
+            </button>
+          )}
         </header>
 
-        {tableOrder?.status === 'BILL_REQUESTED' && (
-          <div className="w-notice-bar" style={{ background:'#fff1f2', borderBottomColor:'#fca5a5', color:'#991b1b' }}>
+        {tableOrder?.bill_requested_at && !orderMode && (
+          <div className="w-notice-bar">
+            <Icon name="receipt" size={18} />
             <span>Bill has been requested</span>
           </div>
         )}
 
         <div className="w-content">
-          {/* ── Pax counter (compact, top) ── */}
-          <div className="w-setup-section">
-            <div className="w-setup-row">
-              <span className="w-setup-label">👥 Pax</span>
-              <div className="w-pax-ctrl">
-                <button className="w-qty-btn minus" style={{ width:32, height:32 }} onClick={() => { const n=Math.max(0,paxCount-1); setPaxCount(n); saveOrderMeta(n, tableTags); }}>−</button>
-                <span className="w-pax-val">{paxCount || '—'}</span>
-                <button className="w-qty-btn plus"  style={{ width:32, height:32 }} onClick={() => { const n=paxCount+1; setPaxCount(n); saveOrderMeta(n, tableTags); }}>+</button>
-              </div>
-              {/* Active tags shown as chips here */}
-              {tableTags.length > 0 && (
-                <div style={{ display:'flex', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
-                  {tableTags.map(t => {
-                    const tagObj = sideMenuTags.find(x => x.name === t);
-                    return <span key={t} className="w-tag-chip active" style={{ fontSize:11, padding:'3px 8px' }}>{tagObj?.value || ''} {t}</span>;
-                  })}
+          {/* ── Pax counter (compact, top) — table orders only ── */}
+          {!orderMode && (
+            <div className="w-setup-section">
+              <div className="w-setup-row">
+                <span className="w-setup-label"><Icon name="person" size={20} />Pax</span>
+                <div className="w-pax-ctrl">
+                  <button className="w-qty-btn minus" aria-label="Fewer guests" onClick={() => { const n=Math.max(0,paxCount-1); setPaxCount(n); saveOrderMeta(n, tableTags); }}><Icon name="remove" size={20} /></button>
+                  <span className="w-pax-val">{paxCount || '—'}</span>
+                  <button className="w-qty-btn plus" aria-label="More guests" onClick={() => { const n=paxCount+1; setPaxCount(n); saveOrderMeta(n, tableTags); }}><Icon name="add" size={20} /></button>
                 </div>
-              )}
+                {/* Active tags shown as chips here */}
+                {tableTags.length > 0 && (
+                  <div className="w-tag-row w-tag-row-end">
+                    {tableTags.map(t => {
+                      const tagObj = sideMenuTags.find(x => x.name === t);
+                      return <span key={t} className="w-tag-chip active">{tagObj?.value || ''} {t}</span>;
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── Current Order (sent, read-only) ── */}
           {totalSentQty > 0 && (
             <div className="w-co-bar">
-              <button className="w-co-toggle" onClick={() => setShowCurrentOrder(s => !s)}>
-                <span className="w-co-toggle-label">📋 Current Order</span>
+              <button className="w-co-toggle" onClick={() => setShowCurrentOrder(s => !s)} aria-expanded={showCurrentOrder}>
+                <span className="w-co-toggle-label">Current order</span>
                 <span className="w-co-count-pill">{totalSentQty} items</span>
-                <span className="w-co-arrow">{showCurrentOrder ? '▲' : '▼'}</span>
+                <span className={`w-co-arrow${showCurrentOrder ? ' is-open' : ''}`}><Icon name="expand" size={22} /></span>
               </button>
               {showCurrentOrder && (
                 <div className="w-co-list">
@@ -770,8 +1241,11 @@ export default function WaiterApp() {
                       {items.map(i => (
                         <div key={i.id} className="w-co-item">
                           <span className="w-co-item-qty">×{i.quantity}</span>
-                          <span className="w-co-item-name">{i.product_name}{i.is_home_pack ? ' 📦' : ''}</span>
-                          <span className={`w-co-status${i._served ? ' served' : ''}`}>{i._served ? '✓ Served' : '🔥 Kitchen'}</span>
+                          <span className="w-co-item-name">{i.product_name}{i.is_home_pack ? ' · pack' : ''}</span>
+                          <span className={`w-co-status${i._served ? ' served' : ''}`}>
+                            <Icon name={i._served ? 'check' : 'fire'} size={13} />
+                            {i._served ? 'Served' : 'Kitchen'}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -782,26 +1256,31 @@ export default function WaiterApp() {
             </div>
           )}
 
-          {/* ── Repeat Last Order ── */}
-          {!tableOrder && (
-            <div style={{ padding:'0 12px 8px', display:'flex', gap:8 }}>
-              <button className="w-btn secondary" style={{ flex:1, fontSize:13 }} onClick={repeatLastOrder}>
-                🔁 Repeat Last Order
+          {/* ── Repeat Last Order — table orders only ── */}
+          {!tableOrder && !orderMode && (
+            <div className="w-inline-actions">
+              <button className="w-btn secondary" onClick={repeatLastOrder}>
+                <Icon name="replay" size={20} />Repeat last order
               </button>
             </div>
           )}
 
-          <div className="w-section-label">Select Category</div>
+          <div className="w-section-label">Select category</div>
           {visibleCats.length === 0 ? (
-            <div className="w-loading"><div className="w-spinner"/><span>Loading menu…</span></div>
+            <div className="w-loading"><MotionArt kind="cooking" size={84} /><span>Loading menu…</span></div>
           ) : (
             <div className="w-cat-grid">
               {visibleCats.map(cat => {
                 const count = products.filter(p => p.category_id === cat.id).length;
                 const icon  = catEmoji(cat.name, cat.icon);
                 return (
-                  <div key={cat.id} className="w-cat-card" onClick={() => handleCategorySelect(cat)}>
-                    <div className="w-cat-icon">{icon}</div>
+                  <div key={cat.id} className="w-cat-card w-ripple" role="button" tabIndex={0} onClick={() => handleCategorySelect(cat)}>
+                    <Thumb
+                      className="w-cat-media"
+                      src={cat.image_url}
+                      alt={cat.name}
+                      fallback={<span className="w-cat-icon">{icon}</span>}
+                    />
                     <div className="w-cat-name">{cat.name}</div>
                     <div className="w-cat-count">{count} item{count !== 1 ? 's' : ''}</div>
                   </div>
@@ -811,29 +1290,36 @@ export default function WaiterApp() {
           )}
         </div>
 
-        {cart.length > 0 && (
-          <div className="w-bottom-bar">
-            <div className="w-bottom-summary">
-              <div className="w-bottom-count">{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
-              <div className="w-bottom-total">{fmt(cartTotal)}</div>
-            </div>
-            <button className="w-btn" onClick={() => setScreen('review')}>Review →</button>
-          </div>
-        )}
+        <div className="w-bottom-bar">
+          <button className="w-bottom-back w-ripple" onClick={() => setScreen('tables')} aria-label="Back">
+            <Icon name="back" size={26} />
+          </button>
+          {cart.length > 0 && (
+            <>
+              <div className="w-bottom-summary">
+                <div className="w-bottom-count">{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
+                <div className="w-bottom-total">{fmt(cartTotal)}</div>
+              </div>
+              <button className="w-btn" onClick={() => setScreen('review')}>Review<Icon name="forward" size={20} /></button>
+            </>
+          )}
+        </div>
         {/* ── Side Menu (≡ → slide-in from right) ── */}
         {showSideMenu && (
           <div className="w-side-overlay" onClick={() => setShowSideMenu(false)}>
             <div className="w-side-panel" onClick={e => e.stopPropagation()}>
               <div className="w-side-header">
                 <span className="w-side-title">Table {selectedTable?.name}</span>
-                <button className="w-side-close" onClick={() => setShowSideMenu(false)}>✕</button>
+                <button className="w-side-close" onClick={() => setShowSideMenu(false)} aria-label="Close menu">
+                  <Icon name="close" />
+                </button>
               </div>
 
               {/* Bill action */}
-              {tableOrder && tableOrder.status !== 'BILL_REQUESTED' && (
-                <button className="w-side-action danger" onClick={() => { setShowSideMenu(false); requestBill(); }}>
-                  <span className="w-side-icon">🧾</span>
-                  <span>Request Bill</span>
+              {tableOrder && !tableOrder.bill_requested_at && (
+                <button className="w-side-action danger is-filled w-ripple" onClick={() => { setShowSideMenu(false); requestBill(); }}>
+                  <span className="w-side-icon"><Icon name="receipt" size={22} /></span>
+                  <span>Request bill</span>
                 </button>
               )}
 
@@ -846,7 +1332,8 @@ export default function WaiterApp() {
                 return (
                   <button
                     key={tag.id}
-                    className={`w-side-action${active ? ' active' : ''}`}
+                    className={`w-side-action w-ripple${active ? ' active' : ''}`}
+                    aria-pressed={active}
                     onClick={() => {
                       const next = active ? tableTags.filter(t => t !== tag.name) : [...tableTags, tag.name];
                       setTableTags(next); saveOrderMeta(paxCount, next);
@@ -854,10 +1341,37 @@ export default function WaiterApp() {
                   >
                     <span className="w-side-icon">{tag.value}</span>
                     <span>{tag.name}</span>
-                    {active && <span className="w-side-check">✓</span>}
+                    {active && <span className="w-side-check"><Icon name="check" size={20} /></span>}
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* "Check on Bill" variants missing from this table's bill */}
+        {forgotList && (
+          <div className="w-sheet-wrap" onClick={() => setForgotList(null)}>
+            <div className="w-sheet" onClick={e => e.stopPropagation()}>
+              <div className="w-sheet-grab" />
+              <div className="w-sheet-title">Did you forget to add?</div>
+              <div className="w-sheet-sub">Not on {selectedTable?.name}'s bill yet.</div>
+              <ul className="w-forgot">
+                {forgotList.map(v => (
+                  <li key={v.id}>
+                    <span>{v.product_name} <i>({v.variant_name})</i></span>
+                    <b>{fmt(v.selling_price)}</b>
+                  </li>
+                ))}
+              </ul>
+              <div className="w-sheet-actions">
+                <button className="w-btn ghost" onClick={() => { setForgotList(null); requestBill(true); }}>
+                  No, bill it
+                </button>
+                <button className="w-btn" onClick={() => { addFlaggedToCart(forgotList); setForgotList(null); tapMedium(); setScreen('review'); }}>
+                  Add {forgotList.length} item{forgotList.length > 1 ? 's' : ''}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -876,32 +1390,36 @@ export default function WaiterApp() {
   if (screen === 'items') return (
     <div className="waiter-app">
       <header className="w-header">
-        <button className="w-header-back" onClick={() => setScreen('categories')}>‹</button>
-        <span className="w-header-title">{activeCat?.name || 'All'}</span>
-        <span className="w-header-sub">{selectedTable?.name}</span>
+        <span className="w-header-title" style={{ paddingLeft: 16 }}>{activeCat?.name || 'All'}</span>
+        <span className="w-header-sub">{selectedTable ? selectedTable.name : orderMode?.label}</span>
       </header>
 
-      {/* ── Floating Quick Category Strip ── */}
-      <div className="w-qcat-strip">
-        {visibleCats.map(c => (
-          <button
-            key={c.id}
-            className={`w-qcat-chip${(quickCat?.id === c.id) ? ' active' : ''}`}
-            onClick={() => { setQuickCat(c); setItemSearch(''); }}
-          >{c.name}</button>
-        ))}
-      </div>
-
-      <div className="w-content" style={{ paddingTop: 0 }}>
-        <div className="w-search">
-          <input className="w-search-input" type="search"
-            placeholder="Search…"
-            value={itemSearch} onChange={e => setItemSearch(e.target.value)}
-          />
+      {/* Category strip hides while searching — results span every category */}
+      {!searching && (
+        <div className="w-qcat-strip">
+          {visibleCats.map(c => (
+            <button
+              key={c.id}
+              className={`w-qcat-chip${(quickCat?.id === c.id) ? ' active' : ''}`}
+              onClick={() => { setQuickCat(c); setItemSearch(''); }}
+            >{c.name}</button>
+          ))}
         </div>
+      )}
+
+      <div className="w-content" style={{ paddingTop: searching ? 12 : 0 }}>
+        {searching && (
+          <div className="w-search-note">
+            {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} across the whole menu
+          </div>
+        )}
 
         {filteredProducts.length === 0 ? (
-          <div className="w-empty"><div className="w-empty-icon">🍽</div><div className="w-empty-text">{itemSearch ? 'No match' : 'No items'}</div></div>
+          <div className="w-empty">
+            <MotionArt kind="search" size={80} />
+            <div className="w-empty-title">{searching ? 'No match' : 'No items'}</div>
+            <div className="w-empty-text">{searching ? `Nothing on the menu matches “${itemSearch}”.` : 'This category is empty right now.'}</div>
+          </div>
         ) : (
           <div className="w-items-list">
             {filteredProducts.map(p => {
@@ -925,11 +1443,33 @@ export default function WaiterApp() {
                   onIncCartItem={(pid, vid) => incItem(pid, vid)}
                   showSimpleQty={!hasOpts}
                   simpleQty={getQty(p.id, null)}
+                  showCategory={searching}
                 />
               );
             })}
           </div>
         )}
+      </div>
+
+      {/* Search docks at the bottom — thumb-reachable, and it stays put when
+          the Android keyboard opens because the list above it is what scrolls. */}
+      <div className="w-search w-search-dock">
+        <button className="w-bottom-back w-ripple" onClick={() => setScreen('categories')} aria-label="Back">
+          <Icon name="back" size={26} />
+        </button>
+        <div className="w-search-wrap">
+          <Icon name="search" className="w-search-icon" />
+          <input className="w-search-input" type="search"
+            placeholder="Search whole menu"
+            aria-label="Search whole menu"
+            value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+          />
+          {itemSearch && (
+            <button className="w-icon-btn" onClick={() => setItemSearch('')} aria-label="Clear search">
+              <Icon name="close" size={20} />
+            </button>
+          )}
+        </div>
       </div>
 
       {cart.length > 0 && (
@@ -938,7 +1478,7 @@ export default function WaiterApp() {
             <div className="w-bottom-count">{cartCount} items</div>
             <div className="w-bottom-total">{fmt(cartTotal)}</div>
           </div>
-          <button className="w-btn" onClick={() => setScreen('review')}>Review →</button>
+          <button className="w-btn" onClick={() => setScreen('review')}>Review<Icon name="forward" size={20} /></button>
         </div>
       )}
 
@@ -965,23 +1505,24 @@ export default function WaiterApp() {
   if (screen === 'review') return (
     <div className="waiter-app">
       <header className="w-header">
-        <button className="w-header-back" onClick={() => setScreen('items')}>‹</button>
-        <span className="w-header-title">Review Order</span>
-        <span className="w-header-sub">{selectedTable?.name}</span>
+        <span className="w-header-title" style={{ paddingLeft: 16 }}>Review order</span>
+        <span className="w-header-sub">{selectedTable ? selectedTable.name : orderMode?.label}</span>
       </header>
       <div className="w-content">
         <div className="w-review-list">
           {cart.map(item => (
             <div key={item.key} className="w-review-card">
+              {/* DOM order matches the visual rows so the reading order is
+                  name → price → stepper → remove */}
               <div className="w-review-card-top">
-                <div className="w-qty-ctrl" style={{ gap:4 }}>
-                  <button className="w-qty-btn minus" style={{ width:34,height:34 }} onClick={() => decItem(item.product_id, item.variant_id)}>−</button>
-                  <span className="w-qty-val" style={{ fontSize:16 }}>{item.quantity}</span>
-                  <button className="w-qty-btn plus"  style={{ width:34,height:34 }} onClick={() => incItem(item.product_id, item.variant_id)}>+</button>
-                </div>
                 <span className="w-review-card-name">{item.product_name}</span>
                 <span className="w-review-card-total">{fmt(item.unit_price * item.quantity)}</span>
-                <button className="w-remove-btn" onClick={() => removeItem(item.key)}>×</button>
+                <div className="w-qty-ctrl">
+                  <button className="w-qty-btn minus" aria-label={`Decrease ${item.product_name}`} onClick={() => decItem(item.product_id, item.variant_id)}><Icon name="remove" size={20} /></button>
+                  <span className="w-qty-val">{item.quantity}</span>
+                  <button className="w-qty-btn plus" aria-label={`Increase ${item.product_name}`} onClick={() => incItem(item.product_id, item.variant_id)}><Icon name="add" size={20} /></button>
+                </div>
+                <button className="w-remove-btn" aria-label={`Remove ${item.product_name}`} onClick={() => removeItem(item.key)}><Icon name="close" size={20} /></button>
               </div>
               <div className="w-review-note">
                 <label className="w-review-pack">
@@ -991,23 +1532,36 @@ export default function WaiterApp() {
                     onChange={e => updateHomePack(item.key, e.target.checked)}
                     className="w-review-pack-cb"
                   />
-                  <span className="w-review-pack-label">Take Out / Pack</span>
+                  <span className="w-review-pack-label">Take out / pack</span>
                 </label>
-                <input className="w-review-note-input" type="text" placeholder="Kitchen note…" value={item.notes} onChange={e => updateNotes(item.key, e.target.value)} />
+                <input className="w-review-note-input" type="text" placeholder="Kitchen note" aria-label="Kitchen note" value={item.notes} onChange={e => updateNotes(item.key, e.target.value)} />
               </div>
             </div>
           ))}
           <div className="w-review-total">
-            <span className="w-review-total-label">Order Total</span>
+            <span className="w-review-total-label">Order total</span>
             <span className="w-review-total-val">{fmt(cartTotal)}</span>
           </div>
         </div>
       </div>
       <div className="w-bottom-bar">
-        <button className="w-btn secondary" style={{ flexShrink:0 }} onClick={() => setScreen('categories')}>+ More</button>
-        <button className="w-btn" style={{ flex:1 }} onClick={sendOrder} disabled={sending || !cart.length}>
-          {sending ? 'Sending…' : '▶ Send to Kitchen'}
+        <button className="w-bottom-back w-ripple" onClick={() => setScreen('items')} aria-label="Back">
+          <Icon name="back" size={26} />
         </button>
+        <button className="w-btn secondary" style={{ flexShrink:0 }} onClick={() => setScreen('categories')}>
+          <Icon name="add" size={20} />More
+        </button>
+        {orderMode?.kind ? (
+          <button className="w-btn" style={{ flex:1 }} onClick={saveDraftOrSchedule} disabled={sending || !cart.length}>
+            {sending
+              ? <><span className="w-spinner sm" />Saving…</>
+              : orderMode.kind === 'SCHEDULED' ? <><Icon name="schedule" size={20} />Schedule order</> : <><Icon name="edit" size={20} />Save draft</>}
+          </button>
+        ) : (
+          <button className="w-btn" style={{ flex:1 }} onClick={sendOrder} disabled={sending || !cart.length}>
+            {sending ? <><span className="w-spinner sm" />Sending…</> : <><Icon name="send" size={20} />Send to kitchen</>}
+          </button>
+        )}
       </div>
       {toast && (
           <div className="w-toast">
@@ -1029,22 +1583,24 @@ function LoginScreen({ pin, onDigit, onBack, error, busy }) {
     <div className="w-login">
       <div className="w-login-brand">
         <div className="w-login-icon">🍽</div>
-        <div className="w-login-title">MTC WAITER</div>
-        <div className="w-login-sub">Restaurant Order System</div>
+        <div className="w-login-title">MTC Waiter</div>
+        <div className="w-login-sub">Restaurant order system</div>
       </div>
       <div className="w-login-card">
-        <div className="w-login-prompt">Enter 4-digit PIN</div>
+        <div className="w-login-prompt">Enter your 4-digit PIN</div>
         <div className="w-pin-dots">
           {[0,1,2,3].map(i => <div key={i} className={`w-pin-dot${pin.length > i ? ' filled' : ''}`} />)}
         </div>
         <div className="w-numpad">
           {['1','2','3','4','5','6','7','8','9'].map(d => (
-            <button key={d} className="w-numpad-key" onClick={() => onDigit(d)} disabled={busy || pin.length >= 4}>{d}</button>
+            <button key={d} className="w-numpad-key w-ripple" onClick={() => onDigit(d)} disabled={busy || pin.length >= 4}>{d}</button>
           ))}
-          <button className="w-numpad-key key-del" onClick={onBack} disabled={busy}>⌫</button>
-          <button className="w-numpad-key" onClick={() => onDigit('0')} disabled={busy || pin.length >= 4}>0</button>
-          <button className="w-numpad-key" disabled style={{ background:'transparent' }}>
-            {busy && <span className="w-spinner" style={{ width:22, height:22, borderWidth:2 }} />}
+          <button className="w-numpad-key key-del w-ripple" onClick={onBack} disabled={busy} aria-label="Delete">
+            <Icon name="backspace" size={26} />
+          </button>
+          <button className="w-numpad-key w-ripple" onClick={() => onDigit('0')} disabled={busy || pin.length >= 4}>0</button>
+          <button className="w-numpad-key" disabled style={{ background:'transparent' }} aria-hidden="true">
+            {busy && <span className="w-spinner" />}
           </button>
         </div>
         <div className="w-login-error">{error}</div>
@@ -1056,7 +1612,7 @@ function LoginScreen({ pin, onDigit, onBack, error, busy }) {
 // ═══════════════════════════════════════════════════════════════════
 //  ProductRow
 // ═══════════════════════════════════════════════════════════════════
-function ProductRow({ product, totalQty, hasOptions, mvs, cartSubItems=[], onTap, onInc, onDec, onDecCartItem, onIncCartItem, showSimpleQty, simpleQty }) {
+function ProductRow({ product, totalQty, hasOptions, mvs, cartSubItems=[], onTap, onInc, onDec, onDecCartItem, onIncCartItem, showSimpleQty, simpleQty, showCategory }) {
   const priceRange = mvs.length
     ? (() => { const prices = mvs.map(v=>v.price).filter(p=>p>0); if (!prices.length) return product.price?`₹${product.price}`:''; const mn=Math.min(...prices),mx=Math.max(...prices); return mn===mx?`₹${mn.toLocaleString('en-IN')}`:` ₹${mn.toLocaleString('en-IN')} – ₹${mx.toLocaleString('en-IN')}`; })()
     : product.price ? `₹${Number(product.price).toLocaleString('en-IN')}` : '';
@@ -1064,18 +1620,33 @@ function ProductRow({ product, totalQty, hasOptions, mvs, cartSubItems=[], onTap
   return (
     <div className={`w-item-card${totalQty > 0 ? ' in-cart' : ''}${hasOptions && cartSubItems.length > 0 ? ' has-sub' : ''}`}>
       <div className="w-item-main-row">
+        {/* Always rendered so every row shares one leading rail — the initial
+            stands in when the CMS has no photo for the item. */}
+        <Thumb
+          className="w-item-thumb"
+          src={product.image_url}
+          alt={product.name}
+          fallback={<span className="w-item-initial">{(product.name || '?').trim().charAt(0).toUpperCase()}</span>}
+        />
         <div className="w-item-info" onClick={onTap} style={{ cursor:'pointer' }}>
           <div className="w-item-name">{product.name}</div>
-          <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap', marginTop:2 }}>
+          {showCategory && product.category_name && (
+            <div className="w-item-cat">{product.category_name}</div>
+          )}
+          <div className="w-item-meta">
             <span className="w-item-price">{priceRange}</span>
             {hasOptions && <span className="w-opt-pill">{mvs.length ? `${mvs.length} sizes` : 'Options'}</span>}
           </div>
         </div>
         <div className="w-qty-ctrl">
           {showSimpleQty && simpleQty > 0 ? (
-            <><button className="w-qty-btn minus" onClick={onDec}>−</button><span className="w-qty-val">{simpleQty}</span><button className="w-qty-btn plus" onClick={onInc}>+</button></>
+            <>
+              <button className="w-qty-btn minus" aria-label={`Remove one ${product.name}`} onClick={onDec}><Icon name="remove" size={20} /></button>
+              <span className="w-qty-val">{simpleQty}</span>
+              <button className="w-qty-btn plus" aria-label={`Add one ${product.name}`} onClick={onInc}><Icon name="add" size={20} /></button>
+            </>
           ) : (
-            <button className="w-qty-btn plus-solo" onClick={hasOptions ? onTap : onInc}>+</button>
+            <button className="w-qty-btn plus-solo" aria-label={`Add ${product.name}`} onClick={hasOptions ? onTap : onInc}><Icon name="add" size={20} /></button>
           )}
         </div>
       </div>
@@ -1084,10 +1655,10 @@ function ProductRow({ product, totalQty, hasOptions, mvs, cartSubItems=[], onTap
           {cartSubItems.map(ci => (
             <div key={ci.key} className="w-item-sub-row">
               <span className="w-item-sub-name">{ci.product_name}</span>
-              <div className="w-qty-ctrl" style={{ gap:4 }}>
-                <button className="w-qty-btn minus" style={{ width:30,height:30,fontSize:18 }} onClick={e => { e.stopPropagation(); onDecCartItem?.(ci.product_id,ci.variant_id); }}>−</button>
-                <span className="w-qty-val" style={{ fontSize:14,minWidth:22 }}>{ci.quantity}</span>
-                <button className="w-qty-btn plus"  style={{ width:30,height:30,fontSize:18 }} onClick={e => { e.stopPropagation(); onIncCartItem?.(ci.product_id,ci.variant_id); }}>+</button>
+              <div className="w-qty-ctrl sm">
+                <button className="w-qty-btn minus" aria-label="Decrease quantity" onClick={e => { e.stopPropagation(); onDecCartItem?.(ci.product_id,ci.variant_id); }}><Icon name="remove" size={18} /></button>
+                <span className="w-qty-val">{ci.quantity}</span>
+                <button className="w-qty-btn plus" aria-label="Increase quantity" onClick={e => { e.stopPropagation(); onIncCartItem?.(ci.product_id,ci.variant_id); }}><Icon name="add" size={18} /></button>
               </div>
               <span className="w-item-sub-price">{fmt(ci.unit_price*ci.quantity)}</span>
             </div>
@@ -1119,7 +1690,7 @@ function ProductPickerModal({ product, mvs, variant, onVariantChange, modGroups,
               <div className="w-option-label">Choose Size / Variant</div>
               <div className="w-option-list">
                 {mvs.map(v => (
-                  <label key={v.id} className={`w-option-row${variant?.id===v.id?' selected':''}`}>
+                  <label key={v.id} className={`w-option-row w-ripple${variant?.id===v.id?' selected':''}`}>
                     <input type="radio" name="variant" checked={variant?.id===v.id} onChange={() => onVariantChange(v)} />
                     <span className="w-option-name">{v.name}</span>
                     {v.price>0 && <span className="w-option-price">₹{v.price.toLocaleString('en-IN')}</span>}
@@ -1128,13 +1699,13 @@ function ProductPickerModal({ product, mvs, variant, onVariantChange, modGroups,
               </div>
             </div>
           )}
-          {modsLoading && <div style={{ display:'flex',gap:8,alignItems:'center',padding:'12px 0',color:'#7a6555',fontSize:13 }}><span className="w-spinner" style={{ width:18,height:18,borderWidth:2 }}/>Loading options…</div>}
+          {modsLoading && <div className="w-inline-load"><span className="w-spinner" />Loading options…</div>}
           {modGroups.map(grp => (
             <div key={grp.id} className="w-option-group">
               <div className="w-option-label">{grp.name}</div>
               <div className="w-option-list">
                 {grp.items.map(m => (
-                  <label key={m.id} className={`w-option-row${modSel[m.id]?' selected':''}`}>
+                  <label key={m.id} className={`w-option-row w-ripple${modSel[m.id]?' selected':''}`}>
                     <input type="checkbox" checked={!!modSel[m.id]} onChange={() => onModToggle(m.id)} />
                     <span className="w-option-name">{m.name}</span>
                     {m.price>0 && <span className="w-option-price">+₹{m.price.toLocaleString('en-IN')}</span>}
@@ -1146,16 +1717,18 @@ function ProductPickerModal({ product, mvs, variant, onVariantChange, modGroups,
           <div className="w-modal-qty-row">
             <span className="w-modal-qty-label">Quantity</span>
             <div className="w-qty-ctrl">
-              <button className="w-qty-btn minus" onClick={() => onQtyChange(q => Math.max(1,q-1))}>−</button>
+              <button className="w-qty-btn minus" aria-label="Decrease quantity" onClick={() => onQtyChange(q => Math.max(1,q-1))}><Icon name="remove" size={20} /></button>
               <span className="w-qty-val">{qty}</span>
-              <button className="w-qty-btn plus"  onClick={() => onQtyChange(q => q+1)}>+</button>
+              <button className="w-qty-btn plus" aria-label="Increase quantity" onClick={() => onQtyChange(q => q+1)}><Icon name="add" size={20} /></button>
             </div>
           </div>
           {lineTotal > 0 && <div className="w-modal-price">{qty>1&&`${qty} × `}{fmt(base+modTotal)} = <strong>{fmt(lineTotal)}</strong></div>}
         </div>
         <div className="w-modal-footer">
           <button className="w-btn secondary" style={{ flexShrink:0 }} onClick={onCancel}>Cancel</button>
-          <button className="w-btn" style={{ flex:1 }} onClick={onConfirm}>Add to Cart {qty>1?`(${qty})`:''}</button>
+          <button className="w-btn" style={{ flex:1 }} onClick={onConfirm}>
+            <Icon name="cart" size={20} />Add to cart {qty>1?`(${qty})`:''}
+          </button>
         </div>
       </div>
     </div>

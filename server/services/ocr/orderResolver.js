@@ -66,10 +66,11 @@ async function loadCatalog() {
     cmsDb.dbAll(`SELECT id, product_id, name, sku, selling_price FROM product_variants WHERE status='active'`),
     cmsDb.dbAll(`SELECT id, name, pos_price FROM products`),                       // all statuses — mero targets
     cmsDb.dbAll(`SELECT id, product_id, name, sku, selling_price FROM product_variants`),
-    cmsDb.dbAll(`SELECT c.name AS category, m.product_name, m.ocr_text, m.product_id, m.variant_id
-                 FROM mero_map m LEFT JOIN mero_categories c ON c.id=m.category_id
-                 WHERE m.product_id IS NOT NULL`)
-      .catch(() => []),   // table optional — no mero_map → pure fuzzy
+    cmsDb.dbAll(`SELECT category, GROUP_NAME AS group_name, product_name, ocr_text, product_id, variant_id
+                 FROM mero_map WHERE product_id IS NOT NULL`)
+      // Table is optional (no mero_map → pure fuzzy), but never fail silently:
+      // an empty mero_map disables every alias + offer combo at once.
+      .catch(e => { console.warn('[resolver] mero_map unavailable — alias/offer matching OFF:', e.message); return []; }),
   ]);
   // Fuzzy candidate lookups use active-only. mero_map targets resolve against the
   // full catalog so inactive products/variants (e.g. offer components) still map.
@@ -93,7 +94,7 @@ async function loadCatalog() {
   const offerGroups = new Map();   // groupKey -> { items:[{product_id,variant_id}], labels:Set }
   for (const r of mero) {
     if (!isOffer(r)) continue;
-    const gk = aliasKey(r.product_name);
+    const gk = aliasKey(r.group_name || r.product_name);   // GROUP_NAME is the real group key
     if (!gk) continue;
     let g = offerGroups.get(gk);
     if (!g) { g = { items: [], labels: new Set() }; offerGroups.set(gk, g); }

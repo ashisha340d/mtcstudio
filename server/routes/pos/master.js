@@ -14,7 +14,9 @@ router.get('/tables', async (req, res) => {
 
 router.get('/categories', async (req, res) => {
   res.json(await dbAll(
-    `SELECT id, name, sort_order, icon FROM categories WHERE status = 'active' ORDER BY sort_order, name`
+    `SELECT c.id, c.name, c.sort_order, c.icon,
+            (SELECT ml.filename FROM media_library ml WHERE ml.id = c.image_id) AS image_url
+       FROM categories c WHERE c.status = 'active' ORDER BY c.sort_order, c.name`
   ));
 });
 
@@ -31,6 +33,17 @@ router.get('/products', async (req, res) => {
             p.pos_active AS is_active, p.badge,
             (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id AND v.status = 'active') AS variant_count,
             c.name AS category_name,
+            -- Media library is the only image source: the product's own primary
+            -- photo wins, a variant-specific photo fills in when it has none.
+            COALESCE(
+              (SELECT ml.filename FROM product_images pi
+                JOIN media_library ml ON ml.id = pi.media_id
+                WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1),
+              (SELECT ml.filename FROM product_variants v2
+                JOIN media_library ml ON ml.id = v2.image_id
+                WHERE v2.product_id = p.id AND v2.status = 'active'
+                ORDER BY v2.sort_order, v2.id LIMIT 1)
+            ) AS image_url,
             s.name AS station_name, s.color_hex AS station_color,
             EXISTS(
               SELECT 1 FROM product_modifier_assignments WHERE product_id = p.id LIMIT 1
@@ -48,12 +61,13 @@ router.get('/products', async (req, res) => {
   const ids = products.map(p => p.id);
   const ph  = ids.map(() => '?').join(',');
   const variants = await dbAll(
-    `SELECT id, product_id, name,
-            COALESCE(selling_price, 0) AS price,
-            sort_order
-     FROM   product_variants
-     WHERE  product_id IN (${ph}) AND status = 'active'
-     ORDER  BY sort_order, id`,
+    `SELECT v.id, v.product_id, v.name,
+            (SELECT ml.filename FROM media_library ml WHERE ml.id = v.image_id) AS image_url,
+            COALESCE(v.selling_price, 0) AS price,
+            v.sort_order
+     FROM   product_variants v
+     WHERE  v.product_id IN (${ph}) AND v.status = 'active'
+     ORDER  BY v.sort_order, v.id`,
     ids
   );
 

@@ -86,6 +86,29 @@ export default function SplitTenderCheckoutContainer({ orderId, cakeItems = [], 
       .catch(() => { });
   }, [order, customers, prefill]);
 
+  // Table-order checkout guard — variants tagged "Check on Bill" in Food Menu
+  // must appear on the order; missing ones surface as a warning banner.
+  const [billCheckMissing, setBillCheckMissing] = useState([]);
+  const orderKotsForCheck = kotsByOrder[orderId]?.length ? kotsByOrder[orderId] : (fetchedKots ?? []);
+  useEffect(() => {
+    if (!order || order.order_type !== 'DINE_IN') return;
+    fetch(`${API}/food-menu/flagged-variants`, { headers: H })
+      .then(r => r.json())
+      .then(rows => {
+        const required = (Array.isArray(rows) ? rows : []).filter(v => v.check_on_bill);
+        if (!required.length) return;
+        const onBill = new Set(
+          orderKotsForCheck.flatMap(k => (k.items || []))
+            .filter(i => i.status !== 'CANCELLED')
+            .map(i => i.variant_id)
+            .filter(id => id != null)
+        );
+        setBillCheckMissing(required.filter(v => !onBill.has(v.id)));
+      })
+      .catch(() => { });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.order_type, orderKotsForCheck.length]);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
@@ -338,6 +361,18 @@ export default function SplitTenderCheckoutContainer({ orderId, cakeItems = [], 
       </button>
       {showFonepay && (
         <FonepayPanel onClose={() => setShowFonepay(false)} />
+      )}
+      {billCheckMissing.length > 0 && (
+        <div
+          style={{
+            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 2410,
+            background: '#fffbeb', border: '1px solid #d97706', color: '#92400e',
+            padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, maxWidth: 520,
+          }}
+          data-testid="bill-check-warning"
+        >
+          ⚠ Not on bill: {billCheckMissing.map(v => `${v.product_name}${v.variant_name && v.variant_name !== 'Regular' ? ` (${v.variant_name})` : ''}`).join(', ')}
+        </div>
       )}
       {error && (
         <div

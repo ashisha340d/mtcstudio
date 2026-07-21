@@ -4,7 +4,6 @@
 // socket per authenticated device, pushes send_sms / cancel_sms jobs, and relays
 // device status frames (sms_queued/sending/sent/delivered/failed) back to the
 // SMS Service. No module talks to Android directly — only through this gateway.
-const url = require('url');
 const WebSocket = require('ws');
 const { WebSocketServer } = WebSocket;
 const { dbGet } = require('../pos/db');
@@ -71,10 +70,10 @@ function init() {
 
 // Called from app.js on the shared HTTP server's 'upgrade' event for /ws/sms.
 async function handleUpgrade(req, socket, head) {
-  const { query } = url.parse(req.url, true);
-  const deviceId = query.deviceId;
+  const { searchParams } = new URL(req.url, 'http://localhost');
+  const deviceId = searchParams.get('deviceId');
   if (!deviceId) { socket.destroy(); return; }
-  const auth = await authToken(query.token);
+  const auth = await authToken(searchParams.get('token'));
   if (!auth) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, (ws) => {
     wss.emit('connection', ws, req, { deviceId, userId: auth.userId });
