@@ -552,6 +552,12 @@ router.put('/:id', async (req, res) => {
       }
     }
     await recalc(tx, existing.id);
+    const { grand_total } = await tx.dbGet(`SELECT grand_total FROM cake_orders WHERE id=?`, [existing.id]);
+    if (totalPaid > Number(grand_total) + 0.005) {
+      const err = new Error(`Advance payment (Rs ${totalPaid.toFixed(2)}) cannot exceed order total (Rs ${Number(grand_total).toFixed(2)})`);
+      err.status = 400;
+      throw err;
+    }
     // Restate advance payment rows to match the submitted breakdown —
     // debit the till for the rows being replaced so the net effect is new − old
     // Skip when breakdown unchanged so original payment dates (daily reports) stay intact.

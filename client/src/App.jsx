@@ -7,6 +7,7 @@ const AdminLayout        = lazy(() => import('./layouts/AdminLayout'));
 const Dashboard          = lazy(() => import('./pages/Dashboard/Dashboard'));
 const SalesReport        = lazy(() => import('./pages/SalesReport/SalesReport'));
 const DayEnd             = lazy(() => import('./pages/DayEnd/DayEnd'));
+const Reports            = lazy(() => import('./pages/Reports/Reports'));
 const FoodMenu           = lazy(() => import('./pages/FoodMenu/FoodMenu'));
 const Media              = lazy(() => import('./pages/Media/Media'));
 const Blogs              = lazy(() => import('./pages/Blogs/Blogs'));
@@ -115,6 +116,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="sales-report" element={<SalesReport />} />
           <Route path="day-end" element={<DayEnd />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="categories" element={<Navigate to="/food-menu" replace />} />
           <Route path="food-menu"    element={<FoodMenu />} />
           <Route path="products" element={<Navigate to="/food-menu" replace />} />

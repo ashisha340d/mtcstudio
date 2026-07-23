@@ -106,7 +106,16 @@ router.get('/products/:id/modifiers', async (req, res) => {
 });
 
 router.get('/dashboard/stats', async (req, res) => {
-  const openOrders   = await dbGet(`SELECT COUNT(*) AS c FROM pos_orders WHERE status IN ('OPEN','SAVED')`);
+  // Open = payment not processed, any date — but skip orders with no details
+  // (no fired KOT line and an empty draft cart).
+  const openOrders   = await dbGet(
+    `SELECT COUNT(*) AS c FROM pos_orders o
+      WHERE o.status IN ('OPEN','SAVED')
+        AND (EXISTS (SELECT 1 FROM pos_kots k
+                       JOIN pos_kot_items ki ON ki.kot_id = k.id
+                      WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+             OR (o.draft_items IS NOT NULL
+                 AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))`);
   const activeKots   = await dbGet(`SELECT COUNT(*) AS c FROM pos_kots WHERE status IN ('ORDERSENT','IN_PROGRESS')`);
   const todayRevenue = await dbGet(`SELECT COALESCE(SUM(paid_amount),0) AS t FROM pos_orders WHERE status='CLOSED' AND DATE(closed_at)=CURDATE()`);
   res.json({

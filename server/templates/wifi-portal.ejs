@@ -1,539 +1,844 @@
-<%
-  // ── View-local helpers ────────────────────────────────────────────────────
+<% /* ── View-local helpers ──────────────────────────────────────────────────── */
   const rs = n => 'Rs. ' + Number(n || 0).toLocaleString('en-IN');
   const has = a => Array.isArray(a) && a.length > 0;
   // Menu sections are only rendered when the catalogue actually has stock for
   // them, so an empty shelf never leaves a headline hanging over nothing.
   const sections = [
-    has(data.featured) && { id: 'featured', label: 'Favourites' },
-    has(data.specials) && { id: 'specials', label: 'Today' },
-    has(data.cakes)    && { id: 'cakes',    label: 'Cakes' },
-    has(data.pizza)    && { id: 'pizza',    label: 'Pizza' },
-    (has(data.coffee) || has(data.desserts)) && { id: 'coffee', label: 'Coffee' },
-    has(data.combos)   && { id: 'offers',   label: 'Offers' },
+  has(data.cakes) && { id: 'cakes', label: 'Cakes' },
+  data.burgers && { id: 'burgers', label: 'Burgers' },
+  data.pizza && { id: 'pizza', label: 'Pizza' },
+  has(data.featured) && { id: 'featured', label: 'Favourites' },
+  has(data.specials) && { id: 'specials', label: 'Today' },
+  (has(data.coffee) || has(data.desserts)) && { id: 'coffee', label: 'Coffee' },
+  has(data.combos) && { id: 'offers', label: 'Offers' },
   ].filter(Boolean);
   // "Order Food" and the skip link must land somewhere that actually rendered.
   const firstSection = sections.length ? sections[0].id : 'trust';
-%><!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14100e" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#14100e">
-<meta name="robots" content="noindex, nofollow">
-<meta name="description" content="<%= cafe.name %> — free guest Wi-Fi. Wood fired pizza, celebration cakes, coffee and desserts in Bharatpur, Chitwan.">
-<meta name="format-detection" content="telephone=no">
-<title><%= cafe.name %> · Guest Wi-Fi</title>
+  %>
+  <!doctype html>
+  <html lang="en">
 
-<link rel="icon" href="/favicon.ico">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#14100e" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#14100e">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description"
+      content="<%= cafe.name %> — free guest Wi-Fi. Wood fired pizza, celebration cakes, coffee and desserts in Bharatpur, Chitwan.">
+    <meta name="format-detection" content="telephone=no">
+    <title>
+      <%= cafe.name %> · Guest Wi-Fi
+    </title>
 
-<%# First hero frame is the LCP element — fetch it before the stylesheet resolves. %>
-<link rel="preload" as="image" href="<%= hero.stills[0] %>" fetchpriority="high">
-<link rel="stylesheet" href="<%= asset('portal.css') %>">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-<%# Above-the-fold paint must not wait on the stylesheet round trip. %>
-<style>
-  :root{--ink:#14100e;--cream:#faf6f1;--ember:#e2703a}
-  html{background:var(--ink);color-scheme:dark}
-  body{margin:0;background:var(--ink);color:var(--cream);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
-    -webkit-font-smoothing:antialiased;overflow-x:hidden}
-  .hero{min-height:100svh}
-</style>
-</head>
-<body>
+    <%# First hero frame is the LCP element — fetch it before the stylesheet resolves. %>
+      <link rel="preload" as="image" href="<%= hero.stills[0] %>" fetchpriority="high">
+      <link rel="stylesheet" href="<%= asset('portal.css') %>">
 
-<a class="skip" href="#<%= firstSection %>">Skip to the menu</a>
+      <%# Above-the-fold paint must not wait on the stylesheet round trip. %>
+        <style>
+          :root {
+            --ink: #14100e;
+            --cream: #faf6f1;
+            --ember: #e2703a
+          }
 
-<div class="scroll-rail" aria-hidden="true"><i id="scrollBar"></i></div>
+          html {
+            background: var(--ink);
+            color-scheme: dark
+          }
 
-<%# ── Icon sprite ─────────────────────────────────────────────────────────── %>
-<svg class="sprite" aria-hidden="true" focusable="false">
-  <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-    <path d="M2.5 8.5a16 16 0 0 1 19 0"/><path d="M5.5 12.2a11 11 0 0 1 13 0"/>
-    <path d="M8.6 15.9a6 6 0 0 1 6.8 0"/><circle cx="12" cy="19.5" r="1.2" fill="currentColor" stroke="none"/>
-  </symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M5 12h14M13 6l6 6-6 6"/>
-  </symbol>
-  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 5v14M6 13l6 6 6-6"/>
-  </symbol>
-  <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor">
-    <path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z"/>
-  </symbol>
-  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-  </symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>
-  </symbol>
-  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M6.5 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L16.5 12l4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 3.5 5.2 2 2 0 0 1 5.5 3Z"/>
-  </symbol>
-  <symbol id="i-instagram" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-    <rect x="3" y="3" width="18" height="18" rx="5.5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/>
-  </symbol>
-  <symbol id="i-facebook" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M14 9V7.4c0-.8.2-1.2 1.3-1.2H17V3.2h-2.6C11.3 3.2 10.4 4.7 10.4 7v2H8.4v3.2h2V21H14v-8.8h2.4l.4-3.2Z"/>
-  </symbol>
-  <symbol id="i-tiktok" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M16.6 3h-2.9v12.1a2.6 2.6 0 1 1-2.2-2.6v-3a5.6 5.6 0 1 0 5.1 5.6V9.4a6.6 6.6 0 0 0 3.7 1.2V7.7a3.8 3.8 0 0 1-3.7-3.8Z"/>
-  </symbol>
-  <symbol id="i-whatsapp" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.3A10 10 0 1 0 12 2Zm5.5 14.2c-.2.6-1.3 1.2-1.8 1.2s-1.2.2-3.8-.9-4.1-3.7-4.2-3.9-1-1.3-1-2.5.6-1.8.9-2a.9.9 0 0 1 .7-.3h.5c.2 0 .4-.1.7.5l.9 2.1c.1.2.1.4 0 .6l-.4.5-.4.4c-.1.2-.3.3-.1.6a9 9 0 0 0 1.6 2 8 8 0 0 0 2.3 1.4c.3.2.5.1.6 0l1-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3a2 2 0 0 1-.1 1.2Z"/>
-  </symbol>
-</svg>
+          body {
+            margin: 0;
+            background: var(--ink);
+            color: var(--cream);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden
+          }
 
-<%# ── MikroTik hand-off ───────────────────────────────────────────────────── %>
-<%# Every "go online" affordance on the page submits this one form. The router's
-    own parameters ride along as hidden fields, so the browser never has to
-    reconstruct them from a query string. %>
-<form id="connectForm" method="post" action="/wifi/connect" hidden>
-  <input type="hidden" name="link-login-only" value="<%= router.loginUrl %>">
-  <input type="hidden" name="link-orig" value="<%= router.origUrl %>">
-  <input type="hidden" name="mac" value="<%= router.mac %>">
-  <input type="hidden" name="ip" value="<%= router.ip %>">
-  <input type="hidden" name="username" value="<%= router.username %>">
-  <input type="hidden" name="dst" id="connectDst" value="<%= router.dst %>">
-</form>
+          .hero {
+            min-height: 100svh
+          }
+        </style>
+  </head>
 
-<!-- ════════════════════════════ HERO ════════════════════════════ -->
-<header class="hero" id="top">
-  <div class="hero__media" aria-hidden="true">
-    <% if (hero.video) { %>
-      <video class="hero__video" autoplay muted loop playsinline preload="metadata"
-             poster="<%= hero.stills[0] %>">
-        <source src="<%= hero.video %>" type="video/mp4">
-      </video>
-    <% } else { %>
-      <div class="hero__stack" style="--frames:<%= hero.stills.length %>">
-        <% hero.stills.forEach(function(src, i) { %>
-          <img src="<%= src %>" alt="" style="--i:<%= i %>"
-               <%= i === 0 ? 'fetchpriority="high" decoding="sync"' : 'loading="lazy" decoding="async"' %>>
-        <% }); %>
-      </div>
-    <% } %>
-    <div class="hero__scrim"></div>
-    <div class="hero__grain"></div>
-  </div>
+  <body>
 
-  <div class="hero__inner shell">
-    <div class="hero__top">
-      <span class="brandmark" aria-hidden="true">MT</span>
-      <span class="wifi-chip" role="status">
-        <span class="wifi-chip__ring"><svg class="ico"><use href="#i-wifi"/></svg></span>
-        <span>
-          <b>Connected to MTC Free Wi-Fi</b>
-          <i><%= router.maskedMac ? 'Device ' + router.maskedMac : 'Guest network · no password' %></i>
-        </span>
-      </span>
-    </div>
+    <a class="skip" href="#<%= firstSection %>">Skip to the menu</a>
 
-    <div class="hero__body">
-      <p class="eyebrow reveal"><%= greeting %><%= visit.returning ? ', welcome back' : '' %></p>
-      <h1 class="display reveal">
-        <span>Munch</span>
-        <span class="display__accent">Time</span>
-        <span>Cafe</span>
-      </h1>
-      <p class="lede reveal"><%= cafe.tagline %></p>
+    <div class="scroll-rail" aria-hidden="true"><i id="scrollBar"></i></div>
 
-      <div class="hero__cta reveal">
-        <a class="btn btn--primary" href="#<%= firstSection %>" data-scroll data-ev="hero_order">
-          Order Food
-          <svg class="ico"><use href="#i-down"/></svg>
-        </a>
-        <button class="btn btn--ghost" type="button" data-connect data-ev="hero_internet">
-          <svg class="ico"><use href="#i-wifi"/></svg>
-          Continue to Internet
-        </button>
-      </div>
-      <p class="hero__hint reveal">Browse the menu first — it's already loaded, no internet needed.</p>
-    </div>
+    <%# ── Icon sprite ─────────────────────────────────────────────────────────── %>
+      <svg class="sprite" aria-hidden="true" focusable="false">
+        <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M2.5 8.5a16 16 0 0 1 19 0" />
+          <path d="M5.5 12.2a11 11 0 0 1 13 0" />
+          <path d="M8.6 15.9a6 6 0 0 1 6.8 0" />
+          <circle cx="12" cy="19.5" r="1.2" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M6 13l6 6 6-6" />
+        </symbol>
+        <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor">
+          <path d="m12 2.6 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9z" />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3.5 2" />
+        </symbol>
+        <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M6.5 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L16.5 12l4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 3.5 5.2 2 2 0 0 1 5.5 3Z" />
+        </symbol>
+        <symbol id="i-instagram" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+          <rect x="3" y="3" width="18" height="18" rx="5.5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-facebook" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M14 9V7.4c0-.8.2-1.2 1.3-1.2H17V3.2h-2.6C11.3 3.2 10.4 4.7 10.4 7v2H8.4v3.2h2V21H14v-8.8h2.4l.4-3.2Z" />
+        </symbol>
+        <symbol id="i-tiktok" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M16.6 3h-2.9v12.1a2.6 2.6 0 1 1-2.2-2.6v-3a5.6 5.6 0 1 0 5.1 5.6V9.4a6.6 6.6 0 0 0 3.7 1.2V7.7a3.8 3.8 0 0 1-3.7-3.8Z" />
+        </symbol>
+        <symbol id="i-whatsapp" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.3A10 10 0 1 0 12 2Zm5.5 14.2c-.2.6-1.3 1.2-1.8 1.2s-1.2.2-3.8-.9-4.1-3.7-4.2-3.9-1-1.3-1-2.5.6-1.8.9-2a.9.9 0 0 1 .7-.3h.5c.2 0 .4-.1.7.5l.9 2.1c.1.2.1.4 0 .6l-.4.5-.4.4c-.1.2-.3.3-.1.6a9 9 0 0 0 1.6 2 8 8 0 0 0 2.3 1.4c.3.2.5.1.6 0l1-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3a2 2 0 0 1-.1 1.2Z" />
+        </symbol>
+      </svg>
 
-    <a class="scroll-cue" href="#trust" data-scroll aria-label="Scroll for more">
-      <span></span>
-    </a>
-  </div>
-</header>
+      <%# ── MikroTik hand-off ───────────────────────────────────────────────────── %>
+        <%# Every "go online" affordance on the page submits this one form. The router's own parameters ride along as
+          hidden fields, so the browser never has to reconstruct them from a query string. %>
+          <form id="connectForm" method="post" action="/wifi/connect" hidden>
+            <input type="hidden" name="link-login-only" value="<%= router.loginUrl %>">
+            <input type="hidden" name="link-orig" value="<%= router.origUrl %>">
+            <input type="hidden" name="mac" value="<%= router.mac %>">
+            <input type="hidden" name="ip" value="<%= router.ip %>">
+            <input type="hidden" name="username" value="<%= router.username %>">
+            <input type="hidden" name="dst" id="connectDst" value="<%= router.dst %>">
+          </form>
 
-<main id="main">
-
-  <!-- ══════════════════════ TRUST STRIP ══════════════════════ -->
-  <section class="trust" id="trust" aria-label="At a glance">
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee__track">
-        <% for (let pass = 0; pass < 2; pass++) { %>
-          <span>Wood Fired Oven</span><i>·</i>
-          <span>Baked Fresh Daily</span><i>·</i>
-          <span>Celebration Cakes</span><i>·</i>
-          <span>Specialty Coffee</span><i>·</i>
-          <span>Free Guest Wi-Fi</span><i>·</i>
-        <% } %>
-      </div>
-    </div>
-    <div class="shell trust__grid">
-      <div class="trust__cell">
-        <b class="count" data-count="<%= data.rating %>" data-decimals="1"><%= data.rating %></b>
-        <span>
-          <span class="stars" aria-label="<%= data.rating %> out of 5">
-            <% for (let s = 0; s < 5; s++) { %><svg class="ico"><use href="#i-star"/></svg><% } %>
-          </span>
-          Guest rating
-        </span>
-      </div>
-      <div class="trust__cell">
-        <b class="count" data-count="<%= data.featured.length + data.pizza.length + data.coffee.length + data.desserts.length %>">0</b>
-        <span>Dishes to explore</span>
-      </div>
-      <div class="trust__cell">
-        <b>8–8:30</b>
-        <span>Open every day</span>
-      </div>
-    </div>
-  </section>
-
-  <% if (has(data.featured)) { %>
-  <!-- ══════════════════════ FEATURED ══════════════════════ -->
-  <section class="band band--cream" id="featured" aria-labelledby="featured-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">Most loved</p>
-        <h2 id="featured-h">The ones people<br>come back for</h2>
-      </header>
-    </div>
-
-    <div class="rail" data-rail>
-      <ul class="rail__track">
-        <% data.featured.forEach(function(p) { %>
-          <li class="card reveal">
-            <div class="card__media">
-              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy" decoding="async" width="480" height="360">
-              <% if (p.badge) { %><span class="pill pill--<%= p.badge.key.toLowerCase() %>"><%= p.badge.label %></span><% } %>
-              <% if (p.diet) { %><span class="diet diet--<%= p.diet %>" title="<%= p.diet === 'veg' ? 'Vegetarian' : 'Non-vegetarian' %>"></span><% } %>
+          <!-- ════════════════════════════ HERO ════════════════════════════ -->
+          <header class="hero" id="top">
+            <div class="hero__media" aria-hidden="true">
+              <% if (hero.video) { %>
+                <video class="hero__video" autoplay muted loop playsinline preload="metadata"
+                  poster="<%= hero.stills[0] %>">
+                  <source src="<%= hero.video %>" type="video/mp4">
+                </video>
+                <% } else { %>
+                  <div class="hero__stack" style="--frames:<%= hero.stills.length %>">
+                    <% hero.stills.forEach(function(src, i) { %>
+                      <img src="<%= src %>" alt="" style="--i:<%= i %>" <%=i===0
+                        ? 'fetchpriority="high" decoding="sync"' : 'loading="lazy" decoding="async"' %>>
+                      <% }); %>
+                  </div>
+                  <% } %>
+                    <div class="hero__scrim"></div>
+                    <div class="hero__grain"></div>
             </div>
-            <div class="card__body">
-              <h3><%= p.name %></h3>
-              <% if (p.tagline) { %><p><%= p.tagline %></p><% } %>
-              <b><%= rs(p.price) %></b>
-            </div>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
 
-    <div class="shell">
-      <button class="link-cta reveal" type="button" data-connect data-dst="<%= cafe.orderUrl %>" data-ev="featured_order_online">
-        Order online for delivery <svg class="ico"><use href="#i-arrow"/></svg>
-      </button>
-    </div>
-  </section>
-  <% } %>
-
-  <% if (has(data.specials)) { %>
-  <!-- ══════════════════════ TODAY'S SPECIALS ══════════════════════ -->
-  <section class="band band--dark specials" id="specials" aria-labelledby="specials-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker kicker--live"><span class="dot"></span>Fresh out of the oven</p>
-        <h2 id="specials-h">Today's specials</h2>
-        <p class="band__sub">Straight off the counter. When they're gone, they're gone.</p>
-      </header>
-
-      <ul class="shelf">
-        <% data.specials.forEach(function(s) { %>
-          <li class="shelf__row reveal">
-            <div class="shelf__img">
-              <% if (s.image) { %>
-                <img src="<%= s.image %>" alt="<%= s.alt %>" loading="lazy" decoding="async" width="160" height="160">
-              <% } else { %>
-                <span class="ph" aria-hidden="true">MT</span>
-              <% } %>
-            </div>
-            <div class="shelf__text">
-              <h3><%= s.name %></h3>
-              <% if (s.tagline) { %><p><%= s.tagline %></p><% } %>
-              <span class="shelf__meta">
-                <b><%= rs(s.price) %></b>
-                <% if (s.qty <= 3) { %><em class="low"><%= s.qty %> left</em><% } %>
-              </span>
-            </div>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-  </section>
-  <% } %>
-
-  <% if (has(data.cakes)) { %>
-  <!-- ══════════════════════ CAKES ══════════════════════ -->
-  <section class="band band--cake" id="cakes" aria-labelledby="cakes-h">
-    <div class="cake-glow" aria-hidden="true"></div>
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">The Cake Atelier</p>
-        <h2 id="cakes-h" class="serif">Made for the<br>moment before<br>the candles</h2>
-        <p class="band__sub">Every cake is built to order — choose the sponge, the cream, the message.</p>
-      </header>
-    </div>
-
-    <div class="rail" data-rail>
-      <ul class="rail__track">
-        <% data.cakes.forEach(function(c) { %>
-          <li class="cake reveal">
-            <div class="cake__media">
-              <img src="<%= c.image %>" alt="<%= c.alt %>" loading="lazy" decoding="async" width="440" height="560">
-              <div class="cake__veil"></div>
-              <div class="cake__caption">
-                <h3 class="serif"><%= c.name %></h3>
-                <% if (c.tagline) { %><p><%= c.tagline %></p><% } %>
+            <div class="hero__inner shell">
+              <div class="hero__top">
+                <span class="brandmark" aria-hidden="true">MT</span>
+                <span class="wifi-chip" role="status">
+                  <span class="wifi-chip__ring"><svg class="ico">
+                      <use href="#i-wifi" />
+                    </svg></span>
+                  <span>
+                    <b>Connected to MTC Free Wi-Fi</b>
+                    <i>
+                      <%= router.maskedMac ? 'Device ' + router.maskedMac : 'Guest network · no password' %>
+                    </i>
+                  </span>
+                </span>
               </div>
+
+              <div class="hero__body">
+                <p class="eyebrow reveal">
+                  <%= greeting %>
+                    <%= visit.returning ? ', welcome back' : '' %>
+                </p>
+                <h1 class="display reveal">
+                  <span>Munch</span>
+                  <span class="display__accent">Time</span>
+                  <span>Cafe</span>
+                </h1>
+                <p class="lede reveal">
+                  <%= cafe.tagline %>
+                </p>
+
+                <div class="hero__cta reveal">
+                  <a class="btn btn--primary" href="#<%= firstSection %>" data-scroll data-ev="hero_order">
+                    Order Food
+                    <svg class="ico">
+                      <use href="#i-down" />
+                    </svg>
+                  </a>
+                  <button class="btn btn--ghost" type="button" data-connect data-ev="hero_internet">
+                    <svg class="ico">
+                      <use href="#i-wifi" />
+                    </svg>
+                    Continue to Internet
+                  </button>
+                </div>
+                <p class="hero__hint reveal">Browse the menu first — it's already loaded, no internet needed.</p>
+              </div>
+
+              <a class="scroll-cue" href="#trust" data-scroll aria-label="Scroll for more">
+                <span></span>
+              </a>
             </div>
-            <div class="cake__foot">
-              <span>from <b><%= rs(c.price) %></b></span>
-              <% if (c.eggless) { %><em>Eggless available</em><% } %>
+          </header>
+
+          <main id="main">
+
+            <!-- ══════════════════════ TRUST STRIP ══════════════════════ -->
+            <section class="trust" id="trust" aria-label="At a glance">
+              <div class="marquee" aria-hidden="true">
+                <div class="marquee__track">
+                  <% for (let pass=0; pass < 2; pass++) { %>
+                    <span>Wood Fired Oven</span><i>·</i>
+                    <span>Baked Fresh Daily</span><i>·</i>
+                    <span>Celebration Cakes</span><i>·</i>
+                    <span>Specialty Coffee</span><i>·</i>
+                    <span>Free Guest Wi-Fi</span><i>·</i>
+                    <% } %>
+                </div>
+              </div>
+              <div class="shell trust__grid">
+                <div class="trust__cell">
+                  <b class="count" data-count="<%= data.rating %>" data-decimals="1">
+                    <%= data.rating %>
+                  </b>
+                  <span>
+                    <span class="stars" aria-label="<%= data.rating %> out of 5">
+                      <% for (let s=0; s < 5; s++) { %><svg class="ico">
+                          <use href="#i-star" />
+                        </svg>
+                        <% } %>
+                    </span>
+                    Guest rating
+                  </span>
+                </div>
+                <div class="trust__cell">
+                  <b class="count"
+                    data-count="<%= data.featured.length + data.pizza.length + data.coffee.length + data.desserts.length %>">0</b>
+                  <span>Dishes to explore</span>
+                </div>
+                <div class="trust__cell">
+                  <b>8–8:30</b>
+                  <span>Open every day</span>
+                </div>
+              </div>
+            </section>
+
+            <% if (has(data.cakes)) { %>
+                      <!-- ══════════════════════ CAKES ══════════════════════ -->
+                      <section class="band band--cake" id="cakes" aria-labelledby="cakes-h">
+                        <div class="cake-glow" aria-hidden="true"></div>
+                        <div class="shell">
+                          <header class="band__head reveal">
+                            <p class="kicker">The Cake Atelier</p>
+                            <h2 id="cakes-h" class="serif">Made for the<br>moment before<br>the candles</h2>
+                            <p class="band__sub">Every cake is built to order — choose the sponge, the cream, the
+                              message.</p>
+                          </header>
+                        </div>
+
+                        <div class="rail" data-rail>
+                          <ul class="rail__track">
+                            <% data.cakes.forEach(function(c) { %>
+                              <li class="cake reveal">
+                                <div class="cake__media">
+                                  <img src="<%= c.image %>" alt="<%= c.alt %>" loading="lazy" decoding="async"
+                                    width="440" height="560">
+                                  <div class="cake__veil"></div>
+                                  <div class="cake__caption">
+                                    <h3 class="serif">
+                                      <%= c.name %>
+                                    </h3>
+                                    <% if (c.tagline) { %>
+                                      <p>
+                                        <%= c.tagline %>
+                                      </p>
+                                      <% } %>
+                                  </div>
+                                </div>
+                                <div class="cake__foot">
+                                  <span>from <b>
+                                      <%= rs(c.price) %>
+                                    </b></span>
+                                  <% if (c.eggless) { %><em>Eggless available</em>
+                                    <% } %>
+                                </div>
+                              </li>
+                              <% }); %>
+                          </ul>
+                        </div>
+
+                        <div class="shell">
+                          <button class="btn btn--gold btn--wide reveal" type="button" data-connect
+                            data-dst="<%= cafe.cakeUrl %>" data-ev="book_cake">
+                            Book a Cake
+                            <svg class="ico">
+                              <use href="#i-arrow" />
+                            </svg>
+                          </button>
+                          <p class="fineprint reveal">Order at least <%= data.cakes[0].prepHours %> hours ahead · Free
+                              message piping</p>
+                        </div>
+                      </section>
+                      <% } %>
+
+                        <% if (data.burgers) { %>
+                          <!-- ══════════════════════ BURGER SPOTLIGHT ══════════════════════ -->
+                          <section class="band band--burger" id="burgers" aria-labelledby="burgers-h">
+                            <div class="sizzle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+                            <div class="shell">
+                              <header class="band__head reveal">
+                                <p class="kicker kicker--neon">Hand-smashed · Griddle-seared</p>
+                                <h2 id="burgers-h" class="burger-title">
+                                  <span>The Smash</span>
+                                  <span class="burger-title__jazz">Burger</span>
+                                  <span>Special</span>
+                                </h2>
+                              </header>
+
+                              <%# Hero burger — the star of the section %>
+                                <article class="hero-burger reveal">
+                                  <div class="hero-burger__media">
+                                    <span class="hero-burger__halo" aria-hidden="true"></span>
+                                    <img src="<%= data.burgers.hero.image %>" alt="<%= data.burgers.hero.alt %>"
+                                      loading="lazy" decoding="async" width="520" height="520">
+                                    <span class="hero-burger__flag">Signature</span>
+                                  </div>
+                                  <div class="hero-burger__body">
+                                    <% if (data.burgers.hero.badge) { %><span class="tag-neon">
+                                        <%= data.burgers.hero.badge.label %>
+                                      </span>
+                                      <% } %>
+                                        <h3>
+                                          <%= data.burgers.hero.name %>
+                                        </h3>
+                                        <% if (data.burgers.hero.tagline) { %>
+                                          <p>
+                                            <%= data.burgers.hero.tagline %>
+                                          </p>
+                                          <% } %>
+                                            <div class="hero-burger__price">
+                                              <span>only</span>
+                                              <b>
+                                                <%= rs(data.burgers.hero.price) %>
+                                              </b>
+                                            </div>
+                                  </div>
+                                </article>
+                            </div>
+
+                            <% if (has(data.burgers.rest)) { %>
+                              <div class="rail" data-rail>
+                                <ul class="rail__track">
+                                  <% data.burgers.rest.forEach(function(b) { %>
+                                    <li class="card card--sm reveal">
+                                      <div class="card__media">
+                                        <img src="<%= b.image %>" alt="<%= b.alt %>" loading="lazy" decoding="async"
+                                          width="320" height="320">
+                                        <% if (b.diet) { %><span class="diet diet--<%= b.diet %>"></span>
+                                          <% } %>
+                                      </div>
+                                      <div class="card__body">
+                                        <h3>
+                                          <%= b.name %>
+                                        </h3>
+                                        <b>
+                                          <%= rs(b.price) %>
+                                        </b>
+                                      </div>
+                                    </li>
+                                    <% }); %>
+                                </ul>
+                              </div>
+                              <% } %>
+
+                                <div class="shell">
+                                  <button class="link-cta link-cta--neon reveal" type="button" data-connect
+                                    data-dst="<%= cafe.orderUrl %>" data-ev="burger_order">
+                                    Order a burger now <svg class="ico">
+                                      <use href="#i-arrow" />
+                                    </svg>
+                                  </button>
+                                </div>
+                          </section>
+                          <% } %>
+
+                            <% if (data.pizza) { %>
+                              <!-- ══════════════════════ WOOD FIRED PIZZA ══════════════════════ -->
+                              <section class="band band--fire pizza" id="pizza" aria-labelledby="pizza-h">
+                                <div class="embers" aria-hidden="true">
+                                  <% for (let e=0; e < 14; e++) { %><i style="--e:<%= e %>"></i>
+                                    <% } %>
+                                </div>
+                                <div class="heat" aria-hidden="true"></div>
+
+                                <div class="shell">
+                                  <header class="band__head reveal">
+                                    <p class="kicker kicker--fire">Live fire · 400°C · 90 seconds</p>
+                                    <h2 id="pizza-h" class="serif">Straight from<br>the flame</h2>
+                                    <p class="band__sub">Dough rested overnight, finished on stone over real hardwood —
+                                      blistered, smoky, molten.</p>
+                                  </header>
+                                </div>
+
+                                <%# Hero pizza — spinning on the peel, glowing from the oven %>
+                                  <div class="pizza-hero reveal">
+                                    <div class="pizza-hero__stage">
+                                      <span class="oven-glow" aria-hidden="true"></span>
+                                      <div class="pizza-hero__disc">
+                                        <img src="<%= data.pizza.hero.image %>" alt="<%= data.pizza.hero.alt %>"
+                                          loading="lazy" decoding="async" width="560" height="560">
+                                      </div>
+                                      <span class="pizza-hero__steam"
+                                        aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                                      <span class="pizza-hero__hot">🔥 Fresh out the oven</span>
+                                    </div>
+                                    <div class="pizza-hero__body">
+                                      <% if (data.pizza.hero.badge) { %><span class="tag-fire">
+                                          <%= data.pizza.hero.badge.label %>
+                                        </span>
+                                        <% } %>
+                                          <h3 class="serif">
+                                            <%= data.pizza.hero.name %>
+                                          </h3>
+                                          <% if (data.pizza.hero.tagline) { %>
+                                            <p>
+                                              <%= data.pizza.hero.tagline %>
+                                            </p>
+                                            <% } %>
+                                              <div class="pizza-hero__price">
+                                                <span>from</span><b>
+                                                  <%= rs(data.pizza.hero.price) %>
+                                                </b>
+                                              </div>
+                                    </div>
+                                  </div>
+
+                                  <% if (has(data.pizza.rest)) { %>
+                                    <div class="shell">
+                                      <h3 class="subhead subhead--fire reveal">More from the oven</h3>
+                                      <ul class="grid">
+                                        <% data.pizza.rest.forEach(function(p) { %>
+                                          <li class="tile reveal">
+                                            <div class="tile__media">
+                                              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy"
+                                                decoding="async" width="320" height="320">
+                                              <% if (p.diet) { %><span class="diet diet--<%= p.diet %>"></span>
+                                                <% } %>
+                                            </div>
+                                            <h3>
+                                              <%= p.name %>
+                                            </h3>
+                                            <b>
+                                              <%= rs(p.price) %>
+                                            </b>
+                                          </li>
+                                          <% }); %>
+                                      </ul>
+                                    </div>
+                                    <% } %>
+
+                                      <div class="shell">
+                                        <button class="link-cta link-cta--fire reveal" type="button" data-connect
+                                          data-dst="<%= cafe.orderUrl %>" data-ev="pizza_order">
+                                          Order a wood fired pizza <svg class="ico">
+                                            <use href="#i-arrow" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                              </section>
+                              <% } %>
+
+                                <% if (has(data.featured)) { %>
+                                  <!-- ══════════════════════ FEATURED ══════════════════════ -->
+                                  <section class="band band--cream" id="featured" aria-labelledby="featured-h">
+                                    <div class="shell">
+                                      <header class="band__head reveal">
+                                        <p class="kicker">Most loved</p>
+                                        <h2 id="featured-h">The ones people<br>come back for</h2>
+                                      </header>
+                                    </div>
+
+                                    <div class="rail" data-rail>
+                                      <ul class="rail__track">
+                                        <% data.featured.forEach(function(p) { %>
+                                          <li class="card reveal">
+                                            <div class="card__media">
+                                              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy" decoding="async" width="480"
+                                                height="360">
+                                              <% if (p.badge) { %><span class="pill pill--<%= p.badge.key.toLowerCase() %>">
+                                                  <%= p.badge.label %>
+                                                </span>
+                                                <% } %>
+                                                  <% if (p.diet) { %><span class="diet diet--<%= p.diet %>"
+                                                      title="<%= p.diet === 'veg' ? 'Vegetarian' : 'Non-vegetarian' %>"></span>
+                                                    <% } %>
+                                            </div>
+                                            <div class="card__body">
+                                              <h3>
+                                                <%= p.name %>
+                                              </h3>
+                                              <% if (p.tagline) { %>
+                                                <p>
+                                                  <%= p.tagline %>
+                                                </p>
+                                                <% } %>
+                                                  <b>
+                                                    <%= rs(p.price) %>
+                                                  </b>
+                                            </div>
+                                          </li>
+                                          <% }); %>
+                                      </ul>
+                                    </div>
+
+                                    <div class="shell">
+                                      <button class="link-cta reveal" type="button" data-connect data-dst="<%= cafe.orderUrl %>"
+                                        data-ev="featured_order_online">
+                                        Order online for delivery <svg class="ico">
+                                          <use href="#i-arrow" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </section>
+                                  <% } %>
+
+                                    <% if (has(data.specials)) { %>
+                                      <!-- ══════════════════════ TODAY'S SPECIALS ══════════════════════ -->
+                                      <section class="band band--dark specials" id="specials" aria-labelledby="specials-h">
+                                        <div class="shell">
+                                          <header class="band__head reveal">
+                                            <p class="kicker kicker--live"><span class="dot"></span>Fresh out of the oven</p>
+                                            <h2 id="specials-h">Today's specials</h2>
+                                            <p class="band__sub">Straight off the counter. When they're gone, they're gone.</p>
+                                          </header>
+
+                                          <ul class="shelf">
+                                            <% data.specials.forEach(function(s) { %>
+                                              <li class="shelf__row reveal">
+                                                <div class="shelf__img">
+                                                  <% if (s.image) { %>
+                                                    <img src="<%= s.image %>" alt="<%= s.alt %>" loading="lazy" decoding="async" width="160"
+                                                      height="160">
+                                                    <% } else { %>
+                                                      <span class="ph" aria-hidden="true">MT</span>
+                                                      <% } %>
+                                                </div>
+                                                <div class="shelf__text">
+                                                  <h3>
+                                                    <%= s.name %>
+                                                  </h3>
+                                                  <% if (s.tagline) { %>
+                                                    <p>
+                                                      <%= s.tagline %>
+                                                    </p>
+                                                    <% } %>
+                                                      <span class="shelf__meta">
+                                                        <b>
+                                                          <%= rs(s.price) %>
+                                                        </b>
+                                                        <% if (s.qty <=3) { %><em class="low">
+                                                            <%= s.qty %> left
+                                                          </em>
+                                                          <% } %>
+                                                      </span>
+                                                </div>
+                                              </li>
+                                              <% }); %>
+                                          </ul>
+                                        </div>
+                                      </section>
+                                      <% } %>
+
+                                <% if (has(data.coffee) || has(data.desserts)) { %>
+                                  <!-- ══════════════════════ COFFEE & DESSERTS ══════════════════════ -->
+                                  <section class="band band--cream" id="coffee" aria-labelledby="coffee-h">
+                                    <div class="shell">
+                                      <header class="band__head reveal">
+                                        <p class="kicker">
+                                          Coffee &amp; sweet things
+                                          <span class="steam" aria-hidden="true"><i></i><i></i><i></i></span>
+                                        </p>
+                                        <h2 id="coffee-h">Something warm,<br>something sweet</h2>
+                                      </header>
+                                    </div>
+
+                                    <% if (has(data.coffee)) { %>
+                                      <div class="rail" data-rail>
+                                        <ul class="rail__track">
+                                          <% data.coffee.forEach(function(p) { %>
+                                            <li class="card card--sm reveal">
+                                              <div class="card__media">
+                                                <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy"
+                                                  decoding="async" width="320" height="320">
+                                              </div>
+                                              <div class="card__body">
+                                                <h3>
+                                                  <%= p.name %>
+                                                </h3>
+                                                <b>
+                                                  <%= rs(p.price) %>
+                                                </b>
+                                              </div>
+                                            </li>
+                                            <% }); %>
+                                        </ul>
+                                      </div>
+                                      <% } %>
+
+                                        <% if (has(data.desserts)) { %>
+                                          <div class="shell">
+                                            <h3 class="subhead reveal">Desserts</h3>
+                                            <ul class="grid grid--2">
+                                              <% data.desserts.forEach(function(p) { %>
+                                                <li class="tile tile--light reveal">
+                                                  <div class="tile__media">
+                                                    <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy"
+                                                      decoding="async" width="320" height="320">
+                                                  </div>
+                                                  <h3>
+                                                    <%= p.name %>
+                                                  </h3>
+                                                  <b>
+                                                    <%= rs(p.price) %>
+                                                  </b>
+                                                </li>
+                                                <% }); %>
+                                            </ul>
+                                          </div>
+                                          <% } %>
+                                  </section>
+                                  <% } %>
+
+                                    <% if (has(data.combos)) { %>
+                                      <!-- ══════════════════════ OFFERS ══════════════════════ -->
+                                      <section class="band band--dark" id="offers" aria-labelledby="offers-h">
+                                        <div class="shell">
+                                          <header class="band__head reveal">
+                                            <p class="kicker">Better together</p>
+                                            <h2 id="offers-h">Combos &amp; offers</h2>
+                                          </header>
+
+                                          <ul class="tickets">
+                                            <% data.combos.forEach(function(c) { %>
+                                              <li class="ticket reveal">
+                                                <div class="ticket__img">
+                                                  <% if (c.image) { %>
+                                                    <img src="<%= c.image %>" alt="<%= c.alt %>" loading="lazy"
+                                                      decoding="async" width="200" height="200">
+                                                    <% } else { %>
+                                                      <span class="ph" aria-hidden="true">MT</span>
+                                                      <% } %>
+                                                </div>
+                                                <div class="ticket__text">
+                                                  <h3>
+                                                    <%= c.name %>
+                                                  </h3>
+                                                  <% if (has(c.includes)) { %>
+                                                    <p>
+                                                      <%= c.includes.slice(0, 4).join(' · ') %><%= c.includes.length > 4 ? ' · +' + (c.includes.length - 4) + ' more' : '' %>
+                                                    </p>
+                                                    <% } %>
+                                                </div>
+                                                <div class="ticket__price"><span>Combo</span><b>
+                                                    <%= rs(c.price) %>
+                                                  </b></div>
+                                              </li>
+                                              <% }); %>
+                                          </ul>
+                                        </div>
+                                      </section>
+                                      <% } %>
+
+                                        <!-- ══════════════════════ REVIEWS ══════════════════════ -->
+                                        <section class="band band--cream reviews" id="reviews"
+                                          aria-labelledby="reviews-h">
+                                          <div class="shell">
+                                            <header class="band__head reveal">
+                                              <p class="kicker">What guests say</p>
+                                              <h2 id="reviews-h">
+                                                <%= data.rating %> out of 5
+                                              </h2>
+                                              <span class="stars stars--lg" aria-hidden="true">
+                                                <% for (let s=0; s < 5; s++) { %><svg class="ico">
+                                                    <use href="#i-star" />
+                                                  </svg>
+                                                  <% } %>
+                                              </span>
+                                            </header>
+                                          </div>
+
+                                          <div class="rail" data-rail>
+                                            <ul class="rail__track">
+                                              <% data.reviews.forEach(function(r) { %>
+                                                <li class="quote reveal">
+                                                  <span class="quote__mark" aria-hidden="true">&rdquo;</span>
+                                                  <p>
+                                                    <%= r.text %>
+                                                  </p>
+                                                  <footer>
+                                                    <span class="avatar" aria-hidden="true">
+                                                      <%= r.name.charAt(0) %>
+                                                    </span>
+                                                    <span>
+                                                      <b>
+                                                        <%= r.name %>
+                                                      </b>
+                                                      <i>
+                                                        <%= r.source %>
+                                                      </i>
+                                                    </span>
+                                                    <span class="stars stars--xs" aria-label="<%= r.rating %> stars">
+                                                      <% for (let s=0; s < r.rating; s++) { %><svg class="ico">
+                                                          <use href="#i-star" />
+                                                        </svg>
+                                                        <% } %>
+                                                    </span>
+                                                  </footer>
+                                                </li>
+                                                <% }); %>
+                                            </ul>
+                                          </div>
+                                        </section>
+
+                                        <!-- ══════════════════════ VISIT US ══════════════════════ -->
+                                        <section class="band band--dark visit" id="visit" aria-labelledby="visit-h">
+                                          <div class="shell">
+                                            <header class="band__head reveal">
+                                              <p class="kicker">Find us</p>
+                                              <h2 id="visit-h" class="serif">See you at<br>the counter</h2>
+                                            </header>
+
+                                            <ul class="facts">
+                                              <li class="reveal"><svg class="ico">
+                                                  <use href="#i-pin" />
+                                                </svg><span>
+                                                  <%= cafe.address %>
+                                                </span></li>
+                                              <li class="reveal"><svg class="ico">
+                                                  <use href="#i-clock" />
+                                                </svg><span>
+                                                  <%= cafe.hours %>
+                                                </span></li>
+                                              <li class="reveal"><svg class="ico">
+                                                  <use href="#i-phone" />
+                                                </svg><a href="tel:<%= cafe.phoneDial %>">
+                                                  <%= cafe.phone %>
+                                                </a></li>
+                                            </ul>
+
+                                            <nav class="social reveal" aria-label="Social media">
+                                              <% cafe.social.forEach(function(s) { %>
+                                                <button type="button" class="social__btn" data-connect
+                                                  data-dst="<%= s.url %>" data-ev="social_<%= s.key %>"
+                                                  aria-label="<%= s.label %>">
+                                                  <svg class="ico">
+                                                    <use href="#i-<%= s.key %>" />
+                                                  </svg>
+                                                </button>
+                                                <% }); %>
+                                            </nav>
+                                            <p class="fineprint reveal">Tapping a link connects you to Wi-Fi first, then
+                                              opens it.</p>
+                                          </div>
+                                        </section>
+          </main>
+
+          <!-- ══════════════════════ FOOTER ══════════════════════ -->
+          <footer class="foot">
+            <div class="shell">
+              <span class="brandmark brandmark--sm" aria-hidden="true">MT</span>
+              <p class="foot__name">
+                <%= cafe.name %>
+              </p>
+              <p class="foot__line">
+                <%= cafe.address %>
+              </p>
+
+              <button class="btn btn--primary btn--wide" type="button" data-connect data-ev="footer_internet">
+                <svg class="ico">
+                  <use href="#i-wifi" />
+                </svg>
+                Continue to Internet
+              </button>
+
+              <nav class="foot__nav" aria-label="Sections">
+                <% sections.forEach(function(s) { %>
+                  <a href="#<%= s.id %>" data-scroll>
+                    <%= s.label %>
+                  </a>
+                  <% }); %>
+                    <a href="#top" data-scroll>Top</a>
+              </nav>
+
+              <p class="foot__legal">
+                Guest Wi-Fi provided free of charge. Network access is managed by the café's router.<br>
+                © <%= year %>
+                  <%= cafe.name %> · Bharatpur, Chitwan
+              </p>
             </div>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
+          </footer>
 
-    <div class="shell">
-      <button class="btn btn--gold btn--wide reveal" type="button" data-connect data-dst="<%= cafe.cakeUrl %>" data-ev="book_cake">
-        Book a Cake
-        <svg class="ico"><use href="#i-arrow"/></svg>
-      </button>
-      <p class="fineprint reveal">Order at least <%= data.cakes[0].prepHours %> hours ahead · Free message piping</p>
-    </div>
-  </section>
-  <% } %>
-
-  <% if (has(data.pizza)) { %>
-  <!-- ══════════════════════ WOOD FIRED PIZZA ══════════════════════ -->
-  <section class="band band--fire" id="pizza" aria-labelledby="pizza-h">
-    <div class="embers" aria-hidden="true">
-      <% for (let e = 0; e < 12; e++) { %><i style="--e:<%= e %>"></i><% } %>
-    </div>
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">400°C · 90 seconds</p>
-        <h2 id="pizza-h" class="serif">Wood fired,<br>the old way</h2>
-        <p class="band__sub">Dough rested overnight, finished on stone over real hardwood flame.</p>
-      </header>
-
-      <ul class="grid">
-        <% data.pizza.forEach(function(p) { %>
-          <li class="tile reveal">
-            <div class="tile__media">
-              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy" decoding="async" width="320" height="320">
-              <% if (p.diet) { %><span class="diet diet--<%= p.diet %>"></span><% } %>
-            </div>
-            <h3><%= p.name %></h3>
-            <b><%= rs(p.price) %></b>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-  </section>
-  <% } %>
-
-  <% if (has(data.coffee) || has(data.desserts)) { %>
-  <!-- ══════════════════════ COFFEE & DESSERTS ══════════════════════ -->
-  <section class="band band--cream" id="coffee" aria-labelledby="coffee-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">
-          Coffee &amp; sweet things
-          <span class="steam" aria-hidden="true"><i></i><i></i><i></i></span>
-        </p>
-        <h2 id="coffee-h">Something warm,<br>something sweet</h2>
-      </header>
-    </div>
-
-    <% if (has(data.coffee)) { %>
-    <div class="rail" data-rail>
-      <ul class="rail__track">
-        <% data.coffee.forEach(function(p) { %>
-          <li class="card card--sm reveal">
-            <div class="card__media">
-              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy" decoding="async" width="320" height="320">
-            </div>
-            <div class="card__body">
-              <h3><%= p.name %></h3>
-              <b><%= rs(p.price) %></b>
-            </div>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-    <% } %>
-
-    <% if (has(data.desserts)) { %>
-    <div class="shell">
-      <h3 class="subhead reveal">Desserts</h3>
-      <ul class="grid grid--2">
-        <% data.desserts.forEach(function(p) { %>
-          <li class="tile tile--light reveal">
-            <div class="tile__media">
-              <img src="<%= p.image %>" alt="<%= p.alt %>" loading="lazy" decoding="async" width="320" height="320">
-            </div>
-            <h3><%= p.name %></h3>
-            <b><%= rs(p.price) %></b>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-    <% } %>
-  </section>
-  <% } %>
-
-  <% if (has(data.combos)) { %>
-  <!-- ══════════════════════ OFFERS ══════════════════════ -->
-  <section class="band band--dark" id="offers" aria-labelledby="offers-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">Better together</p>
-        <h2 id="offers-h">Combos &amp; offers</h2>
-      </header>
-
-      <ul class="tickets">
-        <% data.combos.forEach(function(c) { %>
-          <li class="ticket reveal">
-            <div class="ticket__img">
-              <% if (c.image) { %>
-                <img src="<%= c.image %>" alt="<%= c.alt %>" loading="lazy" decoding="async" width="200" height="200">
-              <% } else { %>
-                <span class="ph" aria-hidden="true">MT</span>
-              <% } %>
-            </div>
-            <div class="ticket__text">
-              <h3><%= c.name %></h3>
-              <% if (has(c.includes)) { %>
-                <p><%= c.includes.slice(0, 4).join(' · ') %><%= c.includes.length > 4 ? ' · +' + (c.includes.length - 4) + ' more' : '' %></p>
-              <% } %>
-            </div>
-            <div class="ticket__price"><span>Combo</span><b><%= rs(c.price) %></b></div>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-  </section>
-  <% } %>
-
-  <!-- ══════════════════════ REVIEWS ══════════════════════ -->
-  <section class="band band--cream reviews" id="reviews" aria-labelledby="reviews-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">What guests say</p>
-        <h2 id="reviews-h"><%= data.rating %> out of 5</h2>
-        <span class="stars stars--lg" aria-hidden="true">
-          <% for (let s = 0; s < 5; s++) { %><svg class="ico"><use href="#i-star"/></svg><% } %>
-        </span>
-      </header>
-    </div>
-
-    <div class="rail" data-rail>
-      <ul class="rail__track">
-        <% data.reviews.forEach(function(r) { %>
-          <li class="quote reveal">
-            <span class="quote__mark" aria-hidden="true">&rdquo;</span>
-            <p><%= r.text %></p>
-            <footer>
-              <span class="avatar" aria-hidden="true"><%= r.name.charAt(0) %></span>
-              <span>
-                <b><%= r.name %></b>
-                <i><%= r.source %></i>
+          <!-- ══════════════════════ STICKY CTA ══════════════════════ -->
+          <div class="dock" id="dock">
+            <button class="dock__btn" type="button" data-connect data-ev="dock_internet">
+              <span class="dock__ico"><svg class="ico">
+                  <use href="#i-wifi" />
+                </svg></span>
+              <span class="dock__label">
+                <b>Continue to Internet</b>
+                <i>Free · one tap</i>
               </span>
-              <span class="stars stars--xs" aria-label="<%= r.rating %> stars">
-                <% for (let s = 0; s < r.rating; s++) { %><svg class="ico"><use href="#i-star"/></svg><% } %>
-              </span>
-            </footer>
-          </li>
-        <% }); %>
-      </ul>
-    </div>
-  </section>
+              <svg class="ico dock__go">
+                <use href="#i-arrow" />
+              </svg>
+            </button>
+          </div>
 
-  <!-- ══════════════════════ VISIT US ══════════════════════ -->
-  <section class="band band--dark visit" id="visit" aria-labelledby="visit-h">
-    <div class="shell">
-      <header class="band__head reveal">
-        <p class="kicker">Find us</p>
-        <h2 id="visit-h" class="serif">See you at<br>the counter</h2>
-      </header>
+          <!-- ══════════════════════ CONNECTING OVERLAY ══════════════════════ -->
+          <div class="veil" id="veil" role="dialog" aria-modal="true" aria-labelledby="veil-h" hidden>
+            <div class="veil__card">
+              <div class="beacon" aria-hidden="true">
+                <i></i><i></i><i></i>
+                <svg class="ico">
+                  <use href="#i-wifi" />
+                </svg>
+              </div>
+              <h2 id="veil-h">Connecting you</h2>
+              <p>Hold on — opening the network.</p>
+            </div>
+          </div>
 
-      <ul class="facts">
-        <li class="reveal"><svg class="ico"><use href="#i-pin"/></svg><span><%= cafe.address %></span></li>
-        <li class="reveal"><svg class="ico"><use href="#i-clock"/></svg><span><%= cafe.hours %></span></li>
-        <li class="reveal"><svg class="ico"><use href="#i-phone"/></svg><a href="tel:<%= cafe.phoneDial %>"><%= cafe.phone %></a></li>
-      </ul>
+          <script src="<%= asset('portal.js') %>" defer></script>
+  </body>
 
-      <nav class="social reveal" aria-label="Social media">
-        <% cafe.social.forEach(function(s) { %>
-          <button type="button" class="social__btn" data-connect data-dst="<%= s.url %>"
-                  data-ev="social_<%= s.key %>" aria-label="<%= s.label %>">
-            <svg class="ico"><use href="#i-<%= s.key %>"/></svg>
-          </button>
-        <% }); %>
-      </nav>
-      <p class="fineprint reveal">Tapping a link connects you to Wi-Fi first, then opens it.</p>
-    </div>
-  </section>
-</main>
-
-<!-- ══════════════════════ FOOTER ══════════════════════ -->
-<footer class="foot">
-  <div class="shell">
-    <span class="brandmark brandmark--sm" aria-hidden="true">MT</span>
-    <p class="foot__name"><%= cafe.name %></p>
-    <p class="foot__line"><%= cafe.address %></p>
-
-    <button class="btn btn--primary btn--wide" type="button" data-connect data-ev="footer_internet">
-      <svg class="ico"><use href="#i-wifi"/></svg>
-      Continue to Internet
-    </button>
-
-    <nav class="foot__nav" aria-label="Sections">
-      <% sections.forEach(function(s) { %>
-        <a href="#<%= s.id %>" data-scroll><%= s.label %></a>
-      <% }); %>
-      <a href="#top" data-scroll>Top</a>
-    </nav>
-
-    <p class="foot__legal">
-      Guest Wi-Fi provided free of charge. Network access is managed by the café's router.<br>
-      © <%= year %> <%= cafe.name %> · Bharatpur, Chitwan
-    </p>
-  </div>
-</footer>
-
-<!-- ══════════════════════ STICKY CTA ══════════════════════ -->
-<div class="dock" id="dock">
-  <button class="dock__btn" type="button" data-connect data-ev="dock_internet">
-    <span class="dock__ico"><svg class="ico"><use href="#i-wifi"/></svg></span>
-    <span class="dock__label">
-      <b>Continue to Internet</b>
-      <i>Free · one tap</i>
-    </span>
-    <svg class="ico dock__go"><use href="#i-arrow"/></svg>
-  </button>
-</div>
-
-<!-- ══════════════════════ CONNECTING OVERLAY ══════════════════════ -->
-<div class="veil" id="veil" role="dialog" aria-modal="true" aria-labelledby="veil-h" hidden>
-  <div class="veil__card">
-    <div class="beacon" aria-hidden="true">
-      <i></i><i></i><i></i>
-      <svg class="ico"><use href="#i-wifi"/></svg>
-    </div>
-    <h2 id="veil-h">Connecting you</h2>
-    <p>Hold on — opening the network.</p>
-  </div>
-</div>
-
-<script src="<%= asset('portal.js') %>" defer></script>
-</body>
-</html>
+  </html>

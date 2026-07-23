@@ -75,15 +75,15 @@ router.post('/order/:id/revert', requireRole('MANAGER', 'ADMIN'), async (req, re
   if (!payments.length) return res.status(400).json({ error: 'No payments to revert' });
 
   const result = await transaction(async (tx) => {
-    // Offsetting negative payment rows — preserves original rows + audit trail
+    // Manager call — delete the original payment rows outright rather than
+    // leaving offsetting negative rows; audit log carries the removed detail.
     let cash = 0, card = 0, qr = 0;
     for (const p of payments) {
-      await tx.dbRun(`INSERT INTO pos_payments (order_id,method,amount,notes) VALUES (?,?,?,?)`,
-        [order.id, p.method, -p.amount, `Revert of payment #${p.id}${reason ? ' — ' + reason : ''}`]);
       if (p.method === 'CASH') cash -= p.amount;
       if (p.method === 'CARD') card -= p.amount;
       if (p.method === 'QR')   qr   -= p.amount;
     }
+    await tx.dbRun(`DELETE FROM pos_payments WHERE order_id=?`, [order.id]);
     await creditTill(tx, cash, card, qr);
 
     // Reopen the order. If its original table is now occupied by a different
@@ -114,7 +114,7 @@ router.post('/order/:id/revert', requireRole('MANAGER', 'ADMIN'), async (req, re
       [newTableId, newOrderType, notesAppend, notesAppend, order.id]
     );
 
-    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'ORDER', entityId: order.id, action: 'REVERT', delta: { reason, movedToQuick: newTableId === null && order.table_id !== null } });
+    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'ORDER', entityId: order.id, action: 'REVERT', delta: { reason, movedToQuick: newTableId === null && order.table_id !== null, deletedPayments: payments.map(p => ({ id: p.id, method: p.method, amount: p.amount })) } });
 
     return await tx.dbGet(`SELECT * FROM pos_orders WHERE id=?`, [order.id]);
   });
@@ -133,14 +133,15 @@ router.post('/cake/:id/revert', requireRole('MANAGER', 'ADMIN'), async (req, res
   if (!payments.length) return res.status(400).json({ error: 'No payments to revert' });
 
   const result = await transaction(async (tx) => {
+    // Manager call — delete the original payment rows outright rather than
+    // leaving offsetting negative rows; audit log carries the removed detail.
     let cash = 0, card = 0, qr = 0;
     for (const p of payments) {
-      await tx.dbRun(`INSERT INTO pos_payments (cake_order_id,method,amount,notes) VALUES (?,?,?,?)`,
-        [cakeOrder.id, p.method, -p.amount, `Revert of payment #${p.id}${reason ? ' — ' + reason : ''}`]);
       if (p.method === 'CASH') cash -= p.amount;
       if (p.method === 'CARD') card -= p.amount;
       if (p.method === 'QR')   qr   -= p.amount;
     }
+    await tx.dbRun(`DELETE FROM pos_payments WHERE cake_order_id=?`, [cakeOrder.id]);
     await creditTill(tx, cash, card, qr);
 
     // advance_paid/balance_due reflect the reversal; production status untouched
@@ -148,7 +149,7 @@ router.post('/cake/:id/revert', requireRole('MANAGER', 'ADMIN'), async (req, res
     const newBal = Math.max(0, Number(cakeOrder.grand_total) - newAdv);
     await tx.dbRun(`UPDATE cake_orders SET advance_paid=?, balance_due=? WHERE id=?`, [newAdv, newBal, cakeOrder.id]);
 
-    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: cakeOrder.id, action: 'REVERT', delta: { reason } });
+    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'CAKE_ORDER', entityId: cakeOrder.id, action: 'REVERT', delta: { reason, deletedPayments: payments.map(p => ({ id: p.id, method: p.method, amount: p.amount })) } });
 
     return await tx.dbGet(`SELECT * FROM cake_orders WHERE id=?`, [cakeOrder.id]);
   });

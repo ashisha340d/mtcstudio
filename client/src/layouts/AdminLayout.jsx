@@ -15,6 +15,7 @@ import Automation from '../pages/Automation/Automation';
 import SystemMonitor from '../pages/SystemMonitor/SystemMonitor';
 import SalesReport from '../pages/SalesReport/SalesReport';
 import DayEnd from '../pages/DayEnd/DayEnd';
+import Reports from '../pages/Reports/Reports';
 
 import DesktopWindow from './DesktopWindow';
 import SettingsPanel from './SettingsPanel';
@@ -45,8 +46,9 @@ const ALL_APPS = [
   { key: 'blogs', label: 'Blogs', icon: '✍', path: '/blogs', accent: '#d97706', desc: 'Articles & content', component: BlogsApp },
   { key: 'crm', label: 'CRM', icon: '👥', path: '/crm', accent: '#0891b2', desc: 'Customers & loyalty', component: CRM },
   { key: 'automation', label: 'Automation', icon: '⚙️', path: '/automation', accent: '#9333ea', desc: 'Marketing rule engine', component: Automation },
-  { key: 'sales-report', label: 'Sales Report', icon: '📊', path: '/sales-report', accent: '#10b981', desc: 'Daily sales & order analytics', component: SalesReport },
+  { key: 'sales-report', label: 'Sales Registry', icon: '📊', path: '/sales-report', accent: '#10b981', desc: 'Daily order register & payment log', component: SalesReport },
   { key: 'day-end', label: 'Day End', icon: '🔒', path: '/day-end', accent: '#b45309', desc: 'Daily closing / Z report', component: DayEnd },
+  { key: 'reports', label: 'Reports', icon: '📈', path: '/reports', accent: '#2563eb', desc: 'Category · Product · Monthly analytics', component: Reports },
   { key: 'system-monitor', label: 'System Monitor', icon: '⚡', path: '/system-monitor', accent: '#0f766e', desc: 'Status · Devices · Logs', component: SystemMonitor },
   // External launchers — navigate full-screen, no window
   { key: 'pos', label: 'POS', icon: '🖥', path: '/pos', accent: '#879b8e', desc: 'Order Management System', external: true },
@@ -75,7 +77,7 @@ const CMS_CHILDREN = [
   File Maintenance                  Cake Catalogue                 POS
                                     Blog                           KDS Display
                                                                    Cake Orders
-                                                                   Sales Report
+                                                                   Sales Registry
                                                                    System Monitor
 */
 const GROUP_DEFS = {
@@ -95,6 +97,7 @@ const GROUP_DEFS = {
   'sales-report': { col: 2, row: 5 },
   'day-end': { col: 2, row: 6 },
   'system-monitor': { col: 2, row: 7 },
+  'reports': { col: 2, row: 8 },
 };
 const COL_X = [16, 120, 224];
 const ROW_Y0 = 40;   // y of first icon row (below group label)
@@ -125,7 +128,7 @@ function loadShortcuts() {
   return [
     'food-menu', 'file-maintenance',
     'media', 'cake-catalogue', 'blogs',
-    'crm', 'automation', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor',
+    'crm', 'automation', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor', 'reports',
   ];
 }
 function saveShortcuts(s) { localStorage.setItem(LS_SHORTCUTS, JSON.stringify(s)); }

@@ -164,7 +164,7 @@ function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, de
       <div className="tc__amount">
         ₹{((Number(order.total_amount) || 0) + cakeDue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         {cakeDue > 0 && (
-          <span style={{ display: 'block', fontSize: 9, fontWeight: 800, color: '#e91e8c', letterSpacing: '0.03em' }}>
+          <span style={{ display: 'block', fontSize: 9, fontWeight: 800, color: 'var(--pink)', letterSpacing: '0.03em' }}>
             🎂 incl ₹{cakeDue.toLocaleString('en-IN', { maximumFractionDigits: 0 })} cake due
           </span>
         )}
@@ -199,7 +199,7 @@ function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, de
           <button className="tc__slip-btn" onClick={onPrintSlip} title="Print slip"
             style={{
               flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-              background: '#ffffff', color: '#000000', fontSize: 10, fontWeight: 800,
+              background: 'var(--fill-3)', color: 'var(--text-1)', fontSize: 10, fontWeight: 800,
               cursor: 'pointer', letterSpacing: '0.03em',
             }}> 🖨 Slip
           </button>
@@ -209,7 +209,7 @@ function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, de
 
             style={{
               flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-              background: '#ee682f', color: '#fff', fontSize: 10, fontWeight: 800,
+              background: 'var(--orange)', color: 'var(--on-accent)', fontSize: 10, fontWeight: 800,
               cursor: 'pointer', letterSpacing: '0.03em',
             }}
           >

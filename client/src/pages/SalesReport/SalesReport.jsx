@@ -206,12 +206,22 @@ export default function SalesReport({
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
+  // QR breakdown — split fully-QR orders from split-tender QR legs (food orders only)
+  const qrBreakdown = (salesData?.orders || []).reduce((acc, o) => {
+    const pays = o.payments || [];
+    const qrLeg = pays.filter(p => p.method === 'QR').reduce((s, p) => s + (p.amount || 0), 0);
+    if (!qrLeg) return acc;
+    if (pays.some(p => p.method !== 'QR')) { acc.splitAmt += qrLeg; acc.splitCount += 1; }
+    else { acc.fullAmt += qrLeg; acc.fullCount += 1; }
+    return acc;
+  }, { fullAmt: 0, fullCount: 0, splitAmt: 0, splitCount: 0 });
+
   return (
     <div className={`sales-report${gridLines ? '' : ' sales-report--no-grid'}`}>
 
       {/* ── Header ── */}
       <div className="sales-report-header">
-        <h1>Sales Report <span className="report-date">— {formattedDate}</span></h1>
+        <h1>Sales Registry <span className="report-date">— {formattedDate}</span></h1>
         <input
           type="text"
           className="report-search"
@@ -302,9 +312,17 @@ export default function SalesReport({
                       )}
                     </div>
                     <div className="col-payment">
-                      <span className={`payment-badge payment-${(order.paymentMethod || 'CASH').toLowerCase()}`}>
-                        {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
-                      </span>
+                      {order.payments && order.payments.length > 1 ? (
+                        order.payments.map((p, i) => (
+                          <span key={i} className={`payment-badge payment-badge--sm payment-${p.method.toLowerCase()}`}>
+                            {PAYMENT_LABELS[p.method] || p.method}
+                          </span>
+                        ))
+                      ) : (
+                        <span className={`payment-badge payment-${(order.paymentMethod || 'CASH').toLowerCase()}`}>
+                          {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
+                        </span>
+                      )}
                     </div>
                     <div className="col-amount">₹{order.deleted ? 0 : (order.amount || 0).toLocaleString('en-IN')}</div>
                     <div className="col-action">
@@ -362,9 +380,18 @@ export default function SalesReport({
 
               <div className="table-footer">
                 <span className="footer-chip footer-chip--credit">Credit ₹{(salesData.credit || 0).toLocaleString('en-IN')}</span>
-                <span className="footer-chip footer-chip--card">Card/UPI/QR ₹{(salesData.card || 0).toLocaleString('en-IN')}</span>
+                <span className="footer-chip footer-chip--card">Card ₹{(salesData.card || 0).toLocaleString('en-IN')}</span>
+                <span
+                  className="footer-chip footer-chip--card"
+                  title={`Fully-QR orders: ${qrBreakdown.fullCount} = ₹${qrBreakdown.fullAmt.toLocaleString('en-IN')}\nSplit-tender QR legs: ${qrBreakdown.splitCount} = ₹${qrBreakdown.splitAmt.toLocaleString('en-IN')}`}
+                >
+                  UPI/QR ₹{(salesData.qr || 0).toLocaleString('en-IN')}
+                  {qrBreakdown.splitCount > 0 && (
+                    <span className="footer-chip-sub"> ({qrBreakdown.fullCount} full + {qrBreakdown.splitCount} split)</span>
+                  )}
+                </span>
                 <span className="footer-chip footer-chip--cash">Cash ₹{(salesData.cash || 0).toLocaleString('en-IN')}</span>
-                <span className="footer-chip footer-chip--total">Total ₹{((salesData.card || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</span>
+                <span className="footer-chip footer-chip--total">Total ₹{((salesData.card || 0) + (salesData.qr || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</span>
               </div>
             </div>
           </div>

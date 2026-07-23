@@ -209,6 +209,13 @@
   position: relative;
 }
 
+.col-payment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
 .col-sn {
   font-size: 12px;
   font-weight: 700;
@@ -342,6 +349,11 @@
   color: #a855f7;
 }
 
+.payment-badge--sm {
+  padding: 2px 6px;
+  font-size: 9px;
+}
+
 .col-amount {
   font-size: 14px;
   font-weight: 700;
@@ -410,6 +422,12 @@
 .footer-chip--card {
   background: linear-gradient(180deg, rgba(59,130,246,.08) 0%, rgba(59,130,246,.22) 100%);
   color: #3b82f6;
+}
+
+.footer-chip-sub {
+  font-weight: 600;
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 .footer-chip--cash {

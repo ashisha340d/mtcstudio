@@ -10,7 +10,6 @@ const crypto  = require('crypto');
 const { dbAll, dbGet } = require('../../pos/db');       // POS DB (orders, kots, pos_customers, addresses)
 const cmsDb            = require('../../database/db');   // CMS DB (customers, menu, media, settings)
 const { requireSession } = require('../../middleware/posAuth');
-const { getNepalDayBoundsUTC } = require('../../utils/nepalDateTime');
 
 const router = express.Router();
 router.use(requireSession);
@@ -34,15 +33,18 @@ function toWebp(p) {
 router.get('/caller-status', async (req, res) => {
   const normPhone = normalizePhone(req.query.phone);
   if (!normPhone) return res.status(400).json({ error: 'phone required' });
-  const { start, end } = getNepalDayBoundsUTC(); // per-day app: never surface a stale carried-over order
 
   const [crmCustomer, posCustomer, activeOrder, cakeBalRow] = await Promise.all([
     cmsDb.dbGet(`SELECT phone, name, loyalty_points, rewards_tier, updated_at FROM customers WHERE phone=?`, [normPhone]),
     dbGet(`SELECT id, name FROM pos_customers WHERE phone=?`, [normPhone]),
-    dbGet(`SELECT id, status, total_amount, paid_amount, updated_at
-             FROM pos_orders WHERE customer_phone=? AND status IN ('OPEN','SAVED')
-               AND created_at >= ? AND created_at <= ?
-             ORDER BY updated_at DESC LIMIT 1`, [normPhone, start, end]),
+    dbGet(`SELECT o.id, o.status, o.total_amount, o.paid_amount, o.updated_at
+             FROM pos_orders o WHERE o.customer_phone=? AND o.status IN ('OPEN','SAVED')
+               AND (EXISTS (SELECT 1 FROM pos_kots k
+                              JOIN pos_kot_items ki ON ki.kot_id = k.id
+                             WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+                    OR (o.draft_items IS NOT NULL
+                        AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))
+             ORDER BY o.updated_at DESC LIMIT 1`, [normPhone]),
     dbGet(`SELECT COALESCE(SUM(balance_due),0) AS bal FROM cake_orders
              WHERE phone=? AND balance_due>0 AND status NOT IN ('DELIVERED','CANCELLED','REFUNDED')`, [normPhone]),
   ]);

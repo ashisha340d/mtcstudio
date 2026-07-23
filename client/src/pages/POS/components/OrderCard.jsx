@@ -161,8 +161,8 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout, clo
           onClick={(e) => { e.stopPropagation(); onClick(order); }}
           style={{
             flex: 1, padding: '6px 8px', borderRadius: 7,
-            border: '1px solid #c4b49c', background: 'rgba(255,255,255,0.65)',
-            color: '#6b5640', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            border: '1px solid var(--window-border-light)', background: 'var(--fill-2)',
+            color: 'var(--text-2)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
           }}
 
         >
@@ -173,7 +173,7 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout, clo
           <button onClick={onPrintSlip} title="Print slip"
             style={{
               flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-              background: '#ffffff', color: '#000000', fontSize: 10, fontWeight: 800,
+              background: 'var(--fill-3)', color: 'var(--text-1)', fontSize: 10, fontWeight: 800,
               cursor: 'pointer', letterSpacing: '0.03em',
             }}
           >
@@ -182,7 +182,7 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout, clo
           <button onClick={(e) => { e.stopPropagation(); onDirectCheckout(order.id); }} title='Direct Checkout'
             style={{
               flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-              background: '#ff6624', color: '#fff', fontSize: 10, fontWeight: 800,
+              background: 'var(--orange)', color: 'var(--on-accent)', fontSize: 10, fontWeight: 800,
               cursor: 'pointer', letterSpacing: '0.03em',
             }}
           >

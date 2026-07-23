@@ -582,12 +582,336 @@ a { color: inherit; text-decoration: none; }
   background: rgba(126,224,168,.12); color: #86efac;
 }
 
+/* ── Burger spotlight ───────────────────────────────────────────────────────
+   The one deliberately loud section. Where the rest of the page is quiet and
+   premium, this leans jazzy — neon amber + magenta, a glowing halo, drifting
+   sizzle — because a "special" should feel like one. */
+.band--burger {
+  --neon: #ffb347;
+  --neon-hot: #ff5e8a;
+  background:
+    radial-gradient(70% 45% at 15% 12%, rgba(255,94,138,.22) 0%, transparent 60%),
+    radial-gradient(75% 50% at 88% 88%, rgba(255,179,71,.20) 0%, transparent 62%),
+    linear-gradient(160deg, #1a0f14 0%, #140d0c 55%, #0f0a09 100%);
+  color: var(--text-d);
+}
+.band--burger .kicker { color: var(--neon); }
+.band--burger .band__sub { color: var(--text-d-mute); }
+
+.kicker--neon { text-shadow: 0 0 14px rgba(255,179,71,.55); }
+
+/* Grease-spark motes drifting up past the hero. */
+.sizzle { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.sizzle i {
+  position: absolute; bottom: -10px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--neon);
+  box-shadow: 0 0 9px 2px rgba(255,179,71,.8);
+  opacity: 0;
+  animation: sizzle 7s linear infinite;
+}
+.sizzle i:nth-child(1) { left: 12%; animation-delay: 0s }
+.sizzle i:nth-child(2) { left: 34%; animation-delay: 1.6s; background: var(--neon-hot); box-shadow: 0 0 9px 2px rgba(255,94,138,.8) }
+.sizzle i:nth-child(3) { left: 56%; animation-delay: 3.1s }
+.sizzle i:nth-child(4) { left: 74%; animation-delay: 4.4s; background: var(--neon-hot); box-shadow: 0 0 9px 2px rgba(255,94,138,.8) }
+.sizzle i:nth-child(5) { left: 90%; animation-delay: 2.2s }
+@keyframes sizzle {
+  0%   { transform: translateY(0) scale(.6);      opacity: 0 }
+  14%  { opacity: .9 }
+  70%  { opacity: .5 }
+  100% { transform: translateY(-320px) translateX(18px) scale(1.1); opacity: 0 }
+}
+
+/* Jazzy title — the middle word pops in neon with a soft flicker. */
+.burger-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(34px, 11vw, 50px);
+  line-height: .96;
+  letter-spacing: -.02em;
+}
+.burger-title span { display: block; }
+.burger-title__jazz {
+  font-style: italic;
+  font-size: 1.28em;
+  color: var(--neon);
+  text-shadow: 0 0 18px rgba(255,179,71,.6), 0 0 40px rgba(255,94,138,.25);
+  animation: flicker 5s var(--ease) infinite;
+}
+@keyframes flicker {
+  0%, 92%, 100% { opacity: 1 }
+  94% { opacity: .72 }
+  96% { opacity: 1 }
+  97% { opacity: .85 }
+}
+
+/* Hero burger — stacked on a phone, side-by-side once there's room. */
+.hero-burger {
+  position: relative;
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+.hero-burger__media {
+  position: relative;
+  width: min(78vw, 300px);
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+}
+.hero-burger__media img {
+  position: relative; z-index: 1;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid rgba(255,179,71,.35);
+  box-shadow: 0 26px 60px -22px rgba(255,94,138,.5), inset 0 0 0 1px rgba(255,255,255,.08);
+  animation: burgerFloat 6s var(--ease) infinite;
+}
+@keyframes burgerFloat {
+  0%,100% { transform: translateY(0) }
+  50%     { transform: translateY(-10px) }
+}
+
+/* Slow conic halo spinning behind the patty. */
+.hero-burger__halo {
+  position: absolute; inset: -14%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--neon), var(--neon-hot), var(--neon), var(--neon-hot), var(--neon));
+  filter: blur(26px);
+  opacity: .45;
+  animation: spin 14s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg) } }
+
+.hero-burger__flag {
+  position: absolute; z-index: 2;
+  top: 6%; right: 2%;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: #2a1004;
+  background: linear-gradient(135deg, #ffd27a, var(--neon));
+  box-shadow: 0 8px 20px -6px rgba(255,179,71,.8);
+  transform: rotate(6deg);
+  animation: wobble 3.5s var(--ease) infinite;
+}
+@keyframes wobble {
+  0%,100% { transform: rotate(6deg) }
+  50%     { transform: rotate(-3deg) scale(1.04) }
+}
+
+.hero-burger__body { max-width: 30ch; }
+.tag-neon {
+  display: inline-block; margin-bottom: 10px;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--neon-hot);
+  border: 1px solid rgba(255,94,138,.5);
+  background: rgba(255,94,138,.1);
+  box-shadow: 0 0 16px rgba(255,94,138,.25);
+}
+.hero-burger__body h3 {
+  font-size: clamp(24px, 7vw, 32px); font-weight: 700; letter-spacing: -.02em; line-height: 1.05;
+}
+.hero-burger__body p {
+  margin-top: 10px; font-size: 14.5px; line-height: 1.5; color: var(--text-d-mute);
+}
+.hero-burger__price {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  margin-top: 18px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(255,179,71,.12);
+  border: 1px solid rgba(255,179,71,.35);
+}
+.hero-burger__price span { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-d-mute); }
+.hero-burger__price b {
+  font-family: var(--serif);
+  font-size: 30px; font-weight: 600; letter-spacing: -.02em;
+  color: var(--neon);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 20px rgba(255,179,71,.4);
+}
+
+.link-cta--neon {
+  color: var(--neon);
+  border-bottom-color: var(--neon-hot);
+  text-shadow: 0 0 12px rgba(255,179,71,.4);
+}
+
+@media (min-width: 640px) {
+  .hero-burger {
+    grid-template-columns: 300px 1fr;
+    align-items: center;
+    text-align: left;
+    gap: 30px;
+    justify-items: start;
+  }
+  .hero-burger__price { margin-top: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-burger__halo { animation: none; }
+  .hero-burger__media img, .hero-burger__flag, .burger-title__jazz { animation: none; }
+}
+
 /* ── Pizza ──────────────────────────────────────────────────────────────── */
 .band--fire {
   background:
-    radial-gradient(80% 50% at 50% 100%, rgba(193,68,14,.30) 0%, transparent 68%),
-    linear-gradient(180deg, var(--ink) 0%, #1c110c 100%);
+    radial-gradient(90% 55% at 50% 42%, rgba(224,96,32,.22) 0%, transparent 60%),
+    radial-gradient(80% 50% at 50% 100%, rgba(193,68,14,.34) 0%, transparent 68%),
+    linear-gradient(180deg, #1c110c 0%, var(--ink) 30%, #180f0a 100%);
   color: var(--text-d);
+}
+.kicker--fire { text-shadow: 0 0 14px rgba(226,112,58,.55); }
+
+/* Heat-shimmer haze rising off the oven floor. */
+.heat {
+  position: absolute; inset: auto 0 0 0; height: 46%;
+  pointer-events: none;
+  background: radial-gradient(60% 100% at 50% 100%, rgba(226,112,58,.16), transparent 70%);
+  filter: blur(8px);
+  animation: heatPulse 4.5s var(--ease) infinite;
+}
+@keyframes heatPulse {
+  0%,100% { opacity: .5; transform: scaleY(1) }
+  50%     { opacity: .85; transform: scaleY(1.06) }
+}
+
+/* ── Pizza hero — the tempting showstopper ─────────────────────────────── */
+.pizza-hero {
+  position: relative; z-index: 1;
+  margin: 6px 0 8px;
+  display: grid; gap: 6px;
+  justify-items: center; text-align: center;
+  padding-inline: var(--shell-pad);
+}
+.pizza-hero__stage {
+  position: relative;
+  width: min(84vw, 340px);
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+}
+
+/* Molten oven glow breathing behind the pie. */
+.oven-glow {
+  position: absolute; inset: -8%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,158,80,.85), rgba(226,112,58,.35) 55%, transparent 72%);
+  filter: blur(22px);
+  animation: ovenBreath 3.6s var(--ease) infinite;
+}
+@keyframes ovenBreath {
+  0%,100% { opacity: .55; transform: scale(.96) }
+  50%     { opacity: .95; transform: scale(1.05) }
+}
+
+/* The pie itself — slowly turning on the peel. */
+.pizza-hero__disc {
+  position: relative; z-index: 1;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid rgba(255,158,80,.4);
+  box-shadow:
+    0 30px 70px -24px rgba(193,68,14,.75),
+    inset 0 0 40px rgba(0,0,0,.45),
+    inset 0 0 0 1px rgba(255,255,255,.08);
+  animation: turn 26s linear infinite;
+}
+.pizza-hero__disc img { width: 100%; height: 100%; object-fit: cover; }
+@keyframes turn { to { transform: rotate(360deg) } }
+
+/* Steam curling off the top. */
+.pizza-hero__steam {
+  position: absolute; z-index: 2; top: -6%; left: 50%;
+  width: 60px; height: 46px; transform: translateX(-50%);
+  pointer-events: none;
+}
+.pizza-hero__steam i {
+  position: absolute; bottom: 0;
+  width: 4px; height: 20px; border-radius: 4px;
+  background: linear-gradient(to top, rgba(255,255,255,.5), transparent);
+  opacity: 0;
+  animation: pizzaSteam 3.4s var(--ease-out) infinite;
+}
+.pizza-hero__steam i:nth-child(1) { left: 8px;  animation-delay: 0s }
+.pizza-hero__steam i:nth-child(2) { left: 24px; animation-delay: .7s }
+.pizza-hero__steam i:nth-child(3) { left: 38px; animation-delay: 1.3s }
+.pizza-hero__steam i:nth-child(4) { left: 52px; animation-delay: 2s }
+@keyframes pizzaSteam {
+  0%   { transform: translateY(6px) scaleY(.5); opacity: 0 }
+  30%  { opacity: .7 }
+  100% { transform: translateY(-26px) scaleY(1.3) translateX(6px); opacity: 0 }
+}
+
+.pizza-hero__hot {
+  position: absolute; z-index: 3; bottom: 4%; left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 8px 16px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; letter-spacing: .02em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ember), var(--ember-deep));
+  box-shadow: 0 10px 24px -8px rgba(193,68,14,.9), inset 0 1px 0 rgba(255,255,255,.25);
+  animation: hotPulse 2.4s var(--ease) infinite;
+}
+@keyframes hotPulse {
+  0%,100% { transform: translateX(-50%) scale(1) }
+  50%     { transform: translateX(-50%) scale(1.05) }
+}
+
+.pizza-hero__body { margin-top: 20px; max-width: 32ch; }
+.tag-fire {
+  display: inline-block; margin-bottom: 10px;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ember-soft);
+  border: 1px solid rgba(226,112,58,.5);
+  background: rgba(226,112,58,.12);
+  box-shadow: 0 0 16px rgba(226,112,58,.22);
+}
+.pizza-hero__body h3 { font-size: clamp(26px, 8vw, 36px); font-weight: 500; letter-spacing: -.02em; line-height: 1.04; }
+.pizza-hero__body p { margin-top: 10px; font-size: 14.5px; line-height: 1.5; color: var(--text-d-mute); }
+.pizza-hero__price {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  margin-top: 18px; padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(226,112,58,.12);
+  border: 1px solid rgba(226,112,58,.35);
+}
+.pizza-hero__price span { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-d-mute); }
+.pizza-hero__price b {
+  font-family: var(--serif);
+  font-size: 30px; font-weight: 600; letter-spacing: -.02em;
+  color: var(--ember-soft);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 20px rgba(226,112,58,.4);
+}
+
+.subhead--fire { color: var(--ember-soft); }
+.link-cta--fire {
+  color: var(--ember-soft);
+  border-bottom-color: var(--ember);
+  text-shadow: 0 0 12px rgba(226,112,58,.4);
+}
+
+@media (min-width: 640px) {
+  .pizza-hero {
+    grid-template-columns: 340px 1fr;
+    align-items: center; text-align: left; gap: 34px;
+    justify-items: start;
+    max-width: var(--shell-max);
+    margin-inline: auto;
+  }
+  .pizza-hero__body { margin-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pizza-hero__disc, .oven-glow, .heat, .pizza-hero__hot { animation: none; }
 }
 
 /* Embers drifting up from the oven mouth at the base of the section. */

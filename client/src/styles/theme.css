@@ -39,8 +39,12 @@
 }
 
 /* ── Tokens: warm (default, matches the pre-existing look) ───── */
+/* .dk-token-scope = portable token context for components (e.g. SalesReport
+   inside the POS modal) mounted OUTSIDE the .desktop-root shell, so they match
+   the admin default look without inheriting the shell's full-screen layout. */
 .desktop-root,
-.desktop-root[data-theme="warm"] {
+.desktop-root[data-theme="warm"],
+.dk-token-scope {
   --t-bg: #fdf9f4;
   --t-surface: #ffffff;
   --t-surface-2: #fafafa;

@@ -164,6 +164,26 @@ export const closeDayEnd = (date, notes) =>
 export const reopenDayEnd = (date) =>
   http.post('/pos/reports/day-end/reopen', { date }).then(r => r.data);
 
+// ── Reports (Order Type / Category / Product / Monthly) ───────
+// category_ids / product_ids are comma-joined id lists ('' = no filter)
+export const getOrderTypeSummaryReport = (from, to) =>
+  http.get('/pos/reports/order-type-summary', { params: { from, to } }).then(r => r.data);
+
+export const getCategorySummaryReport = (from, to, category_ids) =>
+  http.get('/pos/reports/category-summary', { params: { from, to, category_ids } }).then(r => r.data);
+
+export const getProductSummaryReport = (from, to, category_ids, product_ids) =>
+  http.get('/pos/reports/product-summary', { params: { from, to, category_ids, product_ids } }).then(r => r.data);
+
+export const getMonthlySummaryReport = (year, category_ids, product_ids) =>
+  http.get('/pos/reports/monthly-summary', { params: { year, category_ids, product_ids } }).then(r => r.data);
+
+export const getZeroSalesReport = (from, to, category_ids) =>
+  http.get('/pos/reports/zero-sales', { params: { from, to, category_ids } }).then(r => r.data);
+
+export const getPaymentRegisterReport = (from, to) =>
+  http.get('/pos/reports/payment-register', { params: { from, to } }).then(r => r.data);
+
 // ── Transaction Revert ───────────────────────────────────────
 export const getTodayTransactions = () =>
   http.get('/pos/transactions/today').then(r => r.data);
@@ -247,6 +267,9 @@ const posApi = {
   // Sales Reports
   getSalesReportToday, getSalesReport, getCakePaymentsReport,
   getDayEndReport, closeDayEnd, reopenDayEnd,
+  // Analytics Reports
+  getOrderTypeSummaryReport, getCategorySummaryReport, getProductSummaryReport, getMonthlySummaryReport,
+  getZeroSalesReport, getPaymentRegisterReport,
   // Transaction Revert
   getTodayTransactions, revertOrderTransaction, revertCakeTransaction,
   // Web Orders

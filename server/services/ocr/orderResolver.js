@@ -44,18 +44,7 @@ function booleanQuery(name) {
   return toks.map(t => `${t.replace(/[+\-><()~*"@]/g, '')}*`).join(' ');
 }
 
-// ── one-time FULLTEXT index bootstrap ─────────────────────────
-let indexesReady = null;
-function ensureSearchIndexes() {
-  if (indexesReady) return indexesReady;
-  indexesReady = (async () => {
-    try { await cmsDb.dbRun(`ALTER TABLE products ADD FULLTEXT INDEX IF NOT EXISTS ft_products_name (name)`); }
-    catch (e) { if (!/exist|duplicate/i.test(e.message)) console.warn('[resolver] products FT index:', e.message); }
-    try { await cmsDb.dbRun(`ALTER TABLE product_variants ADD FULLTEXT INDEX IF NOT EXISTS ft_variants_name_sku (name, sku)`); }
-    catch (e) { if (!/exist|duplicate/i.test(e.message)) console.warn('[resolver] variants FT index:', e.message); }
-  })();
-  return indexesReady;
-}
+// ft_products_name / ft_variants_name_sku are created by migration 008.
 
 let cache = null;
 let cacheAt = 0;
@@ -187,7 +176,6 @@ function rerank(name, candProducts, catalog) {
 
 // items = parser output [{ name, qty, unitPrice, amount }]
 async function resolve(items) {
-  await ensureSearchIndexes();
   const catalog = await loadCatalog();
   const cart = [];
   const unresolved = [];

@@ -12,12 +12,12 @@ const fmtMoney = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximum
 const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—';
 
 const STATUS_META = {
-  INQUIRY: { label: 'Inquiry', color: '#6b7280' },
-  CONFIRMED: { label: 'Confirmed', color: '#a16207' },
-  IN_PRODUCTION: { label: 'In Production', color: '#d97706' },
-  READY: { label: 'Ready', color: '#16a34a' },
-  DELIVERED: { label: 'Delivered', color: '#2d7a2d' },
-  CANCELLED: { label: 'Cancelled', color: '#c0392b' },
+  INQUIRY: { label: 'Inquiry', color: 'var(--text-2)' },
+  CONFIRMED: { label: 'Confirmed', color: 'var(--yellow)' },
+  IN_PRODUCTION: { label: 'In Production', color: 'var(--orange)' },
+  READY: { label: 'Ready', color: 'var(--green)' },
+  DELIVERED: { label: 'Delivered', color: 'var(--green)' },
+  CANCELLED: { label: 'Cancelled', color: 'var(--red)' },
 };
 
 const PAYMENT_METHODS = [
@@ -31,12 +31,13 @@ const PAY_TYPE_LABEL = { ADVANCE: 'Advance', REGULAR: 'Follow-up' };
 
 // ── Status badge ──────────────────────────────────────────────────────
 function StatusBadge({ status }) {
-  const m = STATUS_META[status] ?? { label: status, color: '#6b7280' };
+  const m = STATUS_META[status] ?? { label: status, color: 'var(--text-2)' };
   return (
     <span style={{
       fontSize: 9, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase',
       padding: '2px 7px', borderRadius: 20,
-      background: m.color + '18', color: m.color, border: `1px solid ${m.color}33`,
+      background: `color-mix(in srgb, ${m.color} 14%, transparent)`, color: m.color,
+      border: `1px solid color-mix(in srgb, ${m.color} 26%, transparent)`,
       whiteSpace: 'nowrap',
     }}>{m.label}</span>
   );
@@ -106,13 +107,13 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
       >
         <div
           style={{
-            background: '#fdf9f4', borderRadius: 14, padding: '24px 28px', width: 320,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.35)', border: '1px solid #c4b49c', textAlign: 'center',
+            background: 'var(--window-bg)', borderRadius: 14, padding: '24px 28px', width: 320,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.35)', border: '1px solid var(--window-border-light)', textAlign: 'center',
           }}
           onClick={e => e.stopPropagation()}
         >
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#2d7a2d', marginBottom: 6 }}>✓ Payment Recorded</div>
-          <div style={{ fontSize: 12, color: '#6b5640', marginBottom: 18 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--green)', marginBottom: 6 }}>✓ Payment Recorded</div>
+          <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 18 }}>
             {fmtMoney(done.amount)} · {order.order_number}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -121,15 +122,15 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
               disabled={printing}
               style={{
                 padding: '10px', borderRadius: 8, border: 'none',
-                background: '#c1440e', color: '#fff', fontWeight: 800, cursor: 'pointer',
+                background: 'var(--orange)', color: 'var(--on-accent)', fontWeight: 800, cursor: 'pointer',
                 fontSize: 12, opacity: printing ? 0.65 : 1,
               }}
             >{printing ? '…' : '🖨 Print Slip'}</button>
             <button
               onClick={() => onSuccess(done)}
               style={{
-                padding: '10px', borderRadius: 8, border: '1px solid #c4b49c',
-                background: 'rgba(255,255,255,0.6)', color: '#6b5640', fontWeight: 700, cursor: 'pointer', fontSize: 12,
+                padding: '10px', borderRadius: 8, border: '1px solid var(--window-border-light)',
+                background: 'var(--fill-2)', color: 'var(--text-2)', fontWeight: 700, cursor: 'pointer', fontSize: 12,
               }}
             >Done →</button>
           </div>
@@ -148,46 +149,46 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
     >
       <div
         style={{
-          background: '#fdf9f4', borderRadius: 14, padding: '24px 28px', width: 360,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.35)', border: '1px solid #c4b49c',
+          background: 'var(--window-bg)', borderRadius: 14, padding: '24px 28px', width: 360,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.35)', border: '1px solid var(--window-border-light)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#2a1f12' }}>💳 Record Payment</div>
-            <div style={{ fontSize: 11, color: '#9c8870', marginTop: 2 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-1)' }}>💳 Record Payment</div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
               {order.order_number} · {order.customer_name}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#9c8870', lineHeight: 1 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-3)', lineHeight: 1 }}>✕</button>
         </div>
 
         {/* Summary */}
-        <div style={{ background: '#f0e8d8', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12 }}>
+        <div style={{ background: 'var(--bg-card-2)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ color: '#6b5640' }}>Total Amount</span>
+            <span style={{ color: 'var(--text-2)' }}>Total Amount</span>
             <span style={{ fontWeight: 700 }}>{fmtMoney(order.total_amount)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ color: '#6b5640' }}>Advance Paid</span>
-            <span style={{ fontWeight: 700, color: '#2d7a2d' }}>{fmtMoney(order.advance_paid)}</span>
+            <span style={{ color: 'var(--text-2)' }}>Advance Paid</span>
+            <span style={{ fontWeight: 700, color: 'var(--green)' }}>{fmtMoney(order.advance_paid)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #c4b49c', paddingTop: 6, marginTop: 4 }}>
-            <span style={{ color: '#c0392b', fontWeight: 700 }}>Balance Due</span>
-            <span style={{ color: '#c0392b', fontWeight: 800, fontSize: 14 }}>{fmtMoney(order.balance_due)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--window-border-light)', paddingTop: 6, marginTop: 4 }}>
+            <span style={{ color: 'var(--red)', fontWeight: 700 }}>Balance Due</span>
+            <span style={{ color: 'var(--red)', fontWeight: 800, fontSize: 14 }}>{fmtMoney(order.balance_due)}</span>
           </div>
         </div>
 
         {/* Split tender — amount per method */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#6b5640', display: 'block', marginBottom: 6 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
             PAYMENT — SPLIT ACROSS METHODS
           </label>
           {PAYMENT_METHODS.map(([m, label], i) => (
             <div key={m} style={{ display: 'grid', gridTemplateColumns: '86px 1fr', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#6b5640' }}>{label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)' }}>{label}</span>
               <input
                 id={`ck-pay-${m}`}
                 type="number" min="0" step="0.01"
@@ -204,44 +205,44 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
                 placeholder="0.00"
                 style={{
                   width: '100%', padding: '7px 12px', borderRadius: 7, fontSize: 16,
-                  fontWeight: 800, border: '1.5px solid #c4b49c', background: '#fff',
-                  color: '#2a1f12', textAlign: 'right', boxSizing: 'border-box', outline: 'none',
+                  fontWeight: 800, border: '1.5px solid var(--window-border-light)', background: 'var(--window-bg)',
+                  color: 'var(--text-1)', textAlign: 'right', boxSizing: 'border-box', outline: 'none',
                 }}
               />
             </div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 8 }}>
-            <span style={{ color: '#6b5640' }}>Total Entered</span>
-            <span style={{ fontWeight: 800, color: overpays ? '#c0392b' : '#2a1f12' }}>{fmtMoney(total)}</span>
+            <span style={{ color: 'var(--text-2)' }}>Total Entered</span>
+            <span style={{ fontWeight: 800, color: overpays ? 'var(--red)' : 'var(--text-1)' }}>{fmtMoney(total)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: '#6b5640' }}>Remaining After</span>
-            <span style={{ fontWeight: 800, color: remaining > 0 ? '#c0392b' : '#2d7a2d' }}>{fmtMoney(remaining)}</span>
+            <span style={{ color: 'var(--text-2)' }}>Remaining After</span>
+            <span style={{ fontWeight: 800, color: remaining > 0 ? 'var(--red)' : 'var(--green)' }}>{fmtMoney(remaining)}</span>
           </div>
           {overpays && (
-            <div style={{ color: '#c0392b', fontSize: 11, fontWeight: 600, marginTop: 4 }}>Cannot exceed balance due</div>
+            <div style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600, marginTop: 4 }}>Cannot exceed balance due</div>
           )}
         </div>
 
         {/* Payment history — advance + follow-ups so far */}
         {history.length > 0 && (
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b5640', display: 'block', marginBottom: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
               PAYMENTS SO FAR
             </label>
-            <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid #e3d5be', borderRadius: 7 }}>
+            <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid var(--window-border-light)', borderRadius: 7 }}>
               {history.map(p => (
                 <div key={p.id} style={{
                   display: 'flex', justifyContent: 'space-between', gap: 8,
-                  padding: '5px 10px', fontSize: 11, borderBottom: '1px solid #f0e8d8',
+                  padding: '5px 10px', fontSize: 11, borderBottom: '1px solid var(--bg-card-2)',
                 }}>
-                  <span style={{ color: '#6b5640' }}>
+                  <span style={{ color: 'var(--text-2)' }}>
                     {p.amount < 0 ? 'Reversal' : (PAY_TYPE_LABEL[p.payment_type] || p.payment_type)} · {p.method}
-                    <span style={{ color: '#9c8870', marginLeft: 6 }}>
+                    <span style={{ color: 'var(--text-3)', marginLeft: 6 }}>
                       {new Date(String(p.created_at).replace(' ', 'T') + '+05:45').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </span>
-                  <span style={{ fontWeight: 700, color: p.amount < 0 ? '#c0392b' : '#2d7a2d' }}>{fmtMoney(p.amount)}</span>
+                  <span style={{ fontWeight: 700, color: p.amount < 0 ? 'var(--red)' : 'var(--green)' }}>{fmtMoney(p.amount)}</span>
                 </div>
               ))}
             </div>
@@ -249,15 +250,15 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
         )}
 
         {err && (
-          <div style={{ color: '#c0392b', fontSize: 11, marginBottom: 10, fontWeight: 600 }}>{err}</div>
+          <div style={{ color: 'var(--red)', fontSize: 11, marginBottom: 10, fontWeight: 600 }}>{err}</div>
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={onClose}
             style={{
-              flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #c4b49c',
-              background: 'rgba(255,255,255,0.6)', color: '#6b5640', fontWeight: 700, cursor: 'pointer', fontSize: 12,
+              flex: 1, padding: '10px', borderRadius: 8, border: '1px solid var(--window-border-light)',
+              background: 'var(--fill-2)', color: 'var(--text-2)', fontWeight: 700, cursor: 'pointer', fontSize: 12,
             }}
           >Cancel</button>
           <button
@@ -265,7 +266,7 @@ function CakePaymentModal({ order, onClose, onSuccess }) {
             disabled={loading || !valid}
             style={{
               flex: 2, padding: '10px', borderRadius: 8, border: 'none',
-              background: '#c1440e', color: '#fff', fontWeight: 800, cursor: 'pointer',
+              background: 'var(--orange)', color: 'var(--on-accent)', fontWeight: 800, cursor: 'pointer',
               fontSize: 12, opacity: (loading || !valid) ? 0.65 : 1,
             }}
           >{loading ? 'Processing…' : `Confirm ${fmtMoney(total)}`}</button>
@@ -320,31 +321,31 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false,
         <div style={{
           position: 'absolute', inset: 0, zIndex: 5, borderRadius: 'inherit',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(233,30,140,0.10)', color: '#e91e8c', fontSize: 13, fontWeight: 800,
+          background: 'color-mix(in srgb, var(--pink) 12%, transparent)', color: 'var(--pink)', fontSize: 13, fontWeight: 800,
         }}>✓ Added to order</div>
       )}
       {/* Order # + Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#c1440e', letterSpacing: '0.05em' }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--orange)', letterSpacing: '0.05em' }}>
           {order.order_number}
         </span>
         <StatusBadge status={order.status} />
       </div>
 
       {/* Customer name */}
-      <div style={{ fontSize: 14, fontWeight: 800, color: '#2a1f12', marginBottom: 4, lineHeight: 1.2 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-1)', marginBottom: 4, lineHeight: 1.2 }}>
         {order.customer_name}
       </div>
 
       {/* Phone */}
       {order.phone && (
-        <div style={{ fontSize: 10, color: '#9c8870', marginBottom: 5 }}>{order.phone}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 5 }}>{order.phone}</div>
       )}
 
       {/* Message on cake */}
       {order.message_on_cake && (
         <div style={{
-          fontSize: 10, color: '#9c8870', fontStyle: 'italic', marginBottom: 7,
+          fontSize: 10, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 7,
           lineHeight: 1.3, overflow: 'hidden',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
         }}>
@@ -356,16 +357,16 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false,
       <div style={{ display: 'flex', gap: 5, marginBottom: 6, flexWrap: 'wrap' }}>
         {order.delivery_date && (
           <span style={{
-            fontSize: 10, fontWeight: 700, color: '#6b5640',
-            background: '#f0e8d8', borderRadius: 5, padding: '2px 7px',
+            fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+            background: 'var(--bg-card-2)', borderRadius: 5, padding: '2px 7px',
           }}>
             📅 {fmtDate(order.delivery_date)}
           </span>
         )}
         {order.delivery_time && (
           <span style={{
-            fontSize: 10, fontWeight: 700, color: '#6b5640',
-            background: '#f0e8d8', borderRadius: 5, padding: '2px 7px',
+            fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+            background: 'var(--bg-card-2)', borderRadius: 5, padding: '2px 7px',
           }}>
             🕐 {order.delivery_time}
           </span>
@@ -377,7 +378,7 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false,
       {/* Balance */}
       <div style={{
         fontSize: 15, fontWeight: 800, marginBottom: 10,
-        color: hasBalance ? '#c0392b' : '#2d7a2d',
+        color: hasBalance ? 'var(--red)' : 'var(--green)',
       }}>
         {hasBalance ? `${fmtMoney(order.balance_due)} due` : '✓ Paid'}
       </div>
@@ -389,7 +390,7 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false,
             onClick={(e) => { e.stopPropagation(); onPay(order); }}
             style={{
               flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
-              background: '#c1440e', color: '#fff', fontSize: 10, fontWeight: 800,
+              background: 'var(--orange)', color: 'var(--on-accent)', fontSize: 10, fontWeight: 800,
               cursor: 'pointer', letterSpacing: '0.03em',
             }}
           >💳 Pay</button>
@@ -399,8 +400,8 @@ function CakeDashCard({ order, onPay, onRefresh, onOpen = null, closing = false,
           disabled={printing}
           style={{
             flex: 1, padding: '6px 8px', borderRadius: 7,
-            border: '1px solid #c4b49c', background: 'rgba(255,255,255,0.65)',
-            color: '#6b5640', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            border: '1px solid var(--window-border-light)', background: 'var(--fill-2)',
+            color: 'var(--text-2)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
             opacity: printing ? 0.6 : 1,
           }}
         >{printing ? '…' : '🖨 Slip'}</button>
@@ -497,9 +498,9 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
           <span className="desktop-chrome__title">🎂  Cake Orders</span>
           {outstandingBalance > 0 && (
             <span style={{
-              fontSize: 10, fontWeight: 800, color: '#c0392b',
-              background: 'rgba(192,57,43,0.12)', padding: '2px 9px',
-              borderRadius: 20, border: '1px solid rgba(192,57,43,0.25)',
+              fontSize: 10, fontWeight: 800, color: 'var(--red)',
+              background: 'color-mix(in srgb, var(--red) 14%, transparent)', padding: '2px 9px',
+              borderRadius: 20, border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)',
             }}>
               {fmtMoney(outstandingBalance)} outstanding
             </span>
@@ -512,7 +513,7 @@ export default function CakeDashboardWindow({ onOpenOrder = null, refreshToken =
         {/* Body */}
         <div className="desktop-window__body">
           {loading && (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: '#9c8870', fontSize: 12 }}>Loading…</div>
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)', fontSize: 12 }}>Loading…</div>
           )}
           {!loading && shownOrders.length === 0 && (
             <div className="pos-empty-state">No cake orders with pending amount.</div>

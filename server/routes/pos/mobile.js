@@ -103,7 +103,14 @@ router.post('/incoming-call', async (req, res) => {
     dbGet(`SELECT COALESCE(SUM(balance_due),0) AS balance FROM cake_orders WHERE phone=? AND balance_due>0 AND status NOT IN ('DELIVERED','CANCELLED','REFUNDED')`, [normPhone]),
     dbGet(`SELECT * FROM pos_orders WHERE customer_phone=? ORDER BY created_at DESC LIMIT 1`, [normPhone]),
     dbGet(`SELECT COUNT(*) AS n FROM pos_orders WHERE customer_phone=?`, [normPhone]),
-    dbAll(`SELECT id,order_type,status,total_amount,created_at FROM pos_orders WHERE customer_phone=? AND status IN ('OPEN','SAVED') AND DATE(created_at)=CURDATE() ORDER BY created_at DESC`, [normPhone]),
+    dbAll(`SELECT o.id,o.order_type,o.status,o.total_amount,o.created_at FROM pos_orders o
+            WHERE o.customer_phone=? AND o.status IN ('OPEN','SAVED')
+              AND (EXISTS (SELECT 1 FROM pos_kots k
+                             JOIN pos_kot_items ki ON ki.kot_id = k.id
+                            WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+                   OR (o.draft_items IS NOT NULL
+                       AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))
+            ORDER BY o.created_at DESC`, [normPhone]),
     dbAll(`SELECT id,order_number,status,grand_total,balance_due,delivery_date,delivery_time FROM cake_orders WHERE phone=? AND status NOT IN ('DELIVERED','CANCELLED','REFUNDED') AND (DATE(order_date)=CURDATE() OR DATE(delivery_date)=CURDATE())`, [normPhone]),
     dbAll(`SELECT id,order_type,status,total_amount,created_at FROM pos_orders WHERE customer_phone=? ORDER BY created_at DESC LIMIT 10`, [normPhone]),
   ]);
@@ -203,7 +210,13 @@ router.get('/dashboard', async (req, res) => {
   const { start, end } = getNepalDayBoundsUTC(dateStr);
 
   const [openRow, closedRow, orderPayments, cakePayments, changeRow, itemRows] = await Promise.all([
-    dbGet(`SELECT COUNT(*) AS n FROM pos_orders WHERE status IN ('OPEN','SAVED') AND created_at >= ? AND created_at <= ?`, [start, end]),
+    dbGet(`SELECT COUNT(*) AS n FROM pos_orders o
+            WHERE o.status IN ('OPEN','SAVED')
+              AND (EXISTS (SELECT 1 FROM pos_kots k
+                             JOIN pos_kot_items ki ON ki.kot_id = k.id
+                            WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+                   OR (o.draft_items IS NOT NULL
+                       AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))`),
     dbGet(`SELECT COUNT(*) AS n FROM pos_orders WHERE status='CLOSED' AND closed_at >= ? AND closed_at <= ?`, [start, end]),
     dbAll(
       `SELECT p.method, SUM(p.amount) AS amount
@@ -274,29 +287,32 @@ router.get('/dashboard', async (req, res) => {
   });
 });
 
-// ── Open orders (Orders tab): today's only, newest first.
-// POS orders (with fired items only) + today's scheduled + today's cake orders.
+// ── Open orders (Orders tab): every unpaid order regardless of date, newest
+// first — POS orders + pending scheduled/drafts + today's cake orders.
 router.get('/open-orders', async (_req, res) => {
-  const { start, end } = getNepalDayBoundsUTC();
   const dateStr = getNepalDateStr();
 
   const [orders, scheduled, cakes] = await Promise.all([
     dbAll(
       `SELECT o.id, o.order_type, o.status, o.customer_name, o.customer_phone,
-              o.total_amount, o.created_at,
+              o.total_amount, o.created_at, o.draft_items,
               TIMESTAMPDIFF(MINUTE, o.created_at, NOW()) AS elapsed_min,
               t.name AS table_name
          FROM pos_orders o
          LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
         WHERE o.status IN ('OPEN','SAVED')
-          AND o.created_at >= ? AND o.created_at <= ?
-        ORDER BY o.created_at DESC`, [start, end]),
+          AND (EXISTS (SELECT 1 FROM pos_kots k
+                         JOIN pos_kot_items ki ON ki.kot_id = k.id
+                        WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+               OR (o.draft_items IS NOT NULL
+                   AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))
+        ORDER BY o.created_at DESC`),
     dbAll(
       `SELECT id, order_type, customer_name, customer_phone, order_caption,
               scheduled_for, items_json, total_amount
          FROM pos_scheduled_orders
-        WHERE status='PENDING' AND scheduled_for >= ? AND scheduled_for <= ?
-        ORDER BY scheduled_for ASC`, [start, end]),
+        WHERE status='PENDING'
+        ORDER BY scheduled_for IS NULL, scheduled_for ASC`),
     dbAll(
       `SELECT id, order_number, customer_name, phone, grand_total, balance_due,
               delivery_date, delivery_time, status, message_on_cake
@@ -318,6 +334,16 @@ router.get('/open-orders', async (_req, res) => {
     for (const i of items) (byOrder[i.order_id] ??= []).push(i);
   }
 
+  // Unsent cart lines live in pos_orders.draft_items (no pos_order_items table),
+  // so an order with no fired KOT still has details to show.
+  const draftItemsOf = o => {
+    try { return (JSON.parse(o.draft_items || '[]') || []).map(i => ({
+      name: i.product_name || i.name || 'Item',
+      qty: Number(i.quantity || i.qty || 1),
+      status: 'DRAFT',
+    })); } catch { return []; }
+  };
+
   const posOut = orders
     .map(o => {
       const its = byOrder[o.id] || [];
@@ -337,11 +363,11 @@ router.get('/open-orders', async (_req, res) => {
         total: Number(o.total_amount || 0), createdAt: o.created_at,
         elapsedMin: Number(o.elapsed_min ?? 0),
         servedInMin: servedIn, timeLabel: null,
-        items: its.map(i => ({ name: i.name, qty: Number(i.qty), status: i.status })),
+        items: its.length
+          ? its.map(i => ({ name: i.name, qty: Number(i.qty), status: i.status }))
+          : draftItemsOf(o),
       };
-    })
-    // Draft-only orders (no fired KOT lines) have nothing to show — hide them.
-    .filter(o => o.items.length > 0);
+    });
 
   const schedOut = scheduled.map(s => {
     let items = [];

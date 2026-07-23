@@ -8,8 +8,9 @@ const POS_MODULES = [
   { label: 'KDS Display',       desc: 'Kitchen order tickets — mount on kitchen screen',  to: '/kds',              accent: '#f97316' },
   { label: 'File Maintenance',  desc: 'Tables · Stations · POS Products · Users',         to: '/file-maintenance', accent: '#6366f1' },
   { label: 'CRM',               desc: 'Customers · Loyalty · Birthday Club',               to: '/crm',              accent: '#0891b2' },
-  { label: 'Sales Report',      desc: 'Daily sales & order analytics',                    to: '/sales-report',     accent: '#10b981' },
+  { label: 'Sales Registry',    desc: 'Daily order register & payment log',               to: '/sales-report',     accent: '#10b981' },
   { label: 'Day End',           desc: 'Daily closing / Z report',                         to: '/day-end',          accent: '#b45309' },
+  { label: 'Reports',           desc: 'Category · Product · Monthly analytics',           to: '/reports',          accent: '#2563eb' },
 ];
 
 const MODULES = [

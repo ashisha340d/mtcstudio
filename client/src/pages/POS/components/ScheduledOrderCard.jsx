@@ -91,7 +91,7 @@ export default function ScheduledOrderCard({ row, index, flash, arrive, onOpen, 
           onClick={(e) => { e.stopPropagation(); onOpen(row); }}
           style={{
             flex: 1, padding: '4px 6px', borderRadius: 6, border: 'none',
-            background: '#ffffff', color: '#000', fontSize: 9, fontWeight: 800,
+            background: 'var(--fill-3)', color: 'var(--text-1)', fontSize: 9, fontWeight: 800,
             cursor: 'pointer', letterSpacing: '0.03em',
           }}
         >
@@ -102,7 +102,7 @@ export default function ScheduledOrderCard({ row, index, flash, arrive, onOpen, 
           onClick={(e) => { e.stopPropagation(); onConvert(row); }}
           style={{
             flex: 1, padding: '4px 6px', borderRadius: 6, border: 'none',
-            background: isScheduled ? '#4c5fd5' : '#c1440e', color: '#fff',
+            background: isScheduled ? 'var(--indigo)' : 'var(--orange)', color: 'var(--on-accent)',
             fontSize: 9, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.03em',
           }}
         >
@@ -112,8 +112,8 @@ export default function ScheduledOrderCard({ row, index, flash, arrive, onOpen, 
           title="Cancel"
           onClick={(e) => { e.stopPropagation(); onCancel(row); }}
           style={{
-            padding: '4px 7px', borderRadius: 6, border: '1px solid #c0392b',
-            background: 'rgba(192,57,43,0.08)', color: '#c0392b',
+            padding: '4px 7px', borderRadius: 6, border: '1px solid var(--red)',
+            background: 'color-mix(in srgb, var(--red) 10%, transparent)', color: 'var(--red)',
             fontSize: 9, fontWeight: 800, cursor: 'pointer',
           }}
         >
@@ -124,8 +124,8 @@ export default function ScheduledOrderCard({ row, index, flash, arrive, onOpen, 
             title="Delete — wrong order"
             onClick={(e) => { e.stopPropagation(); onDelete(row); }}
             style={{
-              padding: '4px 7px', borderRadius: 6, border: '1px solid #7a1f16',
-              background: '#7a1f16', color: '#fff',
+              padding: '4px 7px', borderRadius: 6, border: '1px solid var(--red)',
+              background: 'color-mix(in srgb, var(--red) 78%, #000)', color: 'var(--on-accent)',
               fontSize: 9, fontWeight: 800, cursor: 'pointer',
             }}
           >

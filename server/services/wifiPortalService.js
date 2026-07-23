@@ -148,7 +148,7 @@ async function fetchSpecials() {
     `SELECT id, name, category, price, quantity, image, notes
      FROM   live_shelf
      WHERE  show_online = 1 AND quantity > 0
-     ORDER  BY sort_order, id LIMIT 10`
+     ORDER  BY sort_order, id LIMIT 6`
   );
   return rows.map(r => ({
     id: r.id,
@@ -171,7 +171,7 @@ async function fetchCakes() {
      FROM   cake_designs d
      WHERE  d.is_active = 1
      HAVING image IS NOT NULL
-     ORDER  BY d.sort_order, d.id LIMIT 10`
+     ORDER  BY d.sort_order, d.id LIMIT 6`
   );
   return rows.map(r => ({
     id: r.id,
@@ -217,14 +217,44 @@ async function fetchCombos() {
   }));
 }
 
+// The Pizza spotlight — one showstopper pizza headlines the section on a
+// spinning peel, the rest fill the grid beneath. Ordered so a popular, premium
+// pie takes the hero slot.
+async function fetchPizza() {
+  const rows = await dbAll(
+    `${PRODUCT_SELECT} AND c.name = 'Wood Fired Pizza'
+     ORDER BY p.featured DESC, (p.badge LIKE '%POPULAR%') DESC, p.pos_price DESC
+     LIMIT 12`
+  );
+  const all = rows.map(shapeProduct).filter(p => p.image);
+  if (!all.length) return null;
+  const [hero, ...rest] = all;
+  return { hero, rest: rest.slice(0, 8) };
+}
+
+// The Burger spotlight — one hero (the priciest signature) headlines the
+// section, the rest fill a rail beneath it. Pulled from the same catalogue,
+// so pricing and photos stay in step with the POS.
+async function fetchBurgers() {
+  const rows = await dbAll(
+    `${PRODUCT_SELECT} AND c.name = 'Burgers & Dogs'
+     ORDER BY p.featured DESC, (p.badge LIKE '%SIGNATURE%') DESC, p.pos_price DESC
+     LIMIT 9`
+  );
+  const all = rows.map(shapeProduct).filter(p => p.image);
+  if (!all.length) return null;
+  const [hero, ...rest] = all;
+  return { hero, rest: rest.slice(0, 6) };
+}
+
 // Real guest reviews when we have them. The curated set below is what shows on
 // day one and whenever fewer than three real ones clear the 4-star bar — it is
 // clearly labelled as Google-sourced in the view, never passed off as new.
 const SEED_REVIEWS = [
-  { name: 'Sujata K.',  rating: 5, text: 'The wood fired pizza here is the real thing — proper charred crust, not the usual soggy base. Best in Bharatpur.', source: 'Google' },
-  { name: 'Bibek T.',   rating: 5, text: 'Ordered a birthday cake two days ahead and it arrived exactly like the picture. The team even called to confirm the message on top.', source: 'Google' },
-  { name: 'Anisha S.',  rating: 5, text: 'Coffee is genuinely good and the staff remember your order. My go-to spot for working afternoons.', source: 'Google' },
-  { name: 'Rajan P.',   rating: 4, text: 'Smash burgers are excellent and portions are honest. Gets busy around 7pm so come a little early.', source: 'Google' },
+  { name: 'Sujata K.', rating: 5, text: 'The wood fired pizza here is the real thing — proper charred crust, not the usual soggy base. Best in Bharatpur.', source: 'Google' },
+  { name: 'Bibek T.', rating: 5, text: 'Ordered a birthday cake two days ahead and it arrived exactly like the picture. The team even called to confirm the message on top.', source: 'Google' },
+  { name: 'Anisha S.', rating: 5, text: 'Coffee is genuinely good and the staff remember your order. My go-to spot for working afternoons.', source: 'Google' },
+  { name: 'Rajan P.', rating: 4, text: 'Smash burgers are excellent and portions are honest. Gets busy around 7pm so come a little early.', source: 'Google' },
 ];
 
 async function fetchReviews() {
@@ -257,11 +287,12 @@ async function fetchReviews() {
 async function build() {
   existsMemo.clear();   // re-check the disk each rebuild so re-uploads show up
 
-  const [featured, specials, cakes, pizza, coffee, desserts, combos, reviews] = await Promise.all([
+  const [featured, specials, cakes, burgers, pizza, coffee, desserts, combos, reviews] = await Promise.all([
     fetchFeatured(),
     fetchSpecials(),
     fetchCakes(),
-    fetchByCategory(['Wood Fired Pizza'], 8),
+    fetchBurgers(),
+    fetchPizza(),
     fetchByCategory(['Drinks'], 8),
     fetchByCategory(['Desserts'], 8),
     fetchCombos(),
@@ -275,6 +306,7 @@ async function build() {
     featured,
     specials,
     cakes,
+    burgers,
     pizza,
     coffee,
     desserts,

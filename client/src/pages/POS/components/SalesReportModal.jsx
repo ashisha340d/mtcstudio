@@ -66,7 +66,7 @@ export default function SalesReportModal({ onClose, isAdmin, revertOrderTransact
         >
           ✕
         </button>
-        <div style={{ height: '100%' }}>
+        <div className="dk-token-scope" style={{ height: '100%' }}>
           <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#9c8870' }}>Loading report…</div>}>
             <SalesReport
               gridLines={true}

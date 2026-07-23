@@ -10,7 +10,6 @@ const { validateSplitTender }         = require('../../pos/splitTender');
 const webOrderBridge                  = require('../../services/webOrderBridge');
 
 const { requireOpenDay }              = require('../../middleware/posDayGuard');
-const { getNepalDateStr }             = require('../../utils/nepalDateTime');
 
 const router = express.Router();
 router.use(requireSession);
@@ -22,9 +21,13 @@ router.get('/active', async (req, res) => {
     `SELECT o.*, t.name AS table_name
      FROM   pos_orders o
      LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
-     WHERE  o.status IN ('OPEN','SAVED') AND DATE(o.created_at) = ?
-     ORDER  BY o.created_at`,
-    [getNepalDateStr()]
+     WHERE  o.status IN ('OPEN','SAVED')
+       AND  (EXISTS (SELECT 1 FROM pos_kots k
+                       JOIN pos_kot_items ki ON ki.kot_id = k.id
+                      WHERE k.order_id = o.id AND ki.status <> 'CANCELLED')
+             OR (o.draft_items IS NOT NULL
+                 AND TRIM(o.draft_items) NOT IN ('', '[]', 'null')))
+     ORDER  BY o.created_at`
   );
 
   if (!orders.length) return res.json({ orders: [], kots: [] });
