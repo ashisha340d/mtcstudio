@@ -347,12 +347,11 @@ router.get('/report/today', async (req, res) => {
 
 const DISCOUNT_TYPES = ['MANUAL', 'PROMO', 'COMPLIMENTARY', 'EMPLOYEE'];
 
-// POST /api/pos/kots — one per SEND, never append
-router.post('/', async (req, res) => {
-  const { order_id, items, punched_by } = req.body;
-  if (!order_id || !items?.length) return res.status(400).json({ error: 'order_id and items required' });
-
-  const userId = punched_by ?? req.posUser.id;
+// Fire one KOT for order_id from items[] — one per call, never appended to an
+// existing KOT. Shared by POST / below and the mobile companion edit endpoint
+// (adding a line to an order re-uses the exact same punch path).
+async function fireKot({ order_id, items, punched_by, actorUserId, actorSessionId, actorEmployeeId }) {
+  const userId = punched_by ?? actorUserId;
 
   const result = await transaction(async (tx) => {
     // Auto-calculate next kot_number for this order
@@ -409,8 +408,8 @@ router.post('/', async (req, res) => {
       for (const child of g.children) saved.push(await insertItem(child, parent.id, 1));
     }
 
-    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'KOT', entityId: kot.id, action: 'CREATE', delta: { order_id, kot_number: kotNum, itemCount: saved.length } });
-    return { ...kot, items: saved, punched_by_emp: req.posUser.employee_id };
+    audit({ userId: actorUserId, sessionId: actorSessionId, entityType: 'KOT', entityId: kot.id, action: 'CREATE', delta: { order_id, kot_number: kotNum, itemCount: saved.length } });
+    return { ...kot, items: saved, punched_by_emp: actorEmployeeId };
   });
 
   kdsEvents.broadcast('new_kot', { orderId: result.order_id, kotId: result.id });
@@ -423,6 +422,18 @@ router.post('/', async (req, res) => {
   webOrderBridge.notifyKotItemsChanged(result.order_id); // web-origin orders only, no-op otherwise
   webOrderBridge.notifyKotItemProgress(result.order_id);
 
+  return result;
+}
+
+// POST /api/pos/kots — one per SEND, never append
+router.post('/', async (req, res) => {
+  const { order_id, items, punched_by } = req.body;
+  if (!order_id || !items?.length) return res.status(400).json({ error: 'order_id and items required' });
+
+  const result = await fireKot({
+    order_id, items, punched_by,
+    actorUserId: req.posUser.id, actorSessionId: req.posSessionId, actorEmployeeId: req.posUser.employee_id,
+  });
   res.status(201).json(result);
 });
 
@@ -628,5 +639,114 @@ router.patch('/:id/items/:itemId/status', async (req, res) => {
 
   res.json({ ok: true, status });
 });
+
+// Change a fired line's quantity (with combo-child rescale). Same rules as the
+// quantity branch of PATCH /:id/items/:itemId above; kept as a standalone
+// function so the mobile companion edit endpoint can drive it by item id alone
+// (no kot id needed) without duplicating the combo-rescale logic.
+async function changeKotItemQuantity(itemId, quantity, { actorUserId, actorSessionId }) {
+  const item = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [itemId]);
+  if (!item) return { error: 'Item not found', status: 404 };
+
+  const isComboParent = (await dbGet(`SELECT is_combo FROM products WHERE id=?`, [item.product_id]))?.is_combo === 1;
+  if (!isComboParent && (item.status === 'SERVED' || item.status === 'CANCELLED'))
+    return { error: 'Cannot change quantity of a served or cancelled item', status: 400 };
+  if (!(quantity >= 1)) return { error: 'quantity >= 1 required', status: 400 };
+
+  await dbRun(`UPDATE pos_kot_items SET quantity=? WHERE id=?`, [quantity, item.id]);
+
+  const kids = await dbAll(
+    `SELECT * FROM pos_kot_items WHERE combo_parent_id=? AND status NOT IN ('SERVED','CANCELLED')`, [item.id]);
+  if (kids.length) {
+    const comps = await comboExpander.componentsFor(item.product_id, quantity);
+    const childKot = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [item.kot_id]);
+    for (const ch of kids) {
+      const match = comps.find(c => c.product_id === ch.product_id && (c.variant_id ?? null) === (ch.variant_id ?? null));
+      if (match && match.quantity !== ch.quantity) {
+        await dbRun(`UPDATE pos_kot_items SET quantity=? WHERE id=?`, [match.quantity, ch.id]);
+        if (ch.variant_id) await dbRun(`UPDATE product_variants SET sync_status=0 WHERE id=? AND show_online=1`, [ch.variant_id]);
+        else await dbRun(`UPDATE product_variants SET sync_status=0 WHERE product_id=? AND show_online=1`, [ch.product_id]);
+        socketServer.emitItemUpdated({
+          kotId: ch.kot_id, orderId: childKot?.order_id ?? null, itemId: ch.id,
+          quantity: match.quantity, notes: ch.notes, is_home_pack: ch.is_home_pack,
+          station_id: ch.station_id ?? null,
+        });
+      }
+    }
+    triggerStockSync();
+  }
+
+  audit({ userId: actorUserId, sessionId: actorSessionId, entityType: 'KOT_ITEM', entityId: item.id, action: 'EDIT', delta: { quantity } });
+
+  const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
+  const kotRow  = await dbGet(`SELECT order_id FROM pos_kots WHERE id=?`, [updated.kot_id]);
+  socketServer.emitItemUpdated({
+    kotId: updated.kot_id, orderId: kotRow?.order_id ?? null, itemId: updated.id,
+    quantity: updated.quantity, notes: updated.notes, is_home_pack: updated.is_home_pack,
+    station_id: updated.station_id ?? null,
+  });
+  if (kotRow) webOrderBridge.notifyKotItemsChanged(kotRow.order_id);
+
+  return { item: updated };
+}
+
+// Cancel a single fired line (with combo-child cascade). Same rules as the
+// CANCELLED branch of PATCH /:id/items/:itemId/status above; standalone so the
+// mobile companion edit endpoint can drive it by item id alone.
+async function cancelKotItem(itemId, { reason, kind, actorUserId, actorSessionId }) {
+  const item = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [itemId]);
+  if (!item) return { error: 'Item not found', status: 404 };
+  if (item.status === 'CANCELLED') return { item }; // already cancelled — no-op
+
+  let cancelledKids = [];
+  await transaction(async (tx) => {
+    await tx.dbRun(`UPDATE pos_kot_items SET status='CANCELLED' WHERE id=?`, [item.id]);
+    const k = ['CANCEL', 'RETURN', 'WASTE'].includes(kind) ? kind : 'CANCEL';
+    await tx.dbRun(
+      `INSERT INTO pos_cancellations (entity_type, entity_id, reason, kind, cancelled_by) VALUES ('KOT_ITEM',?,?,?,?)`,
+      [item.id, reason ?? null, k, actorUserId]
+    );
+    if (item.variant_id) await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [item.variant_id]);
+    else await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [item.product_id]);
+
+    const kids = await tx.dbAll(`SELECT * FROM pos_kot_items WHERE combo_parent_id=? AND status!='CANCELLED'`, [item.id]);
+    cancelledKids = kids;
+    for (const kd of kids) {
+      await tx.dbRun(`UPDATE pos_kot_items SET status='CANCELLED' WHERE id=?`, [kd.id]);
+      await tx.dbRun(
+        `INSERT INTO pos_cancellations (entity_type, entity_id, reason, kind, cancelled_by) VALUES ('KOT_ITEM',?,?,?,?)`,
+        [kd.id, reason ?? 'combo parent cancelled', k, actorUserId]
+      );
+      if (kd.variant_id) await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE id = ? AND show_online = 1`, [kd.variant_id]);
+      else await tx.dbRun(`UPDATE product_variants SET sync_status = 0 WHERE product_id = ? AND show_online = 1`, [kd.product_id]);
+    }
+    triggerStockSync();
+  });
+
+  audit({ userId: actorUserId, sessionId: actorSessionId, entityType: 'KOT_ITEM', entityId: item.id, action: 'STATUS_UPDATE', delta: { from: item.status, to: 'CANCELLED' } });
+
+  const updated = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [item.id]);
+  const kot     = await dbGet(`SELECT * FROM pos_kots WHERE id=?`, [item.kot_id]);
+  const statusPayload = {
+    kotId: kot.id, orderId: kot.order_id, itemId: item.id, status: 'CANCELLED', served_at: null, station_id: item.station_id ?? null,
+    product_name: item.product_name, table_name: null, customer_name: null, order_status: null,
+  };
+  kdsEvents.broadcast('item_served', statusPayload);
+  socketServer.emitItemServed(statusPayload);
+  for (const kd of cancelledKids) {
+    socketServer.emitItemServed({
+      kotId: kd.kot_id, orderId: kot.order_id, itemId: kd.id, status: 'CANCELLED',
+      served_at: null, station_id: kd.station_id ?? null, product_name: kd.product_name,
+    });
+  }
+  webOrderBridge.notifyKotItemProgress(kot.order_id);
+  webOrderBridge.notifyKotItemsChanged(kot.order_id);
+
+  return { item: updated, cancelledKids };
+}
+
+router.fireKot = fireKot;
+router.changeKotItemQuantity = changeKotItemQuantity;
+router.cancelKotItem = cancelKotItem;
 
 module.exports = router;

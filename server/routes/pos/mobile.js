@@ -9,6 +9,8 @@ const socketServer       = require('../../pos/socketServer');
 const { authenticatePin } = require('./auth');
 const { uploadCallRecording } = require('../../middleware/upload');
 const { getNepalDateStr, getNepalDayBoundsUTC } = require('../../utils/nepalDateTime');
+const kotsRouter = require('./kots');
+const { assignDraftIds } = require('../../pos/draftItems');
 
 const router = express.Router();
 
@@ -287,6 +289,63 @@ router.get('/dashboard', async (req, res) => {
   });
 });
 
+// Unsent cart lines live in pos_orders.draft_items (no pos_order_items table),
+// so an order with no fired KOT still has details to show.
+function draftItemsOf(o) {
+  try { return (JSON.parse(o.draft_items || '[]') || []).map(i => ({
+    id: typeof i.id === 'number' ? i.id : null,
+    name: i.product_name || i.name || 'Item',
+    qty: Number(i.quantity || i.qty || 1),
+    status: 'DRAFT',
+  })); } catch { return []; }
+}
+
+// Shape one pos_orders row (+ its fired KOT item rows) into the mobile Orders-tab
+// item shape. Shared by the list endpoint and the single-order PATCH response.
+function buildPosOrderOut(o, its) {
+  const total = its.length;
+  const served = its.filter(i => i.status === 'SERVED').length;
+  const ready  = its.filter(i => i.status === 'READY').length;
+  const stage = total > 0 && served === total ? 'SERVED'
+              : total > 0 && served + ready === total && ready > 0 ? 'READY'
+              : 'PREPARING';
+  const servedIn = stage === 'SERVED'
+    ? Math.max(0, ...its.map(i => Number(i.served_in_min ?? 0)))
+    : null;
+  return {
+    id: o.id, kind: 'POS', orderType: o.order_type, status: o.status, stage,
+    tableName: o.table_name, customerName: o.customer_name,
+    customerPhone: o.customer_phone,
+    total: Number(o.total_amount || 0), createdAt: o.created_at,
+    elapsedMin: Number(o.elapsed_min ?? 0),
+    servedInMin: servedIn, timeLabel: null,
+    items: its.length
+      ? its.map(i => ({ id: i.id, name: i.name, qty: Number(i.qty), status: i.status }))
+      : draftItemsOf(o),
+  };
+}
+
+// Re-fetch and re-shape a single POS order — same query pattern as the
+// /open-orders list below, scoped to one id. Used for the PATCH response.
+async function fetchMobileOrder(orderId) {
+  const o = await dbGet(
+    `SELECT o.id, o.order_type, o.status, o.customer_name, o.customer_phone,
+            o.total_amount, o.created_at, o.draft_items,
+            TIMESTAMPDIFF(MINUTE, o.created_at, NOW()) AS elapsed_min,
+            t.name AS table_name
+       FROM pos_orders o
+       LEFT JOIN pos_restaurant_tables t ON t.id = o.table_id
+      WHERE o.id = ?`, [orderId]);
+  if (!o) return null;
+  const its = await dbAll(
+    `SELECT ki.id, ki.product_name AS name, ki.quantity AS qty, ki.status,
+            TIMESTAMPDIFF(MINUTE, k.created_at, ki.served_at) AS served_in_min
+       FROM pos_kot_items ki JOIN pos_kots k ON k.id = ki.kot_id
+      WHERE k.order_id = ? AND ki.status <> 'CANCELLED'
+      ORDER BY ki.id`, [orderId]);
+  return buildPosOrderOut(o, its);
+}
+
 // ── Open orders (Orders tab): every unpaid order regardless of date, newest
 // first — POS orders + pending scheduled/drafts + today's cake orders.
 router.get('/open-orders', async (_req, res) => {
@@ -326,7 +385,7 @@ router.get('/open-orders', async (_req, res) => {
   if (orders.length) {
     const ph = orders.map(() => '?').join(',');
     const items = await dbAll(
-      `SELECT k.order_id, ki.product_name AS name, ki.quantity AS qty, ki.status,
+      `SELECT ki.id, k.order_id, ki.product_name AS name, ki.quantity AS qty, ki.status,
               TIMESTAMPDIFF(MINUTE, k.created_at, ki.served_at) AS served_in_min
          FROM pos_kot_items ki JOIN pos_kots k ON k.id = ki.kot_id
         WHERE k.order_id IN (${ph}) AND ki.status <> 'CANCELLED'
@@ -334,40 +393,7 @@ router.get('/open-orders', async (_req, res) => {
     for (const i of items) (byOrder[i.order_id] ??= []).push(i);
   }
 
-  // Unsent cart lines live in pos_orders.draft_items (no pos_order_items table),
-  // so an order with no fired KOT still has details to show.
-  const draftItemsOf = o => {
-    try { return (JSON.parse(o.draft_items || '[]') || []).map(i => ({
-      name: i.product_name || i.name || 'Item',
-      qty: Number(i.quantity || i.qty || 1),
-      status: 'DRAFT',
-    })); } catch { return []; }
-  };
-
-  const posOut = orders
-    .map(o => {
-      const its = byOrder[o.id] || [];
-      const total = its.length;
-      const served = its.filter(i => i.status === 'SERVED').length;
-      const ready  = its.filter(i => i.status === 'READY').length;
-      const stage = total > 0 && served === total ? 'SERVED'
-                  : total > 0 && served + ready === total && ready > 0 ? 'READY'
-                  : 'PREPARING';
-      const servedIn = stage === 'SERVED'
-        ? Math.max(0, ...its.map(i => Number(i.served_in_min ?? 0)))
-        : null;
-      return {
-        id: o.id, kind: 'POS', orderType: o.order_type, status: o.status, stage,
-        tableName: o.table_name, customerName: o.customer_name,
-        customerPhone: o.customer_phone,
-        total: Number(o.total_amount || 0), createdAt: o.created_at,
-        elapsedMin: Number(o.elapsed_min ?? 0),
-        servedInMin: servedIn, timeLabel: null,
-        items: its.length
-          ? its.map(i => ({ name: i.name, qty: Number(i.qty), status: i.status }))
-          : draftItemsOf(o),
-      };
-    });
+  const posOut = orders.map(o => buildPosOrderOut(o, byOrder[o.id] || []));
 
   const schedOut = scheduled.map(s => {
     let items = [];
@@ -400,6 +426,89 @@ router.get('/open-orders', async (_req, res) => {
   }));
 
   res.json({ orders: [...posOut, ...schedOut, ...cakeOut] });
+});
+
+// PATCH /api/mobile/open-orders/:id — companion edit: customer info + item lines.
+// POS-kind orders only (pos_orders row) — SCHEDULED/CAKE items live in separate
+// tables and share the numeric id space, so this only ever resolves a real
+// pos_orders row, never a scheduled/cake one under the same id.
+//   item.id > 0            -> fired KOT line (pos_kot_items.id)
+//   item.id < 0             -> unsent draft cart line (id assigned by draftItems.js)
+//   item.id null, deleted:false -> new line, resolved to a product by exact name
+//   item.id null, deleted:true  -> no-op
+router.patch('/open-orders/:id', async (req, res) => {
+  const orderId = Number(req.params.id);
+  const { customer_name, customer_phone, notes, items = [] } = req.body;
+
+  const order = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [orderId]);
+  if (!order) return res.status(404).json({ success: false, order: null, error: 'Order not found' });
+
+  // Resolve every new line to a real product before mutating anything — fail
+  // closed rather than applying half the edit on an unresolvable name.
+  const newLines = [];
+  const unresolved = [];
+  for (const it of items) {
+    if (it.id !== null && it.id !== undefined) continue;
+    if (it.deleted) continue;
+    const prod = await dbGet(`SELECT id, pos_price FROM products WHERE name=? LIMIT 1`, [it.name]);
+    if (!prod) { unresolved.push(it.name); continue; }
+    newLines.push({ product_id: prod.id, product_name: it.name, quantity: Number(it.qty) || 1, unit_price: prod.pos_price });
+  }
+  if (unresolved.length) {
+    return res.status(400).json({ success: false, order: null, error: `No matching product for: ${unresolved.join(', ')}` });
+  }
+
+  let draft = [];
+  try { draft = JSON.parse(order.draft_items || '[]') || []; } catch { draft = []; }
+  let draftChanged = false;
+  const itemErrors = [];
+
+  for (const it of items) {
+    if (it.id === null || it.id === undefined) continue; // handled as newLines above
+    if (it.id < 0) {
+      const idx = draft.findIndex(d => d.id === it.id);
+      if (idx === -1) { itemErrors.push(`draft item ${it.id} not found`); continue; }
+      draftChanged = true;
+      if (it.deleted) draft.splice(idx, 1);
+      else draft[idx] = { ...draft[idx], quantity: Number(it.qty) || draft[idx].quantity };
+    } else if (it.deleted) {
+      const r = await kotsRouter.cancelKotItem(it.id, { reason: 'Mobile edit', actorUserId: req.posUser.id, actorSessionId: req.posSessionId });
+      if (r.error) itemErrors.push(`item ${it.id}: ${r.error}`);
+    } else {
+      const r = await kotsRouter.changeKotItemQuantity(it.id, Number(it.qty), { actorUserId: req.posUser.id, actorSessionId: req.posSessionId });
+      if (r.error) itemErrors.push(`item ${it.id}: ${r.error}`);
+    }
+  }
+
+  if (draftChanged) {
+    const next = assignDraftIds(draft);
+    await dbRun(`UPDATE pos_orders SET draft_items=? WHERE id=?`, [next.length ? JSON.stringify(next) : null, orderId]);
+  }
+
+  if (newLines.length) {
+    await kotsRouter.fireKot({
+      order_id: orderId, items: newLines,
+      actorUserId: req.posUser.id, actorSessionId: req.posSessionId, actorEmployeeId: req.posUser.employee_id,
+    });
+  }
+
+  const fields = [];
+  const values = [];
+  if (customer_name !== undefined) { fields.push('customer_name = ?'); values.push(customer_name); }
+  if (customer_phone !== undefined) { fields.push('customer_phone = ?'); values.push(customer_phone); }
+  if (notes !== undefined) { fields.push('order_notes = ?'); values.push(notes); }
+  if (fields.length) {
+    values.push(orderId);
+    await dbRun(`UPDATE pos_orders SET ${fields.join(', ')} WHERE id = ?`, values);
+  }
+
+  audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'ORDER', entityId: orderId, action: 'MOBILE_EDIT', delta: { customer_name, customer_phone, notes, itemCount: items.length } });
+
+  const updatedOrder = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [orderId]);
+  socketServer.emitOrderUpdated(updatedOrder);
+
+  const shaped = await fetchMobileOrder(orderId);
+  res.json({ success: itemErrors.length === 0, order: shaped, error: itemErrors.length ? itemErrors.join('; ') : null });
 });
 
 module.exports = router;

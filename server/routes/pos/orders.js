@@ -8,6 +8,7 @@ const socketServer                    = require('../../pos/socketServer');
 const { triggerStockSync }            = require('../../services/liveShelfSync');
 const { validateSplitTender }         = require('../../pos/splitTender');
 const webOrderBridge                  = require('../../services/webOrderBridge');
+const { assignDraftIds }              = require('../../pos/draftItems');
 
 const { requireOpenDay }              = require('../../middleware/posDayGuard');
 
@@ -69,7 +70,7 @@ router.post('/', async (req, res) => {
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING *`,
     [order_type, table_id ?? null, customer_id ?? null, customer_name ?? null,
      customer_phone ?? null, customer_address ?? null, notes ?? null, order_notes ?? null, status,
-     draft_items ? JSON.stringify(draft_items) : null,
+     draft_items?.length ? JSON.stringify(assignDraftIds(draft_items)) : null,
      req.posUser.id, pax_count ?? 0, table_tags ?? null]
   );
 
@@ -86,7 +87,7 @@ router.patch('/:id', async (req, res) => {
   const { pax_count, table_tags, order_caption, order_notes } = req.body;
   const fields = [];
   const values = [];
-  if (draft_items !== undefined) { fields.push('draft_items = ?'); values.push(draft_items ? JSON.stringify(draft_items) : null); }
+  if (draft_items !== undefined) { fields.push('draft_items = ?'); values.push(draft_items?.length ? JSON.stringify(assignDraftIds(draft_items)) : null); }
   if (customer_name !== undefined) { fields.push('customer_name = ?'); values.push(customer_name); }
   if (customer_phone !== undefined) { fields.push('customer_phone = ?'); values.push(customer_phone); }
   if (status !== undefined) { fields.push('status = ?'); values.push(status); }
@@ -258,8 +259,11 @@ router.post('/:id/merge', async (req, res) => {
       await tx.dbRun(`UPDATE pos_kots SET order_id=?, kot_number=? WHERE id=?`, [targetId, n, k.id]);
     }
 
-    // Merge unsent draft cart items
-    const mergedDraft = [...parseItems(target.draft_items), ...parseItems(source.draft_items)];
+    // Merge unsent draft cart items — strip ids and renumber, since each side's
+    // negative ids were assigned independently and can collide across orders.
+    const mergedDraft = assignDraftIds(
+      [...parseItems(target.draft_items), ...parseItems(source.draft_items)].map(({ id, ...rest }) => rest)
+    );
     await tx.dbRun(`UPDATE pos_orders SET draft_items=? WHERE id=?`,
       [mergedDraft.length ? JSON.stringify(mergedDraft) : null, targetId]);
 

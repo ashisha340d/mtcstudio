@@ -124,7 +124,7 @@ function lineFromTarget(t, catalog, qty) {
     product_name: prod.name,                              // name from OUR DB, not the mero label
     variant_id: variant ? variant.id : null,
     variant_name: variant ? variant.name : null,
-    unit_price: variant?.selling_price || prod.pos_price || 0,
+    unit_price: variant?.selling_price ?? prod.pos_price ?? 0,
     quantity: qty || 1,
     modifiers: [],
     notes: null,
@@ -228,7 +228,7 @@ async function resolve(items) {
       product_name: m.product.name,
       variant_id: m.variant ? m.variant.id : null,
       variant_name: m.variant ? m.variant.name : null,
-      unit_price: m.variant?.selling_price || m.product.pos_price || 0,   // price from DB match
+      unit_price: m.variant?.selling_price ?? m.product.pos_price ?? 0,   // price from DB match
       quantity: it.qty || 1,
       modifiers: [],
       notes: null,

@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: '../server/public/client-build',
       emptyOutDir: true,
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks: {
@@ -28,6 +29,8 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+
+
     },
 
     server: {
