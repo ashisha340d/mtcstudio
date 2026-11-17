@@ -1,0 +1,151 @@
+/* Bikram Sambat date + holiday chip. Shared by the admin menu bar and the POS
+   window chrome, so every colour resolves through both token systems:
+   --t-x (admin shell) first, then the POS --window-x / --text-x tokens,
+   then a literal fallback. */
+
+.nd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+}
+
+/* Dark OS menu bar (admin desktop) */
+.nd-chip--menubar {
+  margin-left: 8px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.72);
+}
+.nd-chip--menubar:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+.nd-chip--menubar.is-holiday {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+}
+
+/* Light window chrome (POS Dine In · Tables bar) — matches .desktop-chrome__count */
+.nd-chip--chrome {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-2, var(--t-text-muted, #666));
+  font-size: 10px;
+  font-weight: 700;
+}
+.nd-chip--chrome:hover { background: rgba(0, 0, 0, 0.16); color: var(--text-1, var(--t-text, #1a1a1a)); }
+.nd-chip--chrome.is-holiday {
+  background: rgba(22, 163, 74, 0.16);
+  border-color: rgba(22, 163, 74, 0.35);
+  color: var(--green, #16a34a);
+}
+
+.nd-chip__flag {
+  font-size: 9px;
+  font-weight: 800;
+  background: rgba(74, 222, 128, 0.25);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.nd-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+}
+
+/* ── Panel (portalled to <body>) ───────────────────────────── */
+.nd-panel {
+  position: fixed;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 99990;
+  background: var(--t-surface, var(--window-bg, #fff));
+  color: var(--t-text, var(--text-1, #1a1a1a));
+  border: 1px solid var(--t-border-strong, var(--window-border, #a89880));
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  padding: 12px 14px 10px;
+  text-align: left;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: default;
+}
+
+.nd-panel__head { margin-bottom: 10px; }
+.nd-panel__big { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.nd-panel__sub {
+  font-size: 11px;
+  color: var(--t-text-muted, var(--text-2, #888));
+  margin-top: 3px;
+}
+
+.nd-panel__status {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--t-surface-2, var(--bg-card-2, #fafafa));
+  border: 1px solid var(--t-border, var(--window-border-light, #e5ddd0));
+  margin-bottom: 12px;
+}
+.nd-panel__status.is-holiday {
+  background: var(--t-success-bg, rgba(22, 163, 74, 0.14));
+  color: var(--t-success-text, var(--green, #166534));
+  border-color: transparent;
+}
+
+.nd-panel__list-title {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t-text-muted, var(--text-3, #888));
+  margin-bottom: 4px;
+}
+.nd-panel__list { display: flex; flex-direction: column; }
+
+.nd-panel__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--t-border, var(--window-border-light, #e5ddd0));
+  font-size: 12px;
+}
+.nd-panel__row:last-child { border-bottom: none; }
+.nd-panel__row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nd-panel__row-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+.nd-panel__row-when b { font-size: 11px; font-weight: 700; }
+.nd-panel__row-when i { font-style: normal; font-size: 10px; color: var(--t-text-muted, var(--text-3, #888)); }
+.nd-panel__row-when em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t-accent, var(--orange, #c1440e));
+}
+
+.nd-panel__empty { font-size: 11px; color: var(--t-text-muted, var(--text-3, #888)); padding: 8px 0; }
+.nd-panel__foot {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--t-border, var(--window-border-light, #e5ddd0));
+  font-size: 9px;
+  color: var(--t-text-muted, var(--text-3, #888));
+}

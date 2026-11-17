@@ -38,12 +38,14 @@ export function can(user, permission) {
 }
 
 // ── State ─────────────────────────────────────────────────────
+const AUTO_LOCK_KEY = 'mtc_auto_lock_seconds';
+const savedAutoLockSeconds = localStorage.getItem(AUTO_LOCK_KEY);
 const initialState = {
   user:            DEV_USER,
   sessionId:       DEV_USER ? 'dev-session' : null,
   locked:          DEV_USER ? false : true,
   error:           null,
-  autoLockSeconds: 120,
+  autoLockSeconds: savedAutoLockSeconds === null ? 120 : Number(savedAutoLockSeconds),
 };
 
 const A = {
@@ -60,7 +62,7 @@ function authReducer(state, { type, payload }) {
     case A.LOGIN_SUCCESS:
       return { ...state, user: payload.user, sessionId: payload.sessionId, locked: false, error: null };
     case A.LOGOUT:
-      return { ...initialState, locked: true };
+      return { ...initialState, autoLockSeconds: state.autoLockSeconds, locked: true };
     case A.LOCK:
       return { ...state, locked: true };
     case A.UNLOCK:
@@ -78,17 +80,20 @@ function authReducer(state, { type, payload }) {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children, apiService }) {
-  const [state, dispatch] = useReducer(authReducer, initialState);
+  const [state, dispatch] = useReducer(authReducer, initialState, s => {
+    const saved = localStorage.getItem(AUTO_LOCK_KEY);
+    return { ...s, autoLockSeconds: saved === null ? 120 : Number(saved) };
+  });
 
   // Activity timer for auto-lock
   const lockTimer = useRef(null);
 
   const resetLockTimer = useCallback(() => {
     if (lockTimer.current) clearTimeout(lockTimer.current);
-    if (!state.locked && state.user) {
+    if (!state.locked && state.user && state.autoLockSeconds > 0) {
       lockTimer.current = setTimeout(
         () => dispatch({ type: A.LOCK }),
-        (state.autoLockSeconds || 120) * 1000
+        state.autoLockSeconds * 1000
       );
     }
   }, [state.locked, state.user, state.autoLockSeconds]);
@@ -105,7 +110,7 @@ export function AuthProvider({ children, apiService }) {
   useEffect(() => {
     resetLockTimer();
     return () => { if (lockTimer.current) clearTimeout(lockTimer.current); };
-  }, [state.locked, state.user]); // eslint-disable-line
+  }, [resetLockTimer]);
 
   // ── Actions ───────────────────────────────────────────────
   const login = useCallback(async (pin) => {
@@ -137,7 +142,10 @@ export function AuthProvider({ children, apiService }) {
     lock,
     logout,
     can: (permission) => can(state.user, permission),
-    setAutoLock: (s) => dispatch({ type: A.SET_AUTO_LOCK, payload: s }),
+    setAutoLock: (s) => {
+      localStorage.setItem(AUTO_LOCK_KEY, String(s));
+      dispatch({ type: A.SET_AUTO_LOCK, payload: s });
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

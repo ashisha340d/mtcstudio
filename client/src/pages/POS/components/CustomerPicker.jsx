@@ -130,7 +130,10 @@ export default function CustomerPicker({ onSelect, limit = 20, autoFocus = true 
       clearTimeout(timer.current); // final search — don't wait out the debounce
       runSearch(search);
     } else if (e.key === 'Escape') {
-      setSearch(''); setRows([]); setActiveIndex(-1);
+      // Clear first, close on the next press — and never leak this keystroke to
+      // ancestor Escape handlers (POS window shortcuts, the desktop shell's
+      // double-Esc-closes-window timer) once we've consumed it here.
+      if (search) { e.stopPropagation(); setSearch(''); setRows([]); setActiveIndex(-1); }
     }
   }
 
@@ -208,6 +211,13 @@ export default function CustomerPicker({ onSelect, limit = 20, autoFocus = true 
               <span className="cust-picker__sub">
                 {highlight(c.phone, tokens)}{c.address ? <> · {highlight(c.address, tokens)}</> : ''}
               </span>
+              {c.tags?.length > 0 && (
+                <span className="cust-picker__tags">
+                  {c.tags.map(t => (
+                    <span key={t.id} className="cust-picker__tag" style={{ '--chip': t.color }}>{t.name}</span>
+                  ))}
+                </span>
+              )}
             </span>
             <span className="cust-picker__arrow">→</span>
           </button>

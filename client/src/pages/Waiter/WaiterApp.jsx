@@ -210,7 +210,6 @@ export default function WaiterApp() {
   // Order IDs this waiter just punched in themselves — suppresses the "new order"
   // toast/sound for our own action (still alerts for orders placed from POS/other waiters).
   const selfCreatedOrdersRef = useRef(new Set());
-  const touchStart = useRef({ x: 0, y: 0 });
 
   // ── Settings ─────────────────────────────────────────────────────
   const [settings,     setSettings]     = useState(getSettings);
@@ -888,16 +887,6 @@ export default function WaiterApp() {
         unit_price: Number(v.selling_price) || 0, modifiers: [],
       });
     }
-  };
-
-  // ── Swipe handlers ────────────────────────────────────────────────
-  const onTouchStart = e => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
-  const onTouchEnd   = (e, t, status) => {
-    const dx = e.changedTouches[0].clientX - touchStart.current.x;
-    const dy = Math.abs(e.changedTouches[0].clientY - touchStart.current.y);
-    if (dy > 40 || Math.abs(dx) < 50) return; // too vertical or too short = tap
-    if (dx > 0) handleTableSelect(t);             // swipe right = open
-    else if (status !== 'vacant') quickBillTable(t); // swipe left = bill
   };
 
   // ── Derived data ──────────────────────────────────────────────────

@@ -352,6 +352,10 @@
   border-collapse: collapse;
   font-size: 13px;
 }
+.ui-col-resizer { position: absolute; top: 0; right: -4px; width: 12px; height: 100%; cursor: col-resize; user-select: none; z-index: 2; }
+.ui-col-resizer::after { content: ''; position: absolute; top: 25%; right: 3px; width: 2px; height: 50%; background: var(--t-border-strong); border-radius: 2px; }
+.ui-col-resizer:hover::after { background: var(--t-accent); }
+
 .ui-table th, .crm-table thead th, .fm-table th {
   background: var(--t-surface-2);
   padding: 10px 12px;
@@ -369,6 +373,8 @@
   border-bottom: 1px solid var(--t-border);
   vertical-align: middle;
   color: var(--t-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ui-table tbody tr:hover td, .crm-table tbody tr:hover td, .fm-table tr:hover td {
   background: var(--t-surface-2);

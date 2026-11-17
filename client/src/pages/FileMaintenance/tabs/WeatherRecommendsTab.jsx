@@ -91,40 +91,40 @@ export default function WeatherRecommendsTab() {
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, gap:12, flexWrap:'wrap' }}>
         <div>
-          <div style={{ fontSize:16, fontWeight:800, color:'#2a1f12' }}>🌤️ Weather Recommends</div>
-          <div style={{ fontSize:12, color:'#9c8870', marginTop:4 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:'var(--t-text)' }}>🌤️ Weather Recommends</div>
+          <div style={{ fontSize:12, color:'var(--t-text-soft)', marginTop:4 }}>
             Pick the products shown in the website's weather recommendation popup for each condition.
             Buckets with fewer than 6 items are topped up with featured products on the site.
             Click <strong>Sync to Website</strong> to push everything live.
           </div>
         </div>
         <button onClick={syncNow} disabled={busy}
-          style={{ background:'#c1440e', color:'#fff', border:0, borderRadius:8, padding:'10px 16px', fontWeight:700, cursor:'pointer' }}>
+          style={{ background:'var(--t-accent)', color:'#fff', border:0, borderRadius:8, padding:'10px 16px', fontWeight:700, cursor:'pointer' }}>
           🔄 Sync to Website
         </button>
       </div>
 
       {/* Settings */}
-      <div style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap', background:'#fff7ef', border:'1px solid #ece1cf', borderRadius:10, padding:'12px 16px', marginBottom:20 }}>
-        <label style={{ display:'flex', gap:8, alignItems:'center', fontWeight:700, color:'#2a1f12', fontSize:13 }}>
+      <div style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap', background:'var(--t-surface-2)', border:'1px solid var(--t-border)', borderRadius:10, padding:'12px 16px', marginBottom:20 }}>
+        <label style={{ display:'flex', gap:8, alignItems:'center', fontWeight:700, color:'var(--t-text)', fontSize:13 }}>
           <input type="checkbox" checked={!!settings.enabled}
             onChange={e => setSettings(s => ({ ...s, enabled: e.target.checked ? 1 : 0 }))} />
           Popup enabled
         </label>
-        <label style={{ display:'flex', gap:6, alignItems:'center', fontSize:13, color:'#5a4a37' }}>
+        <label style={{ display:'flex', gap:6, alignItems:'center', fontSize:13, color:'var(--t-text-muted)' }}>
           Modal seconds
           <input type="number" min={2} max={60} value={settings.modal_seconds}
             onChange={e => setSettings(s => ({ ...s, modal_seconds: e.target.value }))}
-            style={{ width:60, padding:'5px 7px', border:'1px solid #d9cbb6', borderRadius:6 }} />
+            style={{ width:60, padding:'5px 7px', border:'1px solid var(--t-border)', borderRadius:6 }} />
         </label>
-        <label style={{ display:'flex', gap:6, alignItems:'center', fontSize:13, color:'#5a4a37' }}>
+        <label style={{ display:'flex', gap:6, alignItems:'center', fontSize:13, color:'var(--t-text-muted)' }}>
           Max shows / session
           <input type="number" min={1} max={10} value={settings.max_per_session}
             onChange={e => setSettings(s => ({ ...s, max_per_session: e.target.value }))}
-            style={{ width:60, padding:'5px 7px', border:'1px solid #d9cbb6', borderRadius:6 }} />
+            style={{ width:60, padding:'5px 7px', border:'1px solid var(--t-border)', borderRadius:6 }} />
         </label>
         <button onClick={saveSettings} disabled={busy}
-          style={{ background:'#2a1f12', color:'#fff', border:0, borderRadius:6, padding:'7px 14px', fontWeight:700, cursor:'pointer' }}>
+          style={{ background:'var(--t-text)', color:'var(--t-bg)', border:0, borderRadius:6, padding:'7px 14px', fontWeight:700, cursor:'pointer' }}>
           Save
         </button>
       </div>
@@ -135,35 +135,35 @@ export default function WeatherRecommendsTab() {
           const meta = BUCKET_META[b] || { icon: '🌡️', label: b };
           const list = items[b] || [];
           return (
-            <div key={b} style={{ background:'#fff', border:'1px solid #ece1cf', borderRadius:10, padding:14 }}>
-              <div style={{ fontWeight:800, color:'#2a1f12', marginBottom:10 }}>
+            <div key={b} style={{ background:'var(--t-surface)', border:'1px solid var(--t-border)', borderRadius:10, padding:14 }}>
+              <div style={{ fontWeight:800, color:'var(--t-text)', marginBottom:10 }}>
                 {meta.icon} {meta.label}
-                <span style={{ fontSize:12, color:'#9c8870', fontWeight:600, marginLeft:8 }}>{list.length} picks</span>
+                <span style={{ fontSize:12, color:'var(--t-text-soft)', fontWeight:600, marginLeft:8 }}>{list.length} picks</span>
               </div>
 
               {list.length === 0 && (
-                <div style={{ fontSize:12, color:'#b5a692', marginBottom:8 }}>No picks yet — website falls back to featured.</div>
+                <div style={{ fontSize:12, color:'var(--t-text-soft)', marginBottom:8 }}>No picks yet — website falls back to featured.</div>
               )}
               {list.map(it => (
-                <div key={it.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid #f3ece0' }}>
-                  <span style={{ fontSize:13, color:'#3a2c1c' }}>
-                    {it.product_name} {it.price != null && <em style={{ color:'#9c8870', fontStyle:'normal' }}>· Rs.{it.price}</em>}
+                <div key={it.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid var(--t-border)' }}>
+                  <span style={{ fontSize:13, color:'var(--t-text)' }}>
+                    {it.product_name} {it.price != null && <em style={{ color:'var(--t-text-soft)', fontStyle:'normal' }}>· Rs.{it.price}</em>}
                   </span>
                   <button onClick={() => removeItem(it.id)} disabled={busy}
-                    style={{ border:0, background:'none', color:'#c1440e', cursor:'pointer', fontSize:15 }} aria-label="Remove">✕</button>
+                    style={{ border:0, background:'none', color:'var(--t-accent)', cursor:'pointer', fontSize:15 }} aria-label="Remove">✕</button>
                 </div>
               ))}
 
               <div style={{ display:'flex', gap:6, marginTop:10 }}>
                 <select value={pick[b] || ''} onChange={e => setPick(p => ({ ...p, [b]: e.target.value }))}
-                  style={{ flex:1, padding:'6px 8px', border:'1px solid #d9cbb6', borderRadius:6, fontSize:13 }}>
+                  style={{ flex:1, padding:'6px 8px', border:'1px solid var(--t-border)', borderRadius:6, fontSize:13 }}>
                   <option value="">+ Add product…</option>
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.category ? `${p.category} · ` : ''}{p.name}</option>
                   ))}
                 </select>
                 <button onClick={() => addItem(b)} disabled={busy || !pick[b]}
-                  style={{ background:'#c1440e', color:'#fff', border:0, borderRadius:6, padding:'6px 12px', fontWeight:700, cursor:'pointer' }}>Add</button>
+                  style={{ background:'var(--t-accent)', color:'#fff', border:0, borderRadius:6, padding:'6px 12px', fontWeight:700, cursor:'pointer' }}>Add</button>
               </div>
             </div>
           );
@@ -171,7 +171,7 @@ export default function WeatherRecommendsTab() {
       </div>
 
       {toast && (
-        <div style={{ position:'fixed', bottom:24, right:24, background:'#2a1f12', color:'#fff', padding:'10px 16px', borderRadius:8, fontSize:13, zIndex:1000 }}>
+        <div style={{ position:'fixed', bottom:24, right:24, background:'var(--t-text)', color:'var(--t-bg)', padding:'10px 16px', borderRadius:8, fontSize:13, zIndex:1000 }}>
           {toast}
         </div>
       )}

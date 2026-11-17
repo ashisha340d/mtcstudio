@@ -9,6 +9,7 @@ const cmsDb = require('../../database/db');
 const socketServer = require('../../pos/socketServer');
 const ocrEngine = require('./ocrEngine');
 const meroKinmelParser = require('./meroKinmelParser');
+const foodmanduParser = require('./foodmanduParser');
 const orderResolver = require('./orderResolver');
 
 // Read lazily — the env injector may not have populated process.env at module load.
@@ -54,12 +55,16 @@ function publicExtra(e) {
 }
 
 // Parsers registry — extend per platform.
-const PARSERS = { 'Mero Kinmel': meroKinmelParser };
+const PARSERS = { 'Mero Kinmel': meroKinmelParser, 'Foodmandu': foodmanduParser };
 
-async function process({ imagePath, filename, source = 'WhatsApp Business', platform = 'Mero Kinmel', notificationTs = null }) {
-  const hash = md5File(imagePath);
+async function process({ imagePath = null, filename = null, rawText = null, source = 'WhatsApp Business', platform = 'Mero Kinmel', notificationTs = null }) {
+  const parser = PARSERS[platform] || meroKinmelParser;
+  const preParsed = rawText == null ? null : parser.parse(rawText);
+  const hash = rawText == null ? md5File(imagePath) : crypto.createHash('md5')
+    .update(preParsed?.orderNumber ? `${platform}:${preParsed.orderNumber}` : rawText).digest('hex');
+  const isFoodmandu = platform === 'Foodmandu';
 
-  // Duplicate image already handled → ignore (return existing record).
+  // Duplicate image or Foodmandu order already handled → ignore (return existing record).
   const dup = await dbGet(`SELECT id, status, scheduled_order_id FROM pos_ocr_imports WHERE image_hash = ?`, [hash]);
   if (dup) return { duplicate: true, importId: dup.id, status: dup.status, scheduledOrderId: dup.scheduled_order_id };
 
@@ -73,13 +78,17 @@ async function process({ imagePath, filename, source = 'WhatsApp Business', plat
   socketServer.emitOcrImport({ importId, stage: 'RECEIVED', platform, filename });
 
   try {
-    // ── OCR ──
-    await setStatus(importId, 'OCR');
-    const { text, ms } = await ocrEngine.extractText(imagePath);
+    let text = rawText;
+    let ms = 0;
+    if (text == null) {
+      await setStatus(importId, 'OCR');
+      const extracted = await ocrEngine.extractText(imagePath);
+      text = extracted.text;
+      ms = extracted.ms;
+    }
 
     // ── Parse ──
-    const parser = PARSERS[platform] || meroKinmelParser;
-    const parsed = parser.parse(text);
+    const parsed = preParsed || parser.parse(text);
     await setStatus(importId, 'PARSED', {
       ocr_ms: ms, raw_text: text, parsed_json: JSON.stringify(parsed),
       parser_confidence: parsed.confidence,
@@ -95,6 +104,7 @@ async function process({ imagePath, filename, source = 'WhatsApp Business', plat
     // correctness proof — prices come from our DB, so a matching total means
     // qty and price both reconcile. Anything untrusted becomes MK-REVIEW.
     const cfg = await meroConfig();
+    const importMode = isFoodmandu ? (globalThis.process.env.FOODMANDU_IMPORT_MODE || 'ORDER') : cfg.mk_import_mode;
     const computedTotal = cart.reduce((s, i) => s + (Number(i.unit_price) || 0) * (Number(i.quantity) || 0), 0);
     const slipTotal = parsed.printedTotal != null ? Number(parsed.printedTotal) : null;
     const totalMatches = slipTotal != null && Math.abs(computedTotal - slipTotal) < 0.5;
@@ -116,9 +126,12 @@ async function process({ imagePath, filename, source = 'WhatsApp Business', plat
     // Total from matched DB prices (rate comes from the product, not the slip).
     // The slip's own total is kept in the memo for the cashier's reference.
     const total = cart.reduce((s, i) => s + (Number(i.unit_price) || 0) * (Number(i.quantity) || 0), 0);
+    const customerName = parsed.customerName || (isFoodmandu ? 'Foodmandu' : 'Mero Kinmel');
+    const caption = isFoodmandu ? 'FM' : 'MK';
     const notesParts = [
-      parsed.orderNumber ? `MK Order #${parsed.orderNumber}` : null,
+      parsed.orderNumber ? `${isFoodmandu ? 'Foodmandu' : 'MK'} Order #${parsed.orderNumber}` : null,
       parsed.address ? `Addr: ${parsed.address}` : null,
+      parsed.rider ? `Rider: ${parsed.rider}` : null,
       'Pay: LEDGER',
       parsed.printedTotal ? `Slip total: Rs ${parsed.printedTotal}` : null,
       unresolved.length ? `Unmatched: ${unresolved.join('; ')}` : null,
@@ -129,16 +142,16 @@ async function process({ imagePath, filename, source = 'WhatsApp Business', plat
       `INSERT INTO pos_scheduled_orders
          (kind, order_type, customer_name, customer_phone, order_notes, order_caption, items_json, total_amount, created_by)
        VALUES ('DRAFT','DELIVERY',?,?,?,?,?,?,NULL)`,
-      [parsed.customerName || 'Mero Kinmel', parsed.phone || mkDefaultPhone(),
+      [customerName, parsed.phone || (isFoodmandu ? (globalThis.process.env.FOODMANDU_DEFAULT_PHONE || null) : mkDefaultPhone()),
        notesParts.join(' | ') || null,
-       clean ? 'MK' : 'MK-REVIEW', JSON.stringify(cart), total]
+       clean ? caption : `${caption}-REVIEW`, JSON.stringify(cart), total]
     );
     const scheduledOrderId = draft.insertId;
 
     // ── ORDER mode: trustworthy imports go straight to the kitchen ──
     // Untrustworthy always stays a draft, whatever the mode is set to.
     let order = null;
-    if (cfg.mk_import_mode === 'ORDER' && trustworthy) {
+    if (importMode === 'ORDER' && trustworthy) {
       try {
         const { convertRow } = require('../../routes/pos/scheduled');   // lazy — avoids require cycle
         const row = await dbGet(`SELECT * FROM pos_scheduled_orders WHERE id = ?`, [scheduledOrderId]);
@@ -160,15 +173,15 @@ async function process({ imagePath, filename, source = 'WhatsApp Business', plat
     // Draft is live in pos_scheduled_orders — tell POS to load its cards now.
     socketServer.emitScheduledChanged({
       scheduledOrderId, kind: 'DRAFT',
-      caption: clean ? 'MK' : 'MK-REVIEW', review: !clean,
-      customerName: parsed.customerName || 'Mero Kinmel',
+      caption: clean ? caption : `${caption}-REVIEW`, review: !clean,
+      customerName,
       total, orderNumber: parsed.orderNumber || null,
       orderId: order ? order.id : null,
     });
 
     return {
       importId, status: finalStatus, scheduledOrderId,
-      orderId: order ? order.id : null, mode: cfg.mk_import_mode,
+      orderId: order ? order.id : null, mode: importMode,
       confidence: overall, parserConfidence: parsed.confidence, matchConfidence,
       trustworthy, distrust,
       itemCount: cart.length, unresolved, ocrMs: ms, orderNumber: parsed.orderNumber,

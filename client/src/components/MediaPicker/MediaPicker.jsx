@@ -13,7 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { mediaApi } from '../../services/api';
 import './MediaPicker.css';
 
-const SECTIONS = [['', 'All'], ['menu', 'Menu'], ['cake', 'Cake Catalogue'], ['blog', 'Blogs']];
+const SECTIONS = [['', 'All'], ['menu', 'Menu'], ['cake', 'Cake Catalogue'], ['blog', 'Blogs'], ['employee', 'Employee']];
 const PER_PAGE_OPTIONS = [12, 24];
 const LS_KEY = 'mtc_media_picker';
 

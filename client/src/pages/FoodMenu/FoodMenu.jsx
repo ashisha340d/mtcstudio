@@ -6,6 +6,7 @@ import BadgeMultiSelect from './BadgeMultiSelect';
 import LiveShelfView from './LiveShelfView';
 import CategoriesView from './CategoriesView';
 import CombosView from './CombosView';
+import Tip from '../../components/ui/tip';
 import './FoodMenu.css';
 
 const STOREFRONT_CATS = [
@@ -53,8 +54,16 @@ function VariantImageCell({ product, variant, onPick }) {
   );
 }
 
+// Variant-level flags — on the product row for single-variant items, per variant line otherwise
+const VARIANT_FLAGS = [
+  { key: 'auto_entry', label: 'Auto Entry POS', title: 'Auto Entry POS — when ON, this item is added to the cart automatically every time a new table order is opened on POS / Waiter (e.g. water, cover charge). Staff can still remove it.' },
+  { key: 'check_on_bill', label: 'Check on Bill', title: 'Check on Bill — when ON, checkout warns the cashier/waiter if this item is NOT on the bill, so commonly forgotten items (water, service, packing) get charged.' },
+  { key: 'auto_kds', label: 'Active : KDS', invert: true, title: 'Active : KDS — when ON, this item is sent to the kitchen screen (KDS) to be prepared. Turn OFF for items that need no kitchen prep (water, packaged drinks): they skip KDS and are marked served the moment they are posted.' },
+];
+
 function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onAdd, makeKeyHandler, enableImage, onPickImage, onReorder }) {
   const variants = product.variants || [];
+  const showFlags = variants.length > 1;
   const [vDrag, setVDrag] = useState(null);
   const [vOver, setVOver] = useState(null);
 
@@ -78,6 +87,7 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
             <th style={{ width: 80 }}>Price</th>
             <th style={{ width: 80 }}>Status</th>
             <th style={{ width: 90 }}>🌐 Online</th>
+            {showFlags && <th style={{ width: 110 }}>Flags</th>}
             {enableImage && <th style={{ width: 60 }}>Image</th>}
             <th style={{ width: 250 }}></th>
           </tr>
@@ -144,6 +154,18 @@ function VariantGrid({ product, dirtyVariantIds, setRef, onUpdate, onDelete, onA
                     {v.show_online ? 'Online' : 'Off'}
                   </button>
                 </td>
+                {showFlags && (
+                  <td>
+                    <div className="fm-td-toggles">
+                      {VARIANT_FLAGS.filter(f => f.key === 'auto_kds').map(f => (
+                        <Tip key={f.key} text={f.title}><label className="fm-mini-toggle">
+                          <input type="checkbox" checked={!!v[f.key] !== !!f.invert}
+                            onChange={e => onUpdate(product.id, v.id, f.key, e.target.checked !== !!f.invert ? 1 : 0)} /> {f.label}
+                        </label></Tip>
+                      ))}
+                    </div>
+                  </td>
+                )}
                 {enableImage && (
                   <td>
                     <VariantImageCell product={product} variant={v} onPick={onPickImage} />
@@ -331,26 +353,6 @@ function WebMenuView({ categories, showMsg }) {
 }
 
 // ── POS price input — formats to 000.00 on blur, free-typing while focused ──
-function PosPriceInput({ value, onCommit }) {
-  const [text, setText] = useState(() => Number(value ?? 0).toFixed(2));
-  useEffect(() => { setText(Number(value ?? 0).toFixed(2)); }, [value]);
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      className="cell fm-pos-price-input"
-      value={text}
-      onChange={e => setText(e.target.value)}
-      onFocus={e => e.target.select()}
-      onBlur={() => {
-        const n = parseFloat(text) || 0;
-        onCommit(parseFloat(n.toFixed(2)));
-        setText(n.toFixed(2));
-      }}
-    />
-  );
-}
-
 // ── Collapsible side filter panel ───────────────────────────────────────────
 function FilterPanel({
   categories, stations, badgeOptions, catFilter, statFilter, stationFilter,
@@ -530,9 +532,6 @@ export default function FoodMenu() {
   const [bulkSel, setBulkSel] = useState('');
   const [dragSrc, setDragSrc] = useState(null);
   const [dragOver, setDragOver] = useState(null);
-  const [groupByCat, setGroupByCat] = useState(() => lsGet('fm_groupByCat', false));
-  const [dragSrcId, setDragSrcId] = useState(null);
-  const [dragOverId, setDragOverId] = useState(null);
   const [syncModal, setSyncModal] = useState(null); // null | { status: 'running'|'done'|'error', result?, error? }
 
   const { msg, showMsg } = useMsg();
@@ -1174,7 +1173,7 @@ export default function FoodMenu() {
                             onClick={() => updateProduct(p.id, 'featured', !p.featured)}
                             title="Toggle featured"
                           >{p.featured ? '★' : '☆'}</button>
-                          <label className="fm-mini-toggle fm-img-status-toggle" title="Active / Inactive">
+                          <Tip text="Active / Inactive"><label className="fm-mini-toggle fm-img-status-toggle">
                             <input
                               type="checkbox"
                               checked={p.status === 'active'}
@@ -1184,7 +1183,7 @@ export default function FoodMenu() {
                                 showMsg(next === 'active' ? 'Marked Active' : 'Marked Inactive');
                               }}
                             /> {p.status === 'active' ? 'Active' : 'Inactive'}
-                          </label>
+                          </label></Tip>
                         </td>
                         {/* Name / Desc stacked */}
                         <td className="fm-td-name">
@@ -1228,14 +1227,14 @@ export default function FoodMenu() {
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                           <div className="fm-td-mini-row">
-                            <label className="fm-mini-field" title="Kitchen station">Station
+                            <Tip text="Station — the kitchen station (KDS screen / KOT printer) this item is sent to when ordered."><label className="fm-mini-field">Station
                               <select className="cell" value={p.pos_station_id ?? ''}
                                 onChange={e => updateProduct(p.id, 'pos_station_id', e.target.value || null)}
                               >
                                 <option value="">—</option>
                                 {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                               </select>
-                            </label>
+                            </label></Tip>
                           </div>
                         </td>
 
@@ -1248,27 +1247,25 @@ export default function FoodMenu() {
                             placeholder="Add badges…"
                           />
                           <div className="fm-td-toggles">
-                            <label className="fm-mini-toggle" title="Fast moving item">
+                            <Tip text="Fast Section — when ON, this item appears in the ⚡ Fast / Quick rail on POS for one-tap ordering of best sellers."><label className="fm-mini-toggle">
                               <input type="checkbox" checked={!!p.is_fast_moving}
-                                onChange={e => updateProduct(p.id, 'is_fast_moving', e.target.checked ? 1 : 0)} /> Fast
-                            </label>
+                                onChange={e => updateProduct(p.id, 'is_fast_moving', e.target.checked ? 1 : 0)} /> Fast Section
+                            </label></Tip>
 
-                            <label className="fm-mini-toggle" title="Active on POS">
+                            <Tip text="Active : POS — when ON, this product appears on the POS and Waiter menus for ordering. Turn OFF to hide it from staff without deleting it."><label className="fm-mini-toggle">
                               <input type="checkbox" checked={p.pos_active === undefined || p.pos_active === null ? true : !!p.pos_active}
-                                onChange={e => updateProduct(p.id, 'pos_active', e.target.checked ? 1 : 0)} />  Active On Pos
-                            </label>
-                            <label className="fm-mini-toggle" title="Show on customer QR / web menu">
+                                onChange={e => updateProduct(p.id, 'pos_active', e.target.checked ? 1 : 0)} /> Active : POS
+                            </label></Tip>
+                            <Tip text="Active : QR Menu — when ON, customers can see and order this product from the table QR / web menu. Turn OFF to keep it staff-only."><label className="fm-mini-toggle">
                               <input type="checkbox" checked={!!p.customer_visible}
-                                onChange={e => updateProduct(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> QR Menu
-                            </label>
-                            <label className="fm-mini-toggle" title="Added automatically as a default item when a table order is created">
-                              <input type="checkbox" checked={(p.variants || []).some(v => !!v.auto_entry)}
-                                onChange={e => (p.variants || []).forEach(v => updateVariant(p.id, v.id, 'auto_entry', e.target.checked ? 1 : 0))} /> Auto Entry
-                            </label>
-                            <label className="fm-mini-toggle" title="At table checkout, warn if this item is missing from the bill">
-                              <input type="checkbox" checked={(p.variants || []).some(v => !!v.check_on_bill)}
-                                onChange={e => (p.variants || []).forEach(v => updateVariant(p.id, v.id, 'check_on_bill', e.target.checked ? 1 : 0))} /> Check on Bill
-                            </label>
+                                onChange={e => updateProduct(p.id, 'customer_visible', e.target.checked ? 1 : 0)} /> Active : QR Menu
+                            </label></Tip>
+                            {VARIANT_FLAGS.filter(f => f.key !== 'auto_kds' || (p.variants || []).length <= 1).map(f => (
+                              <Tip key={f.key} text={f.title}><label className="fm-mini-toggle">
+                                <input type="checkbox" checked={(p.variants || []).some(v => !!v[f.key] !== !!f.invert)}
+                                  onChange={e => (p.variants || []).forEach(v => updateVariant(p.id, v.id, f.key, e.target.checked !== !!f.invert ? 1 : 0))} /> {f.label}
+                              </label></Tip>
+                            ))}
                           </div>
                         </td>
 
@@ -1302,23 +1299,20 @@ export default function FoodMenu() {
                             </div>
                           )}
                           <div className="fm-td-mini-row">
-                            <label className="fm-mini-field" title="POS price">POS
-                              <PosPriceInput value={p.pos_price} onCommit={v => updateProduct(p.id, 'pos_price', v)} />
-                            </label>
-                            <label className="fm-mini-field" title="Prep time (min)">Prep
+                            <Tip text="Prep Time — minutes the kitchen needs to make this item. Used for KDS timers and to flag delayed orders."><label className="fm-mini-field">Prep Time (min)
                               <input type="number" className="cell fm-prep-input" min="0"
                                 value={p.prep_time_minutes ?? 10}
                                 onChange={e => updateProduct(p.id, 'prep_time_minutes', parseInt(e.target.value))}
                                 onFocus={e => e.target.select()}
                               />
-                            </label>
-                            <label className="fm-mini-field" title="Max qty per customer order (blank = unlimited)">Max
+                            </label></Tip>
+                            <Tip text="Max Qty / Order — most a customer can order of this item in one QR / web order. Blank = unlimited. Does not limit POS or Waiter."><label className="fm-mini-field">Max Qty / Order
                               <input type="number" className="cell fm-max-input" min="1" max="99" maxLength="2" placeholder="∞"
                                 value={p.customer_max_qty ?? ''}
                                 onChange={e => updateProduct(p.id, 'customer_max_qty', e.target.value === '' ? null : parseInt(e.target.value))}
                                 onFocus={e => e.target.select()}
                               />
-                            </label>
+                            </label></Tip>
                           </div>
                         </td>
 

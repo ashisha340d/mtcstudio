@@ -4,8 +4,9 @@
 const express = require('express');
 const { dbAll } = require('../../../pos/db');
 const {
-  round2, SALES_JOIN, PRODUCT_NAME, PRODUCT_KEY, idListFilter, rangeBounds,
+  round2, SALES_JOIN, PRODUCT_NAME, PRODUCT_KEY, idListFilter, stringListFilter, rangeBounds,
 } = require('./shared');
+const { getNepalDayBoundsUTC, getNepalDateStr } = require('../../../utils/nepalDateTime');
 
 const router = express.Router();
 
@@ -78,28 +79,65 @@ router.get('/product-summary', async (req, res) => {
   })));
 });
 
-// GET /api/pos/reports/monthly-summary?year=YYYY&category_ids=&product_ids=
+// GET /api/pos/reports/monthly-summary?year=YYYY&group=item|category|order-type
+//     &category_ids=&product_ids=&order_types=
+// One full-year pivot, three shapes: item rows, category rows, or order-type
+// rows — the filter params only ever narrow that shape's own rows, they
+// never switch it (that's what `group` is for).
 router.get('/monthly-summary', async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
+  const group = ['category', 'order-type'].includes(req.query.group) ? req.query.group : 'item';
   const cat = idListFilter(req.query.category_ids || req.query.category_id, 'p.category_id');
   const prod = idListFilter(req.query.product_ids, 'p.id');
+  const ot = stringListFilter(req.query.order_types, 'o.order_type');
 
-  const rows = await dbAll(
-    `SELECT ${PRODUCT_KEY} AS row_key, p.id, ${PRODUCT_NAME} AS name,
-            MONTH(o.closed_at) AS month,
-            SUM(ki.quantity) AS qty, SUM(ki.quantity * ki.unit_price) AS amount
-     ${SALES_JOIN}
-     WHERE o.status = 'CLOSED' AND YEAR(o.closed_at) = ?
-       ${cat.clause}${prod.clause}
-     GROUP BY row_key, p.id, name, month
-     ORDER BY name`,
-    [year, ...cat.params, ...prod.params]
-  );
+  let rows;
+  if (group === 'category') {
+    rows = await dbAll(
+      `SELECT COALESCE(c.id, 0) AS row_key, COALESCE(c.name, 'Uncategorized') AS name,
+              MONTH(o.closed_at) AS month,
+              SUM(ki.quantity) AS qty, SUM(ki.quantity * ki.unit_price) AS amount
+       ${SALES_JOIN}
+       WHERE o.status = 'CLOSED' AND YEAR(o.closed_at) = ?${cat.clause}
+       GROUP BY row_key, name, month
+       ORDER BY name`,
+      [year, ...cat.params]
+    );
+  } else if (group === 'order-type') {
+    rows = await dbAll(
+      `SELECT o.order_type AS row_key, o.order_type AS name,
+              MONTH(o.closed_at) AS month,
+              SUM(ki.quantity) AS qty, SUM(ki.quantity * ki.unit_price) AS amount
+       FROM pos_kot_items ki
+       JOIN pos_kots k ON k.id = ki.kot_id
+       JOIN pos_orders o ON o.id = k.order_id
+       WHERE o.status = 'CLOSED' AND YEAR(o.closed_at) = ?${ot.clause}
+       GROUP BY row_key, name, month
+       ORDER BY name`,
+      [year, ...ot.params]
+    );
+  } else {
+    rows = await dbAll(
+      `SELECT ${PRODUCT_KEY} AS row_key, p.id, ${PRODUCT_NAME} AS name,
+              COALESCE(c.name, 'Uncategorized') AS category_name,
+              MONTH(o.closed_at) AS month,
+              SUM(ki.quantity) AS qty, SUM(ki.quantity * ki.unit_price) AS amount
+       ${SALES_JOIN}
+       WHERE o.status = 'CLOSED' AND YEAR(o.closed_at) = ?
+         ${cat.clause}${prod.clause}
+       GROUP BY row_key, p.id, name, category_name, month
+       ORDER BY name`,
+      [year, ...cat.params, ...prod.params]
+    );
+  }
 
-  res.json(rows.map(r => ({
-    id: r.row_key, productId: r.id, name: r.name, month: Number(r.month) || 0,
-    qty: Number(r.qty) || 0, amount: round2(r.amount),
-  })));
+  res.json({
+    mode: group,
+    rows: rows.map(r => ({
+      id: r.row_key, productId: r.id ?? null, name: r.name, category_name: r.category_name ?? null, month: Number(r.month) || 0,
+      qty: Number(r.qty) || 0, amount: round2(r.amount),
+    })),
+  });
 });
 
 // GET /api/pos/reports/zero-sales?from=&to=&category_ids=
@@ -134,6 +172,52 @@ router.get('/zero-sales', async (req, res) => {
     last_sold: r.last_sold ? String(r.last_sold).split(' ')[0] : null,
     qty: 0, amount: 0,
   })));
+});
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Count how many of each weekday (0=Sun..6=Sat) fall in an inclusive date range. */
+function weekdayCounts(from, to) {
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  const start = Date.UTC(fy, fm - 1, fd);
+  const end = Date.UTC(ty, tm - 1, td);
+  for (let t = start; t <= end; t += 86400000) counts[new Date(t).getUTCDay()]++;
+  return counts;
+}
+
+// GET /api/pos/reports/weekly-pattern?from=&to=
+// Typical hourly sales curve per weekday — averaged over how many times that
+// weekday actually occurred in the range, so a 2-week range and a 2-month
+// range both plot "a normal Monday", not a lopsided sum.
+router.get('/weekly-pattern', async (req, res) => {
+  const from = req.query.from || getNepalDateStr();
+  const to = req.query.to || from;
+  const { start } = getNepalDayBoundsUTC(from);
+  const { end } = getNepalDayBoundsUTC(to);
+
+  const rows = await dbAll(
+    `SELECT (DAYOFWEEK(o.closed_at) - 1) AS dow, HOUR(o.closed_at) AS hour,
+            SUM(ki.quantity * ki.unit_price) AS amount
+     ${SALES_JOIN}
+     WHERE o.status = 'CLOSED' AND o.closed_at >= ? AND o.closed_at <= ?
+     GROUP BY dow, hour`,
+    [start, end]
+  );
+
+  const counts = weekdayCounts(from, to);
+  const sums = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const r of rows) sums[r.dow][r.hour] = Number(r.amount) || 0;
+
+  const weekdays = [1, 2, 3, 4, 5, 6, 0].map(dow => ({
+    dow,
+    label: WEEKDAY_LABELS[dow],
+    days: counts[dow],
+    hours: counts[dow] ? sums[dow].map(v => round2(v / counts[dow])) : sums[dow].map(() => 0),
+  }));
+
+  res.json({ from, to, weekdays });
 });
 
 module.exports = router;

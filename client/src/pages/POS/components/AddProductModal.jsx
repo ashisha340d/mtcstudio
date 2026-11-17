@@ -99,6 +99,7 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
       : []
   );
   const [selMods, setSelMods] = useState(existingItem?.modifiers ?? []);
+  const qtyLocked = existingItem?.status === 'SERVED' && !existingItem?.no_station;
   const [qty, setQty] = useState(existingItem?.quantity ?? 1);
   const [notes, setNotes] = useState(existingItem?.notes ?? '');
   const [rateInput, setRateInput] = useState(existingItem ? String(existingItem.unit_price) : '');
@@ -394,13 +395,13 @@ export default function AddProductModal({ product, existingItem, onClose, onConf
               </div>
               {!isMulti && (
                 <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>Qty</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: W.text3, marginBottom: 5 }}>Qty{qtyLocked ? ' (served)' : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button disabled={qtyLocked} onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: qtyLocked ? 'not-allowed' : 'pointer', opacity: qtyLocked ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Minus style={{ width: 15, height: 15 }} />
                     </button>
                     <span style={{ fontSize: 18, fontWeight: 900, color: W.text1, minWidth: 26, textAlign: 'center' }}>{qty}</span>
-                    <button onClick={() => setQty(q => q + 1)} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button disabled={qtyLocked} onClick={() => setQty(q => q + 1)} style={{ width: 34, height: 34, borderRadius: '50%', background: W.orange, border: 'none', color: '#fff', cursor: qtyLocked ? 'not-allowed' : 'pointer', opacity: qtyLocked ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Plus style={{ width: 15, height: 15 }} />
                     </button>
                   </div>

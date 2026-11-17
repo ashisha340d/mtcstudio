@@ -26,13 +26,6 @@ export const KOT_STATUS = {
   CANCELLED:   'CANCELLED',
 };
 
-export const PAYMENT_METHOD = {
-  CASH:   'CASH',
-  CARD:   'CARD',
-  QR:     'QR',
-  LEDGER: 'LEDGER',
-};
-
 // ── Initial State ─────────────────────────────────────────────
 const initialState = {
   // Master data (loaded once)
@@ -65,11 +58,17 @@ const initialState = {
     screen: 'DASHBOARD',  // 'DASHBOARD' | 'ORDER_ENTRY' | 'CHECKOUT'
     activeOrderId: null,
     notification: null,   // { type: 'success'|'error'|'info', message }
+    // Today's notification log, newest first — { id, type, message, at }
+    notifications: [],
   },
 
   loading: false,
   error: null,
 };
+
+// Notification log persistence — one bucket per Nepal business day
+const NOTIF_LOG_KEY = 'pos.notifications.v1';
+const notifLogDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
 
 // ── Action Types ──────────────────────────────────────────────
 const A = {
@@ -99,6 +98,8 @@ const A = {
   SET_SCREEN:           'SET_SCREEN',
   SET_NOTIFICATION:     'SET_NOTIFICATION',
   CLEAR_NOTIFICATION:   'CLEAR_NOTIFICATION',
+  SET_NOTIFICATION_LOG: 'SET_NOTIFICATION_LOG',
+  CLEAR_NOTIFICATION_LOG: 'CLEAR_NOTIFICATION_LOG',
 
   SET_LOADING:          'SET_LOADING',
   SET_ERROR:            'SET_ERROR',
@@ -326,10 +327,24 @@ function posReducer(state, { type, payload }) {
       return { ...state, ui: { ...state.ui, screen: payload } };
 
     case A.SET_NOTIFICATION:
-      return { ...state, ui: { ...state.ui, notification: payload } };
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          notification: payload,
+          // Newest first, capped — the log is a day's worth, not a journal.
+          notifications: [payload, ...state.ui.notifications].slice(0, 200),
+        },
+      };
 
     case A.CLEAR_NOTIFICATION:
       return { ...state, ui: { ...state.ui, notification: null } };
+
+    case A.SET_NOTIFICATION_LOG:
+      return { ...state, ui: { ...state.ui, notifications: payload } };
+
+    case A.CLEAR_NOTIFICATION_LOG:
+      return { ...state, ui: { ...state.ui, notifications: [] } };
 
     case A.SET_LOADING:
       return { ...state, loading: payload };
@@ -617,6 +632,25 @@ export function POSProvider({ children, apiService, activeUser = null }) {
   }, [apiService]);
 
   /**
+   * TRANSFER ITEM ("Advance") — move qty of a single KOT line from its order into
+   * another. Splits the line when partial; source order stays open.
+   */
+  const transferItem = useCallback(async ({ targetOrderId, itemId, quantity }) => {
+    dispatch({ type: A.SET_LOADING, payload: true });
+    try {
+      const res = await apiService.transferItem({ targetOrderId, itemId, quantity });
+      const { orders, kots } = await apiService.getActiveOrders();
+      dispatch({ type: A.ORDERS_LOADED, payload: { orders, kots } });
+      return res;
+    } catch (err) {
+      dispatch({ type: A.SET_ERROR, payload: err.response?.data?.error || err.message });
+      throw err;
+    } finally {
+      dispatch({ type: A.SET_LOADING, payload: false });
+    }
+  }, [apiService]);
+
+  /**
    * Patch arbitrary order fields (order_caption, customer_name, customer_phone…)
    * and merge the result straight into state — no full reload needed.
    */
@@ -697,9 +731,33 @@ export function POSProvider({ children, apiService, activeUser = null }) {
 
   // ── Notification helper ───────────────────────────────────
   const notify = useCallback((type, message) => {
-    dispatch({ type: A.SET_NOTIFICATION, payload: { type, message } });
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type, message, at: new Date().toISOString(),
+    };
+    dispatch({ type: A.SET_NOTIFICATION, payload: entry });
     setTimeout(() => dispatch({ type: A.CLEAR_NOTIFICATION }), 4000);
   }, []);
+
+  /* The log survives a reload but never crosses into the next business day. */
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(NOTIF_LOG_KEY));
+      if (saved?.date === notifLogDay() && Array.isArray(saved.items) && saved.items.length) {
+        dispatch({ type: A.SET_NOTIFICATION_LOG, payload: saved.items });
+      }
+    } catch { /* corrupt entry — start clean */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NOTIF_LOG_KEY, JSON.stringify({
+        date: notifLogDay(), items: state.ui.notifications,
+      }));
+    } catch { /* quota */ }
+  }, [state.ui.notifications]);
+
+  const clearNotifications = useCallback(() => dispatch({ type: A.CLEAR_NOTIFICATION_LOG }), []);
 
   // ── KDS feedback → POS state ──────────────────────────────
   /**
@@ -708,18 +766,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
    */
   const onItemServed = useCallback(({ orderId, kotId, itemId }) => {
     dispatch({ type: A.KOT_ITEM_SERVED, payload: { orderId, kotId, itemId } });
-
-    // Check if the whole order is now served
-    const kots = state.kotsByOrder[orderId] || [];
-    const allServed = kots.every(
-      (k) =>
-        k.id === kotId
-          ? (k.items || []).every(
-              (i) => i.id === itemId || i.status === KOT_STATUS.SERVED || i.status === KOT_STATUS.CANCELLED
-            )
-          : k.status === KOT_STATUS.SERVED || k.status === KOT_STATUS.CANCELLED
-    );
-  }, [state.kotsByOrder]);
+  }, []);
 
   // ── Derived helpers ───────────────────────────────────────
 
@@ -878,6 +925,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
     checkout,
     mergeOrders,
     shiftOrder,
+    transferItem,
     updateOrderFields,
     cancelOrder,
     revertOrderTransaction,
@@ -898,6 +946,7 @@ export function POSProvider({ children, apiService, activeUser = null }) {
 
     // UI
     notify,
+    clearNotifications,
     setScreen: (s) => dispatch({ type: A.SET_SCREEN, payload: s }),
 
     // Web Orders (approval queue)

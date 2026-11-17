@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, Routes, Route } from 'react-router';
 
 // ── Page components ────────────────────────────────────────────
-import Dashboard from '../pages/Dashboard/Dashboard';
 import FoodMenu from '../pages/FoodMenu/FoodMenu';
 import Media from '../pages/Media/Media';
 import Blogs from '../pages/Blogs/Blogs';
@@ -12,6 +11,8 @@ import CakeCatalogue from '../pages/CakeCatalogue/CakeCatalogue';
 import FileMaintenance from '../pages/FileMaintenance/FileMaintenance';
 import CRM from '../pages/CRM/CRM';
 import Automation from '../pages/Automation/Automation';
+import Campaigns from '../pages/Campaigns/Campaigns';
+import HR from '../pages/HR/HR';
 import SystemMonitor from '../pages/SystemMonitor/SystemMonitor';
 import SalesReport from '../pages/SalesReport/SalesReport';
 import DayEnd from '../pages/DayEnd/DayEnd';
@@ -19,6 +20,7 @@ import Reports from '../pages/Reports/Reports';
 
 import DesktopWindow from './DesktopWindow';
 import SettingsPanel from './SettingsPanel';
+import NepaliDateChip from '../components/NepaliDateChip/NepaliDateChip';
 import { getTheme, saveTheme } from '../utils/themeConfig';
 
 import './AdminLayout.css';
@@ -46,6 +48,8 @@ const ALL_APPS = [
   { key: 'blogs', label: 'Blogs', icon: '✍', path: '/blogs', accent: '#d97706', desc: 'Articles & content', component: BlogsApp },
   { key: 'crm', label: 'CRM', icon: '👥', path: '/crm', accent: '#0891b2', desc: 'Customers & loyalty', component: CRM },
   { key: 'automation', label: 'Automation', icon: '⚙️', path: '/automation', accent: '#9333ea', desc: 'Marketing rule engine', component: Automation },
+  { key: 'campaigns', label: 'Campaigns', icon: '📣', path: '/campaigns', accent: '#db2777', desc: 'Campaign management & marketing engine', component: Campaigns },
+  { key: 'hr', label: 'HR', icon: '👔', path: '/hr', accent: '#0d9488', desc: 'Staff · Attendance · Payroll', component: HR },
   { key: 'sales-report', label: 'Sales Registry', icon: '📊', path: '/sales-report', accent: '#10b981', desc: 'Daily order register & payment log', component: SalesReport },
   { key: 'day-end', label: 'Day End', icon: '🔒', path: '/day-end', accent: '#b45309', desc: 'Daily closing / Z report', component: DayEnd },
   { key: 'reports', label: 'Reports', icon: '📈', path: '/reports', accent: '#2563eb', desc: 'Category · Product · Monthly analytics', component: Reports },
@@ -80,31 +84,39 @@ const CMS_CHILDREN = [
                                                                    Sales Registry
                                                                    System Monitor
 */
-const GROUP_DEFS = {
-  // FILES group — col 0
-  'food-menu': { col: 0, row: 0 },
-  'file-maintenance': { col: 0, row: 1 },
-  // CMS group — col 1
-  'media': { col: 1, row: 0 },
-  'cake-catalogue': { col: 1, row: 1 },
-  'blogs': { col: 1, row: 2 },
-  // Apps — col 2 (no Dashboard)
-  'crm': { col: 2, row: 0 },
-  'automation': { col: 2, row: 1 },
-  'pos': { col: 2, row: 2 },
-  'kds': { col: 2, row: 3 },
-  'cake-orders': { col: 2, row: 4 },
-  'sales-report': { col: 2, row: 5 },
-  'day-end': { col: 2, row: 6 },
-  'system-monitor': { col: 2, row: 7 },
-  'reports': { col: 2, row: 8 },
-};
-const COL_X = [16, 120, 224];
-const ROW_Y0 = 40;   // y of first icon row (below group label)
-const ROW_H = 94;   // height per icon row
+// Icons auto-arrange as a 4-wide grid; groups stack vertically (Files, CMS,
+// Apps) so no group ever forms a long single column — Apps flows 4×3.
+const DESKTOP_GROUPS = [
+  { header: 'Files', keys: ['food-menu', 'file-maintenance'] },
+  { header: 'CMS', keys: ['media', 'cake-catalogue', 'blogs'] },
+  { header: 'Apps', keys: ['crm', 'automation', 'campaigns', 'hr', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor', 'reports'] },
+];
+const GRID_COLS = 4;
+const CELL_W = 104;
+const CELL_H = 98;
+const GRID_X0 = 24;
+const GRID_TOP = 8;
+const LABEL_H = 20;
+const GROUP_GAP = 16;
+
+// Precompute default grid position per key + each group label's y.
+const ICON_LAYOUT = {};
+const GROUP_LABELS = [];
+(() => {
+  let y = GRID_TOP;
+  for (const g of DESKTOP_GROUPS) {
+    GROUP_LABELS.push({ header: g.header, keys: g.keys, x: GRID_X0, y });
+    y += LABEL_H;
+    g.keys.forEach((k, i) => {
+      ICON_LAYOUT[k] = { x: GRID_X0 + (i % GRID_COLS) * CELL_W, y: y + Math.floor(i / GRID_COLS) * CELL_H };
+    });
+    const rows = Math.max(1, Math.ceil(g.keys.length / GRID_COLS));
+    y += rows * CELL_H + GROUP_GAP;
+  }
+})();
 
 /* ── localStorage persistence ─────────────────────────────────── */
-const LS_POS = 'mtc_icon_positions_v4';
+const LS_POS = 'mtc_icon_positions_v5';   // v5: 4-wide auto grid (was long columns)
 const LS_SHORTCUTS = 'mtc_shortcuts_v4';
 const LS_WIN_STATE = 'mtc_win_state_v1';
 const DRAG_THRESHOLD = 5;
@@ -128,15 +140,13 @@ function loadShortcuts() {
   return [
     'food-menu', 'file-maintenance',
     'media', 'cake-catalogue', 'blogs',
-    'crm', 'automation', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor', 'reports',
+    'crm', 'automation', 'campaigns', 'pos', 'kds', 'cake-orders', 'sales-report', 'day-end', 'system-monitor', 'reports',
   ];
 }
 function saveShortcuts(s) { localStorage.setItem(LS_SHORTCUTS, JSON.stringify(s)); }
 
 function defaultPos(key) {
-  const g = GROUP_DEFS[key];
-  if (g) return { x: COL_X[g.col], y: ROW_Y0 + g.row * ROW_H };
-  return { x: 16, y: 16 };
+  return ICON_LAYOUT[key] ?? { x: GRID_X0, y: GRID_TOP };
 }
 
 /* ── URL → app resolution ─────────────────────────────────────── */
@@ -249,8 +259,8 @@ function IconTile({ app, isOpen, size = 72 }) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
         padding: '8px 10px', borderRadius: 10, width: 90,
         background: isOpen
-          ? 'rgba(193,68,14,0.15)'
-          : hover ? 'rgba(255,255,255,0.42)' : 'transparent',
+          ? 'var(--t-accent-soft)'
+          : hover ? 'var(--dk-fill-strong)' : 'transparent',
         transition: 'background 0.12s, transform 0.1s',
         transform: hover ? 'translateY(-2px)' : 'none',
       }}
@@ -271,11 +281,13 @@ function IconTile({ app, isOpen, size = 72 }) {
         {app.icon}
       </div>
       <span style={{
-        fontSize: 10, fontWeight: 700, color: '#2a1f12',
-        textShadow: '0 1px 4px rgba(255,255,255,0.9)',
+        fontSize: 11, fontWeight: 700, color: 'var(--t-text)',
+        textShadow: '0 1px 2px rgba(0,0,0,0.55)',
         textAlign: 'center', lineHeight: 1.2,
         maxWidth: 82, wordBreak: 'break-word',
-        letterSpacing: '0.02em',
+        letterSpacing: '0.01em',
+        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+        textRendering: 'optimizeLegibility',
       }}>{app.label}</span>
       {isOpen && (
         <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c1440e', marginTop: -2 }} />
@@ -376,7 +388,7 @@ function ShortcutsPanel({ shortcuts, onToggle, onArrange, onClose }) {
           {[
             { header: '📂  Files', keys: ['food-menu', 'file-maintenance'] },
             { header: '🌐  CMS', keys: ['media', 'cake-catalogue', 'blogs'] },
-            { header: '⚡  Apps', keys: ['crm', 'automation', 'pos', 'kds', 'cake-orders', 'system-monitor'] },
+            { header: '⚡  Apps', keys: ['crm', 'automation', 'campaigns', 'pos', 'kds', 'cake-orders', 'system-monitor'] },
           ].map(group => (
             <div key={group.header}>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase', color: '#9c8870', padding: '8px 8px 3px' }}>{group.header}</div>
@@ -504,13 +516,14 @@ function DesktopGroupLabel({ label, x, y }) {
     <div style={{
       position: 'absolute', left: x, top: y, zIndex: 15,
       pointerEvents: 'none', userSelect: 'none',
-      fontSize: 9, fontWeight: 800, letterSpacing: '0.14em',
+      fontSize: 10, fontWeight: 800, letterSpacing: '0.14em',
       textTransform: 'uppercase',
-      color: 'rgba(42,31,18,0.5)',
-      textShadow: '0 1px 4px rgba(255,255,255,0.95)',
-      background: 'rgba(255,255,255,0.22)',
+      color: 'var(--t-text-muted)',
+      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+      background: 'var(--dk-fill)',
+      border: '1px solid var(--t-border)',
       padding: '2px 9px', borderRadius: 5,
-      backdropFilter: 'blur(2px)',
+      WebkitFontSmoothing: 'antialiased',
     }}>
       {label}
     </div>
@@ -702,7 +715,7 @@ export default function AdminLayout() {
     const app = ALL_APPS.find(a => a.key === key);
     if (!app) return;
     // External launchers (POS, KDS) — navigate full-screen, no window
-    if (app.external) { navigate(app.path); return; }
+    if (app.external) { navigate(app.path, { state: { fromAdmin: true } }); return; }
     setWindows(prev => {
       const existing = prev.find(w => w.key === key);
       if (existing) {
@@ -941,7 +954,7 @@ export default function AdminLayout() {
 
         {/* POS / KDS quick launchers */}
         <button className="os-menubar__shortcut" onClick={() => navigate('/pos')} title="Launch POS — Order Management">🖥 POS</button>
-        <button className="os-menubar__shortcut" onClick={() => navigate('/kds')} title="Launch KDS — Kitchen Display">📺 KDS</button>
+        <button className="os-menubar__shortcut" onClick={() => navigate('/kds', { state: { fromAdmin: true } })} title="Launch KDS — Kitchen Display">📺 KDS</button>
 
         {/* Shortcut manager button */}
         <button
@@ -959,6 +972,9 @@ export default function AdminLayout() {
           title="Server Settings"
         >⚙</button>
 
+        {/* Nepali (BS) date + holiday status */}
+        <NepaliDateChip />
+
         {/* Clock */}
         <span className="os-menubar__clock">{clock}</span>
       </div>
@@ -968,16 +984,10 @@ export default function AdminLayout() {
           ╚═══════════════════════════════════════╝ */}
       <div className="desktop-area">
 
-        {/* Desktop group labels */}
-        {visibleKeys.some(k => ['food-menu', 'file-maintenance'].includes(k)) && (
-          <DesktopGroupLabel label="Files" x={COL_X[0] + 4} y={12} />
-        )}
-        {visibleKeys.some(k => ['media', 'cake-catalogue', 'blogs'].includes(k)) && (
-          <DesktopGroupLabel label="CMS" x={COL_X[1] + 4} y={12} />
-        )}
-        {visibleKeys.some(k => ['crm', 'pos', 'kds', 'cake-orders'].includes(k)) && (
-          <DesktopGroupLabel label="Apps" x={COL_X[2] + 4} y={12} />
-        )}
+        {/* Desktop group labels — one per stacked grid section */}
+        {GROUP_LABELS.filter(g => g.keys.some(k => visibleKeys.includes(k))).map(g => (
+          <DesktopGroupLabel key={g.header} label={g.header} x={g.x} y={g.y} />
+        ))}
 
         {/* Freely-draggable desktop icons */}
         {visibleKeys.map((key) => {

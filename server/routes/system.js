@@ -6,6 +6,8 @@ const fs      = require('fs');
 const tracker = require('../services/deviceTracker');
 const backup  = require('../services/backupService');
 const logger  = require('../services/logService');
+const holidayCalendar = require('../services/holidayCalendar');
+const { getNepalDateStr } = require('../utils/nepalDateTime');
 const router  = express.Router();
 
 const DB_PATH = path.join(__dirname, '..', 'database', 'mtcstudio.db');
@@ -137,6 +139,33 @@ router.get('/info', (_req, res) => {
     hostname:    os.hostname(),
     uptime:      Math.floor(process.uptime()),
     dbSizeBytes: dbSize(),
+  });
+});
+
+// GET /api/system/holidays?days=120&limit=8
+// Today's holiday status plus the next few, for the dashboard menu bar.
+router.get('/holidays', (req, res) => {
+  const days  = Math.min(400, Math.max(1, Number(req.query.days) || 120));
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 8));
+  const today = getNepalDateStr();
+
+  const until = new Date(`${today}T00:00:00Z`);
+  until.setUTCDate(until.getUTCDate() + days);
+  const to = until.toISOString().slice(0, 10);
+
+  const window = holidayCalendar.getHolidays(today, to);
+  const dayMs = 86400000;
+  const daysAway = (d) =>
+    Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / dayMs);
+
+  res.json({
+    today,
+    todayHolidays: window.filter(h => h.date <= today && (h.end || h.date) >= today).map(h => h.title),
+    upcoming: window
+      .filter(h => h.date > today)
+      .slice(0, limit)
+      .map(h => ({ date: h.date, end: h.end, title: h.title, daysAway: daysAway(h.date) })),
+    ...holidayCalendar.status(),
   });
 });
 

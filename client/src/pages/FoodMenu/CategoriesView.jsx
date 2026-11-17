@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { categoriesApi } from '../../services/api';
 import { useMsg } from '../../hooks/useApi';
 import MediaPicker from '../../components/MediaPicker/MediaPicker';

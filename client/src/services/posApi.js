@@ -56,6 +56,9 @@ export const mergeOrders = ({ targetOrderId, sourceOrderId }) =>
 export const shiftOrder = ({ orderId, targetTableId }) =>
   http.patch(`/pos/orders/${orderId}/shift`, { targetTableId }).then(r => r.data);
 
+export const transferItem = ({ targetOrderId, itemId, quantity }) =>
+  http.post(`/pos/orders/${targetOrderId}/transfer-item`, { itemId, quantity }).then(r => r.data);
+
 // ── KOTs ─────────────────────────────────────────────────────
 export const getActiveKOTs = () => http.get('/pos/kots/active').then(r => r.data);
 
@@ -68,10 +71,6 @@ export const markItemServed = ({ kotId, itemId }) =>
 export const unserveItem = ({ kotId, itemId }) =>
   http.patch(`/pos/kots/${kotId}/items/${itemId}/unserve`).then(r => r.data);
 
-export const updateItemStatus = ({ kotId, itemId, status }) =>
-  http.patch(`/pos/kots/${kotId}/items/${itemId}/status`, { status }).then(r => r.data);
-
-export const getTodayKOTs  = () => http.get('/pos/kots/today').then(r => r.data);
 export const getServedKOTs = () => http.get('/pos/kots/served').then(r => r.data);
 
 export const serveAllKots = (orderId) =>
@@ -83,7 +82,6 @@ export const getKdsSoundConfig = () => http.get('/settings/kds-sound').then(r =>
 export const getKDSReport = (stationId) =>
   http.get('/pos/kots/report/today', stationId ? { params: { station: stationId } } : {}).then(r => r.data);
 
-
 export const kdsSessionLogin = async (pin) => {
   const data = await http.post('/auth/pin', { pin }).then(r => r.data);
   localStorage.setItem('kds_session', data.sessionId);
@@ -93,25 +91,7 @@ export const kdsSessionLogin = async (pin) => {
 
 export const getKDSMe = () => http.get('/auth/me').then(r => r.data);
 
-// ── Ledger ────────────────────────────────────────────────────
-export const getLedger = (customerPhone) =>
-  http.get('/pos/ledger', { params: { phone: customerPhone } }).then(r => r.data);
-
 // ── Till / Cash Drawer ────────────────────────────────────────
-export const getCurrentTill = () =>
-  http.get('/pos/till/current').then(r => r.data);
-
-export const openTill = (opening_float) =>
-  http.post('/pos/till/open', { opening_float }).then(r => r.data);
-
-export const closeTill = (closing_counted, variance_note) =>
-  http.post('/pos/till/close', { closing_counted, variance_note }).then(r => r.data);
-
-export const approveTillClose = ({ till_id, manager_pin }) =>
-  http.post('/pos/till/approve-close', { till_id, manager_pin }).then(r => r.data);
-
-export const getCashMovements = (date) =>
-  http.get('/pos/till/movements', { params: { date } }).then(r => r.data);
 
 export const addCashMovement = (payload) =>
   http.post('/pos/till/movements', payload).then(r => r.data);
@@ -145,8 +125,6 @@ export const updateDayOpening = (opening_float) =>
   http.put('/pos/till/day/opening', { opening_float }).then(r => r.data);
 
 // ── Sales Reports ─────────────────────────────────────────────
-export const getSalesReportToday = () =>
-  http.get('/pos/reports/sales').then(r => r.data);
 
 export const getSalesReport = (date) =>
   http.get('/pos/reports/sales', { params: { date } }).then(r => r.data);
@@ -175,18 +153,32 @@ export const getCategorySummaryReport = (from, to, category_ids) =>
 export const getProductSummaryReport = (from, to, category_ids, product_ids) =>
   http.get('/pos/reports/product-summary', { params: { from, to, category_ids, product_ids } }).then(r => r.data);
 
-export const getMonthlySummaryReport = (year, category_ids, product_ids) =>
-  http.get('/pos/reports/monthly-summary', { params: { year, category_ids, product_ids } }).then(r => r.data);
+// group: 'item' | 'category' | 'order-type' — narrowed by whichever of
+// category_ids / product_ids / order_types applies to that shape.
+export const getMonthlySummaryReport = ({ year, group, category_ids, product_ids, order_types }) =>
+  http.get('/pos/reports/monthly-summary', { params: { year, group, category_ids, product_ids, order_types } }).then(r => r.data);
 
 export const getZeroSalesReport = (from, to, category_ids) =>
   http.get('/pos/reports/zero-sales', { params: { from, to, category_ids } }).then(r => r.data);
 
+export const getWeeklyPatternReport = (from, to) =>
+  http.get('/pos/reports/weekly-pattern', { params: { from, to } }).then(r => r.data);
+
 export const getPaymentRegisterReport = (from, to) =>
   http.get('/pos/reports/payment-register', { params: { from, to } }).then(r => r.data);
 
+// ── Sales Calendar ───────────────────────────────────────────
+// params: { from, to, bucket:'hour'|'day', include, category_ids, product_ids }
+export const getCalendarReport = (params) =>
+  http.get('/pos/reports/calendar', { params }).then(r => r.data);
+
+export const getCalendarDetail = (from, to) =>
+  http.get('/pos/reports/calendar-detail', { params: { from, to } }).then(r => r.data);
+
+export const getCalendarMeta = () =>
+  http.get('/pos/reports/calendar-meta').then(r => r.data);
+
 // ── Transaction Revert ───────────────────────────────────────
-export const getTodayTransactions = () =>
-  http.get('/pos/transactions/today').then(r => r.data);
 
 export const revertOrderTransaction = ({ orderId, reason }) =>
   http.post(`/pos/transactions/order/${orderId}/revert`, { reason }).then(r => r.data);
@@ -197,9 +189,6 @@ export const revertCakeTransaction = ({ cakeOrderId, reason }) =>
 // ── Web Orders (approval queue) ───────────────────────────────
 export const getWebOrders = (status = 'PENDING_APPROVAL') =>
   http.get('/pos/web-orders', { params: { status } }).then(r => r.data);
-
-export const getWebOrder = (id) =>
-  http.get(`/pos/web-orders/${id}`).then(r => r.data);
 
 export const getWebOrderCounts = () =>
   http.get('/pos/web-orders/counts').then(r => r.data);
@@ -217,12 +206,6 @@ export const getScheduledOrders = () =>
 export const getStoreHours = (date) =>
   http.get('/pos/scheduled/hours', { params: { date } }).then(r => r.data);
 
-export const createScheduledOrder = (payload) =>
-  http.post('/pos/scheduled', payload).then(r => r.data);
-
-export const updateScheduledOrder = (id, payload) =>
-  http.patch(`/pos/scheduled/${id}`, payload).then(r => r.data);
-
 export const convertScheduledOrder = (id) =>
   http.post(`/pos/scheduled/${id}/convert`).then(r => r.data);
 
@@ -232,53 +215,37 @@ export const cancelScheduledOrder = (id) =>
 export const deleteScheduledOrder = (id) =>
   http.delete(`/pos/scheduled/${id}`).then(r => r.data);
 
-// ── Lookup Master ─────────────────────────────────────────────
-// Generic lookup_master reader (cream/shape/sponge/theme/dietary/table-tag/
-// product-badge types all live in the same table). Pass a lookup_type to
-// filter, or omit to get every row.
-export const getLookupMaster = (lookupType) =>
-  http.get('/maintenance/cake-lookup').then(r =>
-    lookupType ? r.data.filter(row => row.lookup_type === lookupType) : r.data
-  );
-
-// All POS stations (including inactive) — used by admin screens for station assignment
-export const getMaintenanceStations = () =>
-  http.get('/maintenance/stations').then(r => r.data);
-
 const posApi = {
   // Auth
   pinLogin, logout, kdsSessionLogin, getKDSMe,
   // Master
-  getTables, getProducts, getCategories, getStations, getMaintenanceStations,
+  getTables, getProducts, getCategories, getStations,
   // Orders
-  getActiveOrders, createOrder, updateOrder, updateOrderStatus, cancelOrder, checkout, mergeOrders, shiftOrder, serveAllKots,
-  getTodayKOTs, getServedKOTs,
+  getActiveOrders, createOrder, updateOrder, updateOrderStatus, cancelOrder, checkout, mergeOrders, shiftOrder, transferItem, serveAllKots,
+  getServedKOTs,
   // KOTs
-  getActiveKOTs, getTodayKOTs, createKOT, markItemServed, unserveItem, updateItemStatus,
+  getActiveKOTs, createKOT, markItemServed, unserveItem,
   getKDSReport, getKdsSoundConfig,
-  // Ledger
-  getLedger,
   // Till / Cash Drawer
-  getCurrentTill, openTill, closeTill, approveTillClose,
-  getCashMovements, addCashMovement, deleteCashMovement, updateCashMovement,
+  addCashMovement, deleteCashMovement, updateCashMovement,
   // Business Day / Daily Cash Closing
   getBusinessDay, openBusinessDay, saveDayDraft, closeBusinessDay,
   reopenBusinessDay, printDayClosing, updateDayOpening,
   // Sales Reports
-  getSalesReportToday, getSalesReport, getCakePaymentsReport,
+  getSalesReport, getCakePaymentsReport,
   getDayEndReport, closeDayEnd, reopenDayEnd,
   // Analytics Reports
   getOrderTypeSummaryReport, getCategorySummaryReport, getProductSummaryReport, getMonthlySummaryReport,
-  getZeroSalesReport, getPaymentRegisterReport,
+  getZeroSalesReport, getPaymentRegisterReport, getWeeklyPatternReport,
+  // Sales Calendar
+  getCalendarReport, getCalendarDetail, getCalendarMeta,
   // Transaction Revert
-  getTodayTransactions, revertOrderTransaction, revertCakeTransaction,
+  revertOrderTransaction, revertCakeTransaction,
   // Web Orders
-  getWebOrders, getWebOrder, getWebOrderCounts, approveWebOrder, rejectWebOrder,
+  getWebOrders, getWebOrderCounts, approveWebOrder, rejectWebOrder,
   // Scheduled & Draft Orders
-  getScheduledOrders, getStoreHours, createScheduledOrder, updateScheduledOrder,
+  getScheduledOrders, getStoreHours,
   convertScheduledOrder, cancelScheduledOrder, deleteScheduledOrder,
-  // Lookup Master
-  getLookupMaster, getMaintenanceStations,
 };
 
 export default posApi;

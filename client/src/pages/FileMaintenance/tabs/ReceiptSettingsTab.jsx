@@ -14,16 +14,16 @@ const DEFAULTS = {
 
 function Toggle({ label, checked, onChange, hint }) {
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
             <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#222' }}>{label}</div>
-                {hint && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{hint}</div>}
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-text)' }}>{label}</div>
+                {hint && <div style={{ fontSize: 11, color: 'var(--t-text-muted)', marginTop: 2 }}>{hint}</div>}
             </div>
             <button
                 onClick={() => onChange(checked ? '0' : '1')}
                 style={{
                     width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                    background: checked ? '#c1440e' : '#ddd', transition: 'background .2s',
+                    background: checked ? 'var(--t-accent)' : 'var(--t-border-strong)', transition: 'background .2s',
                     position: 'relative', flexShrink: 0,
                 }}
             >
@@ -40,18 +40,18 @@ function Toggle({ label, checked, onChange, hint }) {
 function Field({ label, required, error, hint, children }) {
     return (
         <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>
-                {label}{required && <span style={{ color: '#c1440e' }}> *</span>}
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                {label}{required && <span style={{ color: 'var(--t-accent)' }}> *</span>}
             </label>
             {children}
-            {error && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 3 }}>{error}</div>}
-            {hint && !error && <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>{hint}</div>}
+            {error && <div style={{ fontSize: 11, color: 'var(--t-danger)', marginTop: 3 }}>{error}</div>}
+            {hint && !error && <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 3 }}>{hint}</div>}
         </div>
     );
 }
 
 const inputStyle = (err) => ({
-    width: '100%', padding: '8px 10px', border: `1px solid ${err ? '#dc2626' : '#ddd'}`,
+    width: '100%', padding: '8px 10px', border: `1px solid ${err ? 'var(--t-danger)' : 'var(--t-border)'}`,
     borderRadius: 6, fontSize: 13, boxSizing: 'border-box', outline: 'none',
 });
 
@@ -195,17 +195,17 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                     <div className="fm-card__head">
                         <span className="fm-card__title">🖨 Printer Setup</span>
                         {savedPrinter && (
-                            <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>✓ {savedPrinter}</span>
+                            <span style={{ fontSize: 12, color: 'var(--t-success)', fontWeight: 600 }}>✓ {savedPrinter}</span>
                         )}
                     </div>
                     <div style={{ padding: '16px 20px' }}>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                             <div style={{ flex: 1, minWidth: 200 }}>
-                                <label style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                                     Select Printer
                                 </label>
                                 <select
-                                    style={{ ...inputStyle(false), background: '#fff' }}
+                                    style={{ ...inputStyle(false) }}
                                     value={selPrinter}
                                     onChange={e => setSelPrinter(e.target.value)}
                                 >
@@ -224,7 +224,7 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                                 Set Printer
                             </button>
                         </div>
-                        <div style={{ fontSize: 11, color: '#aaa', marginTop: 8 }}>
+                        <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 8 }}>
                             Install ZKP8001 via Windows (Printers &amp; Scanners) then click Scan.
                         </div>
                     </div>
@@ -281,7 +281,7 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                                     value={cfg.logo_text}
                                     onChange={e => set('logo_text', e.target.value)}
                                 />
-                                <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
+                                <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 3 }}>
                                     80mm paper ≈ 42 chars/line at 12px · Use a monospace ASCII generator
                                 </div>
                             </Field>
@@ -329,7 +329,7 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                     <div style={{ padding: '16px 20px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                             <Field label="Paper Width (mm)" error={errors.paper_width_mm} hint="58 or 80">
-                                <select style={{ ...inputStyle(errors.paper_width_mm), background: '#fff' }}
+                                <select style={{ ...inputStyle(errors.paper_width_mm) }}
                                     value={cfg.paper_width_mm} onChange={e => set('paper_width_mm', e.target.value)}>
                                     <option value="58">58mm</option>
                                     <option value="80">80mm</option>
@@ -356,7 +356,7 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                         {showPreview ? 'Hide Preview' : '👁 Show Preview'}
                     </button>
                     {toast && (
-                        <span style={{ fontSize: 12, fontWeight: 600, color: toast.err ? '#dc2626' : '#16a34a' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: toast.err ? 'var(--t-danger)' : 'var(--t-success)' }}>
                             {toast.err ? '✗' : '✓'} {toast.msg}
                         </span>
                     )}
@@ -366,10 +366,10 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
             {/* Right — Live Preview */}
             {showPreview && (
                 <div style={{ width: 320, flexShrink: 0, position: 'sticky', top: 20, alignSelf: 'flex-start' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '.05em' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '.05em' }}>
                         Live Preview — {cfg.paper_width_mm}mm
                     </div>
-                    <div style={{ background: '#f0f0f0', padding: 8, borderRadius: 8 }}>
+                    <div style={{ background: 'var(--t-surface-3)', padding: 8, borderRadius: 8 }}>
                         <iframe
                             key={JSON.stringify(cfg)}
                             srcDoc={previewHTML()}
@@ -377,7 +377,7 @@ ${tog('show_customer_phone') ? `<div class="kv"><span>Phone</span><span>98000000
                             title="Receipt Preview"
                         />
                     </div>
-                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 6, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 6, textAlign: 'center' }}>
                         Preview uses sample order data
                     </div>
                 </div>

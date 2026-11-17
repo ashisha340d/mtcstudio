@@ -80,8 +80,8 @@ export default function TableTagsTab() {
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
         <div>
-          <div style={{ fontSize:16, fontWeight:800, color:'#2a1f12' }}>🏷 Table Tags</div>
-          <div style={{ fontSize:12, color:'#9c8870', marginTop:4 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:'var(--t-text)' }}>🏷 Table Tags</div>
+          <div style={{ fontSize:12, color:'var(--t-text-soft)', marginTop:4 }}>
             Tags shown in the Waiter App side menu (☰). Stored in <code>lookup_master</code> as <code>TABLE_TAG</code>.
             <br />
             <strong>Value</strong> = emoji displayed · <strong>Code</strong> = internal key · <strong>Name</strong> = label in waiter app.
@@ -89,7 +89,7 @@ export default function TableTagsTab() {
         </div>
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           {toast && (
-            <span style={{ fontSize:12, fontWeight:700, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>
+            <span style={{ fontSize:12, fontWeight:700, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>
               {toast}
             </span>
           )}
@@ -117,7 +117,7 @@ export default function TableTagsTab() {
           <tbody>
             {/* Add row */}
             {adding && (
-              <tr style={{ background:'rgba(193,68,14,0.04)' }}>
+              <tr style={{ background:'var(--t-accent-soft)' }}>
                 <td>
                   <input
                     className="fm-inline-input"
@@ -229,14 +229,14 @@ export default function TableTagsTab() {
       {/* Preview */}
       {rows.filter(r => r.is_active).length > 0 && (
         <div style={{ marginTop:20 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#9c8870', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'var(--t-text-soft)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>
             Preview — waiter app side menu
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {rows.filter(r => r.is_active).sort((a,b) => a.sort_order - b.sort_order).map(tag => (
               <div
                 key={tag.id}
-                style={{ display:'flex', alignItems:'center', gap:8, background:'#f9f5f1', border:'1.5px solid #e8ddd0', borderRadius:10, padding:'8px 14px', fontSize:14, fontWeight:600, color:'#1a1008' }}
+                style={{ display:'flex', alignItems:'center', gap:8, background:'var(--t-surface-2)', border:'1.5px solid var(--t-border)', borderRadius:10, padding:'8px 14px', fontSize:14, fontWeight:600, color:'var(--t-text)' }}
               >
                 <span style={{ fontSize:20 }}>{tag.value}</span>
                 <span>{tag.name}</span>

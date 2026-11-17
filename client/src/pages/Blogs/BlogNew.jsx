@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { blogsApi } from '../../services/api';
 import MediaPicker from '../../components/MediaPicker/MediaPicker';

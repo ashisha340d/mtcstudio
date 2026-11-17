@@ -159,8 +159,8 @@ export default function SharedModifiersTab() {
         <div className="fm-card__head">
           <span className="fm-card__title">Modifier Groups</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>{toast}</span>}
-            <span style={{ fontSize: 12, color: '#999' }}>{groups.length} groups</span>
+            {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast}</span>}
+            <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{groups.length} groups</span>
             {gDirty > 0 && (
               <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAllGroups} disabled={saving}>
                 {saving ? 'Saving…' : `Save All (${gDirty})`}
@@ -229,7 +229,7 @@ export default function SharedModifiersTab() {
         <div className="fm-card__head">
           <span className="fm-card__title">Shared Modifiers</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 12, color: '#999' }}>{mods.length} modifiers</span>
+            <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{mods.length} modifiers</span>
             {mDirty > 0 && (
               <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAllMods} disabled={saving}>
                 {saving ? 'Saving…' : `Save All (${mDirty})`}

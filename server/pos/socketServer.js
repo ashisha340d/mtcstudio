@@ -222,6 +222,13 @@ function emitMissedCall(payload) {
   io.to('pos').emit('missed-call', payload);
 }
 
+// Fonepay payment from MTC Companion (FoneBiz notification) — every Studio
+// screen (POS, admin, KDS) pops a payment card.
+function emitPaymentReceived(payload) {
+  if (!io) return;
+  io.to('pos').to('kds').emit('payment-received', payload);
+}
+
 // OCR/WhatsApp image import lifecycle (Mero Kinmel). stage = RECEIVED | OCR |
 // PARSING | DRAFTED | MANUAL_REVIEW | FAILED. POS shows live status + refreshes
 // the draft list when a draft becomes ready.
@@ -243,4 +250,9 @@ function emitSmsUpdate(payload) {
   io.to('pos').emit('sms-update', payload);
 }
 
-module.exports = { init, emitSmsUpdate, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitMenuUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected, emitIncomingCall, emitCallAnswered, emitCallEnded, emitMissedCall, emitOcrImport, emitScheduledChanged };
+function emitCampaignUpdate(payload) {
+  if (!io) return;
+  io.to('pos').emit('campaign-update', payload);
+}
+
+module.exports = { init, emitSmsUpdate, emitCampaignUpdate, emitNewOrder, emitOrderUpdated, emitItemServed, emitItemUpdated, emitOrderCompleted, emitOrderCancelled, emitWaiterCall, emitWaiterCallResolved, emitCustomerNotify, emitTablesUpdated, emitMenuUpdated, emitCakeProductionChanged, emitWebOrderReceived, emitPendingApproved, emitPendingRejected, emitIncomingCall, emitCallAnswered, emitCallEnded, emitMissedCall, emitPaymentReceived, emitOcrImport, emitScheduledChanged };

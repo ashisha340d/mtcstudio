@@ -33,6 +33,7 @@ function todayNepal() {
 export default function SalesReport({
   gridLines = true, actionsEnabled = false, isAdmin = false,
   revertOrderTransaction, revertCakeTransaction, notify,
+  toCollect = 0, toCollectCount = 0,
 } = {}) {
   const [date, setDate]                 = useState(todayNepal);
   const [salesData, setSalesData]       = useState(null);
@@ -93,9 +94,19 @@ export default function SalesReport({
         customer_name: order.customerName,
         customer_phone: order.customerPhone,
         total_amount: order.amount,
+        discount_amount: order.discount || 0,
         created_at: order.closedAt,
       },
-      items: order.items || [],
+      // Report rows use display field names (name/qty/rate) — remap to the same
+      // product_name/quantity/unit_price contract every other print call site uses,
+      // so this produces the exact same slip as POS/checkout/reprint.
+      items: (order.items || []).map(it => ({
+        product_name: it.name,
+        quantity: it.qty,
+        unit_price: it.rate,
+        discount_amount: it.discount_amount || 0,
+        discount_type: it.discount_type || null,
+      })),
       payments: order.payments || [],
       isReprint: true,
     });
@@ -391,6 +402,15 @@ export default function SalesReport({
                   )}
                 </span>
                 <span className="footer-chip footer-chip--cash">Cash ₹{(salesData.cash || 0).toLocaleString('en-IN')}</span>
+                {toCollect > 0 && (
+                  <span
+                    className="footer-chip footer-chip--collect"
+                    title={`Unpaid balance still open on the POS dashboard — ${toCollectCount} order${toCollectCount === 1 ? '' : 's'}`}
+                  >
+                    To Collect ₹{toCollect.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    {toCollectCount > 0 && <span className="footer-chip-sub"> ({toCollectCount} open)</span>}
+                  </span>
+                )}
                 <span className="footer-chip footer-chip--total">Total ₹{((salesData.card || 0) + (salesData.qr || 0) + (salesData.cash || 0)).toLocaleString('en-IN')}</span>
               </div>
             </div>

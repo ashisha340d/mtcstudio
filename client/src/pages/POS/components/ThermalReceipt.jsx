@@ -1,9 +1,6 @@
 ﻿// ── Thermal Receipt — ESC/POS via server ────────────────────────
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-// Invalidate after saving receipt settings (kept for compatibility)
-export function invalidateReceiptConfig() {}
-
 export async function printReceipt({ order, items = [], payments = [], isReprint = false } = {}) {
   try {
     // Combo child lines are kitchen/inventory only — the combo parent carries the

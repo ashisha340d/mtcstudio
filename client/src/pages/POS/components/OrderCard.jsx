@@ -5,6 +5,7 @@ import { printReceipt } from './ThermalReceipt';
 import CustomerPickerModal from './CustomerPickerModal';
 import DeliveryPartnerModal from './OrderTypeModal';
 import { flyToCashStack } from './flyToCashStack';
+import BillPopover from './BillPopover';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return '0m';
@@ -42,6 +43,7 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout, clo
   const [captionDraft, setCaptionDraft] = useState('');
   const [showAssign, setShowAssign] = useState(false);
   const pressTimer = useRef(null);
+  const [hoverRect, setHoverRect] = useState(null);
 
   const derived = useMemo(() => {
     const kots = kotsByOrder[order.id] || [];
@@ -89,7 +91,13 @@ export default function OrderCard({ order, index, onClick, onDirectCheckout, clo
 
   return (
     <div ref={cardRef} className={`oc oc--${meta.cls}${isDraft ? ' oc--draft' : ''}${closing ? ' tc--wiping' : ''}`}
-      onClick={closing ? undefined : () => onClick(order)}>
+      onClick={closing ? undefined : () => onClick(order)}
+      onMouseEnter={closing ? undefined : (e) => setHoverRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setHoverRect(null)}>
+      {hoverRect && !closing && !editingCaption && !showAssign && (
+        <BillPopover rect={hoverRect} tableName={captionLabel} order={order} orderType={order.order_type}
+          items={(kotsByOrder[order.id] || []).flatMap((k) => k.items || [])} />
+      )}
       <button
         className="oc__assign-btn"
         title={order.customer_phone ? 'Change customer' : 'Add customer'}

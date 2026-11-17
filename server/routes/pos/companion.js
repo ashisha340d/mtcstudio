@@ -4,11 +4,11 @@
 //   • /sync/*         — background incremental pulls into the phone's Room DB.
 // Everything the popup shows comes from Room; only active-order status is live.
 const express = require('express');
-const fs      = require('fs');
-const path    = require('path');
-const crypto  = require('crypto');
-const { dbAll, dbGet } = require('../../pos/db');       // POS DB (orders, kots, pos_customers, addresses)
-const cmsDb            = require('../../database/db');   // CMS DB (customers, menu, media, settings)
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { dbAll, dbGet, dbRun } = require('../../pos/db');       // POS DB (orders, kots, pos_customers, addresses)
+const cmsDb = require('../../database/db');   // CMS DB (customers, menu, media, settings)
 const { requireSession } = require('../../middleware/posAuth');
 
 const router = express.Router();
@@ -49,8 +49,8 @@ router.get('/caller-status', async (req, res) => {
              WHERE phone=? AND balance_due>0 AND status NOT IN ('DELIVERED','CANCELLED','REFUNDED')`, [normPhone]),
   ]);
 
-  const total   = Number(activeOrder?.total_amount ?? 0);
-  const paid    = Number(activeOrder?.paid_amount ?? 0);
+  const total = Number(activeOrder?.total_amount ?? 0);
+  const paid = Number(activeOrder?.paid_amount ?? 0);
 
   // Kitchen/serve lifecycle for the active order — powers the popup's
   // "Sent to kitchen · Preparing · Xm ago" / "Served · packed, ready" line.
@@ -66,11 +66,11 @@ router.get('/caller-status', async (req, res) => {
          FROM pos_kots k JOIN pos_kot_items ki ON ki.kot_id = k.id
         WHERE k.order_id = ? AND ki.status <> 'CANCELLED'`, [activeOrder.id]);
     const itemsTotal = Number(k?.items_total ?? 0);
-    const served     = Number(k?.items_served ?? 0);
-    const ready      = Number(k?.items_ready ?? 0);
+    const served = Number(k?.items_served ?? 0);
+    const ready = Number(k?.items_ready ?? 0);
     const stage = itemsTotal > 0 && served === itemsTotal ? 'SERVED'
-                : itemsTotal > 0 && served + ready === itemsTotal && ready > 0 ? 'READY'
-                : 'PREPARING';
+      : itemsTotal > 0 && served + ready === itemsTotal && ready > 0 ? 'READY'
+        : 'PREPARING';
     lifecycle = {
       stage,                                   // PREPARING | READY | SERVED
       sentAt: k?.sent_at ?? null,              // Nepal local time
@@ -89,25 +89,25 @@ router.get('/caller-status', async (req, res) => {
   ) : [];
 
   res.json({
-    phone:           normPhone,
-    customerExists:  !!(crmCustomer || posCustomer),
-    activeOrder:     activeOrder ? {
-      id:      activeOrder.id,
-      status:  activeOrder.status,
+    phone: normPhone,
+    customerExists: !!(crmCustomer || posCustomer),
+    activeOrder: activeOrder ? {
+      id: activeOrder.id,
+      status: activeOrder.status,
       total,
       balance: Math.max(0, total - paid),
-      stage:       lifecycle?.stage ?? null,
-      sentAt:      lifecycle?.sentAt ?? null,
-      elapsedMin:  lifecycle?.elapsedMin ?? 0,
-      itemsTotal:  lifecycle?.itemsTotal ?? 0,
+      stage: lifecycle?.stage ?? null,
+      sentAt: lifecycle?.sentAt ?? null,
+      elapsedMin: lifecycle?.elapsedMin ?? 0,
+      itemsTotal: lifecycle?.itemsTotal ?? 0,
       itemsServed: lifecycle?.itemsServed ?? 0,
-      itemsReady:  lifecycle?.itemsReady ?? 0,
+      itemsReady: lifecycle?.itemsReady ?? 0,
       items,
     } : null,
-    cakeBalance:   Number(cakeBalRow?.bal ?? 0),
+    cakeBalance: Number(cakeBalRow?.bal ?? 0),
     loyaltyPoints: crmCustomer?.loyalty_points ?? 0,
-    rewardsTier:   crmCustomer?.rewards_tier ?? 'standard',
-    lastUpdated:   activeOrder?.updated_at ?? crmCustomer?.updated_at ?? null,
+    rewardsTier: crmCustomer?.rewards_tier ?? 'standard',
+    lastUpdated: activeOrder?.updated_at ?? crmCustomer?.updated_at ?? null,
   });
 });
 
@@ -117,7 +117,7 @@ router.get('/caller-status', async (req, res) => {
 router.post('/customer', express.json(), async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   if (!phone) return res.status(400).json({ error: 'phone required' });
-  const name  = (req.body.name || '').trim() || phone;   // name column is NOT NULL
+  const name = (req.body.name || '').trim() || phone;   // name column is NOT NULL
   const notes = (req.body.notes || '').trim() || null;
 
   await dbRun(
@@ -128,6 +128,12 @@ router.post('/customer', express.json(), async (req, res) => {
     [name, phone, notes]
   );
   if (notes) await dbRun(`INSERT INTO pos_customer_notes (phone, note) VALUES (?,?)`, [phone, notes]);
+
+  // New number, not yet in CRM (cms customers) — mirror it there too.
+  const crmExisting = await cmsDb.dbGet(`SELECT phone FROM customers WHERE phone=?`, [phone]);
+  if (!crmExisting) {
+    await cmsDb.dbRun(`INSERT INTO customers (phone, name, notes) VALUES (?,?,?)`, [phone, name, notes]);
+  }
 
   res.json({ ok: true, phone });
 });

@@ -4,6 +4,7 @@ import { toUtcMs } from '../../../utils/dateTime';
 import { printReceipt } from './ThermalReceipt';
 import { flyToCashStack } from './flyToCashStack';
 import { cakeDraftDue } from '../posShared';
+import BillPopover from './BillPopover';
 
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return null;
@@ -148,13 +149,18 @@ export default function TableCard({ table, onClick, onDirectCheckout, frozenOrde
 
 function OccupiedCard({ table, onClick, onPrintSlip, onDirectCheckout, order, derived, isDraft, delayed, wiping, frozen, measureRef }) {
   const cakeDue = cakeDraftDue(order);
+  const { kotsByOrder } = usePOS();
+  const [hoverRect, setHoverRect] = useState(null);
   return (
     <div
       ref={measureRef}
       className={`tc ${isDraft ? 'tc--draft' : 'tc--occupied'}${delayed ? ' tc--delayed' : ''}${wiping ? ' tc--wiping' : ''}`}
       style={frozen ? { pointerEvents: 'none', opacity: 0.85 } : undefined}
       onClick={frozen ? undefined : () => onClick(table)}
+      onMouseEnter={frozen || wiping || localStorage.getItem('mtc_show_hover_bill') === '0' ? undefined : (e) => setHoverRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setHoverRect(null)}
     >
+      {hoverRect && !wiping && <BillPopover rect={hoverRect} tableName={table.name} order={order} orderType={order.order_type} items={(kotsByOrder[order.id] || []).flatMap((k) => k.items || [])} />}
       {order.bill_requested_at && <div className="tc__bill-req-ribbon">BILL REQ</div>}
       <div className="tc__header">
         <span className="tc__name">{table.name}</span>

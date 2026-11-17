@@ -11,7 +11,7 @@ const CAKE_TYPE_OPTIONS = [
 ];
 
 const CAKE_TYPE_BADGE = {
-  CAKE_BASE:      { bg: 'rgba(193,68,14,0.1)',  color: '#c1440e' },
+  CAKE_BASE:      { bg: 'rgba(193,68,14,0.1)',  color: 'var(--t-accent)' },
   CAKE_ACCESSORY: { bg: 'rgba(124,58,237,0.1)', color: '#7c3aed' },
 };
 
@@ -41,10 +41,10 @@ function VariantRows({ productId, onSaved }) {
   }
 
   if (!variants) return (
-    <tr><td colSpan={5} style={{ paddingLeft: 48, fontSize: 11, color: '#aaa' }}>Loading…</td></tr>
+    <tr><td colSpan={5} style={{ paddingLeft: 48, fontSize: 11, color: 'var(--t-text-soft)' }}>Loading…</td></tr>
   );
   if (!variants.length) return (
-    <tr><td colSpan={5} style={{ paddingLeft: 48, fontSize: 11, color: '#aaa' }}>No variants</td></tr>
+    <tr><td colSpan={5} style={{ paddingLeft: 48, fontSize: 11, color: 'var(--t-text-soft)' }}>No variants</td></tr>
   );
 
   return variants.map(v => {
@@ -52,12 +52,12 @@ function VariantRows({ productId, onSaved }) {
     const badge = CAKE_TYPE_BADGE[currentType];
     const dirty = varEdits[v.id] !== undefined;
     return (
-      <tr key={v.id} style={{ background: 'rgba(193,68,14,0.03)' }}>
-        <td style={{ paddingLeft: 36, fontSize: 12, color: '#555' }}>
+      <tr key={v.id} style={{ background: 'var(--t-accent-soft)' }}>
+        <td style={{ paddingLeft: 36, fontSize: 12, color: 'var(--t-text-muted)' }}>
           ↳ {v.name}
         </td>
-        <td style={{ fontSize: 11, color: '#aaa' }}>variant</td>
-        <td style={{ fontSize: 12, color: '#555' }}>
+        <td style={{ fontSize: 11, color: 'var(--t-text-soft)' }}>variant</td>
+        <td style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>
           ₹{Number(v.selling_price || 0).toLocaleString('en-IN')}
         </td>
         <td>
@@ -158,8 +158,8 @@ export default function CakeProductsTab() {
       <div className="fm-card__head">
         <span className="fm-card__title">Cake Products</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>{toast}</span>}
-          <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: 'rgba(193,68,14,0.1)', color: '#c1440e', fontWeight: 700 }}>
+          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast}</span>}
+          <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: 'rgba(193,68,14,0.1)', color: 'var(--t-accent)', fontWeight: 700 }}>
             🎂 {baseCount} Base
           </span>
           <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, background: 'rgba(124,58,237,0.1)', color: '#7c3aed', fontWeight: 700 }}>
@@ -176,7 +176,7 @@ export default function CakeProductsTab() {
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <input className="fm-search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
-          <span style={{ fontSize: 12, color: '#999' }}>{visible.length} shown</span>
+          <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{visible.length} shown</span>
           {dirtyCount > 0 && (
             <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAll} disabled={saving}>
               {saving ? 'Saving…' : `Save All (${dirtyCount})`}
@@ -205,13 +205,13 @@ export default function CakeProductsTab() {
                 <td style={{ fontWeight: 600 }}>
                   <button
                     onClick={() => toggleExpand(p.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: 6, fontSize: 11, color: '#aaa', padding: '0 2px' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: 6, fontSize: 11, color: 'var(--t-text-soft)', padding: '0 2px' }}
                     title="Show variants"
                   >{isExpanded ? '▾' : '▸'}</button>
                   {p.name}
                 </td>
-                <td style={{ fontSize: 12, color: '#888' }}>{p.category_name}</td>
-                <td style={{ fontSize: 12, color: '#555' }}>
+                <td style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{p.category_name}</td>
+                <td style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>
                   ₹{Number(p.pos_price || 0).toLocaleString('en-IN')}
                 </td>
                 <td>

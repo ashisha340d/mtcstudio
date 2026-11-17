@@ -18,6 +18,8 @@ const FileMaintenance    = lazy(() => import('./pages/FileMaintenance/FileMainte
 const ModifierAssignment = lazy(() => import('./pages/ModifierAssignment/ModifierAssignment'));
 const CRM                = lazy(() => import('./pages/CRM/CRM'));
 const Automation         = lazy(() => import('./pages/Automation/Automation'));
+const Campaigns          = lazy(() => import('./pages/Campaigns/Campaigns'));
+const HR                 = lazy(() => import('./pages/HR/HR'));
 
 // ── POS / KDS / Auth ─────────────────────────────────────────
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -30,6 +32,7 @@ import posApi                   from './services/posApi';
 import POSDashboard  from './pages/POS/POSDashboard';
 import WebOrderDock  from './pages/POS/components/WebOrderDock';
 import IncomingCallDock from './pages/POS/components/IncomingCallDock';
+import FonepayDrawer from './components/FonepayDrawer';
 import POS           from './pages/POS/POS';
 
 // Secondary POS-adjacent screens — lazy, idle-prefetched from the dashboard
@@ -131,10 +134,14 @@ export default function App() {
           <Route path="modifier-assignment"   element={<ModifierAssignment />} />
           <Route path="crm"                   element={<CRM />} />
           <Route path="automation"            element={<Automation />} />
+          <Route path="campaigns"             element={<Campaigns />} />
+          <Route path="hr"                    element={<HR />} />
+          <Route path="payroll"               element={<Navigate to="/hr" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
       </Suspense>
+      <FonepayDrawer />
     </BrowserRouter>
   );
 }

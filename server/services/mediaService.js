@@ -35,7 +35,8 @@ const SECTIONS_AGG = `TRIM(BOTH ',' FROM CONCAT(
     IF(EXISTS (SELECT 1 FROM product_images pi2 WHERE pi2.media_id = m.id AND pi2.is_primary = 1), 'menu,', ''),
     IF(EXISTS (SELECT 1 FROM blogs b WHERE b.featured_image = m.id OR b.author_image = m.id), 'blog,', ''),
     IF(EXISTS (SELECT 1 FROM cake_design_media cdm WHERE cdm.media_id = m.id)
-       OR EXISTS (SELECT 1 FROM cake_collections cc WHERE cc.hero_media_id = m.id), 'cake,', '')
+       OR EXISTS (SELECT 1 FROM cake_collections cc WHERE cc.hero_media_id = m.id), 'cake,', ''),
+    IF(EXISTS (SELECT 1 FROM employee_profiles ep WHERE ep.photo_media_id = m.id), 'employee,', '')
 )) AS sections`;
 
 const SECTION_FILTER_SQL = {
@@ -44,6 +45,7 @@ const SECTION_FILTER_SQL = {
                      UNION SELECT author_image FROM blogs WHERE author_image IS NOT NULL)`,
     cake: `m.id IN (SELECT media_id FROM cake_design_media WHERE media_id IS NOT NULL
                      UNION SELECT hero_media_id FROM cake_collections WHERE hero_media_id IS NOT NULL)`,
+    employee: `m.id IN (SELECT photo_media_id FROM employee_profiles WHERE photo_media_id IS NOT NULL)`,
 };
 
 function withSections(rows) {

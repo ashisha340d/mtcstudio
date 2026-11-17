@@ -47,6 +47,23 @@ router.post('/ocr-import', upload.single('image'), async (req, res) => {
   }
 });
 
+router.post('/foodmandu-import', async (req, res) => {
+  const rawText = req.body.rawText;
+  if (typeof rawText !== 'string' || !rawText.trim()) return res.status(400).json({ error: 'No order text uploaded' });
+  try {
+    const result = await pipeline.process({
+      rawText,
+      source: 'Foodmandu Restro',
+      platform: 'Foodmandu',
+      notificationTs: req.body.notificationTs || null,
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[foodmandu-import] failed:', err);
+    res.status(500).json({ error: 'Import failed', details: err.message });
+  }
+});
+
 // GET /api/companion/imports — recent imports (POS monitor / debugging).
 router.get('/imports', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);

@@ -120,6 +120,11 @@ export const dashboardApi = {
   stats: () => api.get('/dashboard/stats')
 };
 
+// ── System / Nepal holiday feed ─────────────────────────────────────────────
+export const systemApi = {
+  holidays: (params) => api.get('/system/holidays', { params }),
+};
+
 // ── Automation (Rule Engine) ────────────────────────────────────────────────
 export const automationApi = {
   conditionTypes:   () => api.get('/automation/condition-types'),
@@ -145,6 +150,83 @@ export const automationApi = {
   recommendedAdd:     (product_id) => api.post('/automation/recommended-products', { product_id }),
   recommendedReorder: (ids) => api.post('/automation/recommended-products/reorder', { ids }),
   recommendedRemove:  (id) => api.delete(`/automation/recommended-products/${id}`),
+};
+
+// ── Campaign Management ──────────────────────────────────────────────────────
+export const campaignsApi = {
+  // registry / metadata
+  types:            (all) => api.get('/campaigns/types', { params: { all: all ? 1 : undefined } }),
+  createType:       (data) => api.post('/campaigns/types', data),
+  updateType:       (id, data) => api.put(`/campaigns/types/${id}`, data),
+  removeType:       (id) => api.delete(`/campaigns/types/${id}`),
+  channels:         () => api.get('/campaigns/channels'),
+  updateChannel:    (key, data) => api.put(`/campaigns/channels/${key}`, data),
+  permissions:      () => api.get('/campaigns/permissions'),
+  audienceFields:   () => api.get('/campaigns/audience-fields'),
+
+  // dashboard / analytics
+  dashboard:        () => api.get('/campaigns/dashboard'),
+  overview:         (params) => api.get('/campaigns/analytics/overview', { params }),
+  leaderboard:      (limit) => api.get('/campaigns/analytics/leaderboard', { params: { limit } }),
+  customerGrowth:   (months) => api.get('/campaigns/analytics/customer-growth', { params: { months } }),
+  revenueTimeline:  (params) => api.get('/campaigns/analytics/revenue-timeline', { params }),
+  campaignAnalytics:(id) => api.get(`/campaigns/${id}/analytics`),
+
+  // campaigns CRUD + lifecycle
+  list:             (params) => api.get('/campaigns', { params }),
+  get:              (id) => api.get(`/campaigns/${id}`),
+  create:           (data) => api.post('/campaigns', data),
+  update:           (id, data) => api.put(`/campaigns/${id}`, data),
+  remove:           (id) => api.delete(`/campaigns/${id}`),
+  duplicate:        (id) => api.post(`/campaigns/${id}/duplicate`),
+  setStatus:        (id, status) => api.post(`/campaigns/${id}/status`, { status }),
+  submit:           (id, note) => api.post(`/campaigns/${id}/submit`, { note }),
+  approve:          (id, note) => api.post(`/campaigns/${id}/approve`, { note }),
+  reject:           (id, note) => api.post(`/campaigns/${id}/reject`, { note }),
+  approvals:        (id) => api.get(`/campaigns/${id}/approvals`),
+  preview:          (id) => api.post(`/campaigns/${id}/preview`),
+  run:              (id, data) => api.post(`/campaigns/${id}/run`, data || {}),
+
+  // templates
+  templates:        (params) => api.get('/campaigns/templates', { params }),
+  createTemplate:   (data) => api.post('/campaigns/templates', data),
+  updateTemplate:   (id, data) => api.put(`/campaigns/templates/${id}`, data),
+  removeTemplate:   (id) => api.delete(`/campaigns/templates/${id}`),
+  renderTemplate:   (data) => api.post('/campaigns/templates/render', data),
+
+  // audiences
+  audiences:        () => api.get('/campaigns/audiences'),
+  createAudience:   (data) => api.post('/campaigns/audiences', data),
+  updateAudience:   (id, data) => api.put(`/campaigns/audiences/${id}`, data),
+  removeAudience:   (id) => api.delete(`/campaigns/audiences/${id}`),
+  audiencePreview:  (data) => api.post('/campaigns/audiences/preview', data),
+  audienceCount:    (data) => api.post('/campaigns/audiences/count', data),
+
+  // coupons
+  coupons:          (campaign_id) => api.get('/campaigns/coupons', { params: { campaign_id } }),
+  createCoupon:     (data) => api.post('/campaigns/coupons', data),
+  updateCoupon:     (id, data) => api.put(`/campaigns/coupons/${id}`, data),
+  removeCoupon:     (id) => api.delete(`/campaigns/coupons/${id}`),
+  couponCodes:      (id) => api.get(`/campaigns/coupons/${id}/codes`),
+  issueCoupon:      (id, data) => api.post(`/campaigns/coupons/${id}/issue`, data),
+  validateCoupon:   (data) => api.post('/campaigns/coupons/validate', data),
+  redeemCoupon:     (data) => api.post('/campaigns/coupons/redeem', data),
+
+  // queue + runs
+  queue:            (params) => api.get('/campaigns/queue', { params }),
+  queueAction:      (action, ids) => api.post(`/campaigns/queue/${action}`, { ids }),
+  queueBulk:        (action, ids) => api.post('/campaigns/queue/bulk', { action, ids }),
+  queueBulkAll:     (action, filter) => api.post('/campaigns/queue/bulk', { action, all: true, filter }),
+  queueUpdate:      (id, payload) => api.put(`/campaigns/queue/${id}`, payload),
+  queueDelete:      (ids) => api.post('/campaigns/queue/delete', { ids }),
+  queueDeleteAll:   (filter) => api.post('/campaigns/queue/delete', { all: true, filter }),
+  runs:             (campaign_id) => api.get('/campaigns/runs', { params: { campaign_id } }),
+  runQueue:         (runId) => api.get(`/campaigns/runs/${runId}/queue`),
+  approveRun:       (runId) => api.post(`/campaigns/runs/${runId}/approve`),
+  rejectRun:        (runId) => api.post(`/campaigns/runs/${runId}/reject`),
+
+  // triggers
+  emitEvent:        (data) => api.post('/campaigns/events', data),
 };
 
 export default api;

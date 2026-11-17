@@ -191,6 +191,25 @@ router.post('/missed-call', async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Fonepay payment (FoneBiz notification) ────────────────────
+router.post('/payment-received', async (req, res) => {
+  const { deviceId, dedupeKey, amount, payer, txnId, rawTitle, rawText, notificationTs } = req.body;
+  if (!deviceId || !dedupeKey) return res.status(400).json({ error: 'deviceId and dedupeKey required' });
+  const notifiedAt = notificationTs ? new Date(Number(notificationTs)) : new Date();
+  const row = await dbGet(
+    `INSERT IGNORE INTO pos_fonepay_payments (device_id, dedupe_key, amount, payer, txn_id, raw_title, raw_text, notified_at, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?) RETURNING *`,
+    [deviceId, dedupeKey, amount ?? null, payer ?? null, txnId ?? null, rawTitle ?? null, rawText ?? null, notifiedAt, req.posUser.id]
+  );
+  if (!row) return res.json({ success: true, duplicate: true });
+  socketServer.emitPaymentReceived({
+    paymentId: row.id, amount: row.amount != null ? Number(row.amount) : null,
+    payer: row.payer, txnId: row.txn_id, title: row.raw_title, text: row.raw_text,
+    timestamp: notifiedAt.toISOString(), device: deviceId,
+  });
+  res.status(201).json({ success: true, paymentId: row.id });
+});
+
 // ── Recording upload ──────────────────────────────────────────
 router.post('/upload-recording', uploadCallRecording.single('audio'), async (req, res) => {
   const { deviceId, customerId, callId } = req.body;

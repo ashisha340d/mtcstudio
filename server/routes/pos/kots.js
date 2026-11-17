@@ -365,14 +365,14 @@ async function fireKot({ order_id, items, punched_by, actorUserId, actorSessionI
 
     // Insert one KOT line. Combo children pass comboParentId + isComboChild.
     const insertItem = async (item, comboParentId, isComboChild) => {
-      const prod = await tx.dbGet(`SELECT prep_time_minutes, pos_station_id FROM products WHERE id=?`, [item.product_id]);
+      const prod = await tx.dbGet(`SELECT p.prep_time_minutes, p.pos_station_id, (SELECT COALESCE(MAX(v.auto_kds),0) FROM product_variants v WHERE IF(? IS NULL, v.product_id = p.id, v.id = ?)) AS auto_kds FROM products p WHERE p.id=?`, [item.variant_id ?? null, item.variant_id ?? null, item.product_id]);
       // Item discount: absolute per line, clamped to line value; type required with amount
       const lineValue = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
       const discAmt = Math.min(Math.max(Number(item.discount_amount) || 0, 0), lineValue);
       const discType = discAmt > 0 && DISCOUNT_TYPES.includes(item.discount_type) ? item.discount_type : (discAmt > 0 ? 'MANUAL' : null);
       // No station = not kitchen-tracked (water, delivery charge, retail) — auto-SERVED
-      // so KDS skips it and web-order progress (n/N) never stalls on it
-      const stationId = prod?.pos_station_id ?? null;
+      // so KDS skips it and web-order progress (n/N) never stalls on it. Auto KDS variants take the same path.
+      const stationId = prod?.auto_kds ? null : prod?.pos_station_id ?? null;
       const row = await tx.dbGet(
         `INSERT INTO pos_kot_items
            (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, combo_parent_id, is_combo_child, status, served_at)
@@ -448,12 +448,14 @@ router.patch('/:id/items/:itemId', async (req, res) => {
   const fields = [];
   const values = [];
 
-  // Qty only editable if not yet served/cancelled — except a combo parent, which
-  // auto-serves (no station) yet must stay editable so its child lines rescale.
+  // Qty only editable if not yet served/cancelled — except no-station lines (combo
+  // parents, auto-entry, retail), which auto-serve on send and were never actually
+  // kitchen-served, so they must stay qty-editable.
   if (quantity !== undefined) {
-    const isComboParent = (await dbGet(`SELECT is_combo FROM products WHERE id=?`, [item.product_id]))?.is_combo === 1;
-    if (!isComboParent && (item.status === 'SERVED' || item.status === 'CANCELLED'))
+    if (item.station_id != null && (item.status === 'SERVED' || item.status === 'CANCELLED'))
       return res.status(400).json({ error: 'Cannot change quantity of a served or cancelled item' });
+    if (item.station_id == null && item.status === 'CANCELLED')
+      return res.status(400).json({ error: 'Cannot change quantity of a cancelled item' });
     if (quantity < 1) return res.status(400).json({ error: 'quantity >= 1 required' });
     fields.push('quantity = ?'); values.push(quantity);
   }
@@ -648,9 +650,10 @@ async function changeKotItemQuantity(itemId, quantity, { actorUserId, actorSessi
   const item = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [itemId]);
   if (!item) return { error: 'Item not found', status: 404 };
 
-  const isComboParent = (await dbGet(`SELECT is_combo FROM products WHERE id=?`, [item.product_id]))?.is_combo === 1;
-  if (!isComboParent && (item.status === 'SERVED' || item.status === 'CANCELLED'))
+  if (item.station_id != null && (item.status === 'SERVED' || item.status === 'CANCELLED'))
     return { error: 'Cannot change quantity of a served or cancelled item', status: 400 };
+  if (item.station_id == null && item.status === 'CANCELLED')
+    return { error: 'Cannot change quantity of a cancelled item', status: 400 };
   if (!(quantity >= 1)) return { error: 'quantity >= 1 required', status: 400 };
 
   await dbRun(`UPDATE pos_kot_items SET quantity=? WHERE id=?`, [quantity, item.id]);

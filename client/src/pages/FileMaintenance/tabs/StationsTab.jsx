@@ -106,8 +106,8 @@ export default function StationsTab() {
       <div className="fm-card__head">
         <span className="fm-card__title">Kitchen Stations</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>{toast}</span>}
-          <span style={{ fontSize: 12, color: '#999' }}>{rows.length} stations</span>
+          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast}</span>}
+          <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{rows.length} stations</span>
           {dirtyCount > 0 && (
             <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAll} disabled={saving}>
               {saving ? 'Saving…' : `Save All (${dirtyCount})`}
@@ -135,7 +135,7 @@ export default function StationsTab() {
               onDrop={onDrop}
               style={{ cursor: 'grab' }}
             >
-              <td style={{ color: '#ccc', fontSize: 16, textAlign: 'center', cursor: 'grab' }}>⋮⋮</td>
+              <td style={{ color: 'var(--t-text-soft)', fontSize: 16, textAlign: 'center', cursor: 'grab' }}>⋮⋮</td>
               <td>
                 <span className="color-swatch" style={{ background: val(r, 'color_hex') }} />
                 <input
@@ -151,9 +151,9 @@ export default function StationsTab() {
                   type="color"
                   value={val(r, 'color_hex')}
                   onChange={e => setField(r.id, 'color_hex', e.target.value)}
-                  style={{ width: 40, height: 28, padding: 2, border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer' }}
+                  style={{ width: 40, height: 28, padding: 2, border: '1px solid var(--t-border)', borderRadius: 4, cursor: 'pointer' }}
                 />
-                <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#999', marginLeft: 6 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--t-text-muted)', marginLeft: 6 }}>
                   {val(r, 'color_hex')}
                 </span>
               </td>
@@ -204,7 +204,7 @@ export default function StationsTab() {
             value={newRow.color_hex}
             onChange={e => setNewRow(f => ({ ...f, color_hex: e.target.value }))}
             onKeyDown={e => onAddKeyDown(e, 1, false)}
-            style={{ height: 36, padding: 2, border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', width: '100%' }}
+            style={{ height: 36, padding: 2, border: '1px solid var(--t-border)', borderRadius: 6, cursor: 'pointer', width: '100%' }}
           />
         </div>
         <div className="fm-field" style={{ maxWidth: 80 }}>

@@ -76,7 +76,7 @@ router.get('/sales', async (req, res) => {
   // All non-cancelled KOT items for these orders
   const items = await dbAll(
     `SELECT k.order_id,
-            ki.product_name, ki.quantity, ki.unit_price, ki.discount_amount,
+            ki.product_name, ki.quantity, ki.unit_price, ki.discount_amount, ki.discount_type,
             ROW_NUMBER() OVER (PARTITION BY k.order_id ORDER BY ki.id) AS sn
      FROM   pos_kot_items ki
      JOIN   pos_kots k ON k.id = ki.kot_id
@@ -148,6 +148,8 @@ router.get('/sales', async (req, res) => {
         qty: it.quantity,
         rate: it.unit_price,
         amount: it.quantity * it.unit_price - (it.discount_amount || 0),
+        discount_amount: it.discount_amount || 0,
+        discount_type: it.discount_type || null,
       })),
     };
   });

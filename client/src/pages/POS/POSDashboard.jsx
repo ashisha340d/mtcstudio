@@ -15,12 +15,13 @@ import AddCustomerModal from './components/AddCustomerModal';
 import ScheduleOrderModal from './components/ScheduleOrderModal';
 import ScheduledOrderCard from './components/ScheduledOrderCard';
 import CakeDashboardWindow from './components/CakeDashboardWindow';
-import { cakeDraftItems } from './posShared';
-import FonepayPanel from './components/FonepayPanel';
+import { cakeDraftItems, cakeDraftDue } from './posShared';
 // Lazy — shares the route chunk, idle-prefetched below
 const CakeOrderFormWindow = lazy(() => import('../CakeOrders/CakeOrderForm'));
 import { getScheduledOrders, convertScheduledOrder, cancelScheduledOrder, deleteScheduledOrder, getBusinessDay } from '../../services/posApi';
 import ConfettiBurst from '../../components/ConfettiBurst/ConfettiBurst';
+import NepaliDateChip from '../../components/NepaliDateChip/NepaliDateChip';
+import NotificationCenter from './components/NotificationCenter';
 import { nepalNow } from '../../utils/dateTime';
 import './pos.css';
 
@@ -38,7 +39,7 @@ function Clock() {
 const TOOLBAR_ORDER_KEY = 'pos_toolbar_btn_order';
 const DEFAULT_BTN_ORDER = [
   'takeaway', 'delivery', 'schedule', 'draft', 'cake', 'weborders',
-  'tablemerge', 'shift', 'drawer', 'closeday', 'fonepay',
+  'tablemerge', 'shift', 'drawer', 'closeday',
 ];
 
 function noop() { }
@@ -67,15 +68,10 @@ function loadBtnOrder() {
 }
 
 /* ── Desktop window panel with OS chrome ──────────────────── */
-function DesktopWindow({ title, count, onAdd, onReorder, reorderActive, children }) {
+function DesktopWindow({ title, count, onAdd, onReorder, reorderActive, extra, children }) {
   return (
     <div className="desktop-window">
       <div className="desktop-chrome">
-        <div className="desktop-chrome__dots">
-          <div className="win-dot win-dot--close" />
-          <div className="win-dot win-dot--min" />
-          <div className="win-dot win-dot--max" />
-        </div>
         <span className="desktop-chrome__title">{title}</span>
         {count != null && (
           <span className="desktop-chrome__count">{count}</span>
@@ -92,6 +88,7 @@ function DesktopWindow({ title, count, onAdd, onReorder, reorderActive, children
             {reorderActive ? '✓' : '🔀'}
           </button>
         )}
+        {extra}
       </div>
       <div className="desktop-window__body">{children}</div>
     </div>
@@ -116,7 +113,6 @@ export default function POSDashboard() {
   const [showTableMerge, setShowTableMerge] = useState(false);
   const [showShift, setShowShift] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
-  const [showFonepay, setShowFonepay] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showWebOrders, setShowWebOrders] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -447,6 +443,23 @@ export default function POSDashboard() {
   const tableCountLabel = `${occupiedCount} occupied · ${sortedTables.length} total`;
 
   const allOrderCards = [...deliveryOrders, ...takeawayOrders, ...quickOrders];
+
+  /* Unpaid balance still on this board. Each entry uses the very expression its
+     own card prints — TableCard adds the parked cake due, OrderCard does not —
+     so the pill always ties out to the amounts on screen. */
+  const openOnBoard = [
+    ...sortedTables
+      .map(t => orders[tableOrderMap[t.id]])
+      .filter(o => o && hasContent(o))
+      .map(o => ({ order: o, amount: (Number(o.total_amount) || 0) + cakeDraftDue(o) })),
+    // heldOrder is a paid snapshot kept only for the fly-to-drawer animation
+    ...allOrderCards
+      .filter(o => o.id !== heldOrder?.id)
+      .map(o => ({ order: o, amount: Number(o.total_amount) || 0 })),
+  ];
+  // Cards round to whole rupees — round per card too so the pill is exactly
+  // the sum of the numbers the cashier can see, not a re-rounded raw total.
+  const toCollect = openOnBoard.reduce((sum, e) => sum + Math.round(e.amount), 0);
   const sortedOrderCards = [...allOrderCards].sort((a, b) => {
     const ia = cardOrder.indexOf(a.id);
     const ib = cardOrder.indexOf(b.id);
@@ -466,58 +479,53 @@ export default function POSDashboard() {
   const TOOLBAR_BTN_DEFS = {
 
     cake: {
-      className: 'pos-topbar__btn--g1', label: '🎂Cake Orders',
+      className: 'pos-topbar__btn--g1', icon: '🎂', label: 'Cake Orders',
       onClick: () => setCakeWin({ id: null }), badge: () => cakeOrders.length,
     },
     delivery: {
-      className: 'pos-topbar__btn--g1', label: '🚴Delivery',
+      className: 'pos-topbar__btn--g1', icon: '🚴', label: 'Delivery',
       onClick: () => openNonDineIn(ORDER_TYPE.DELIVERY),
     },
     takeaway: {
-      className: 'pos-topbar__btn--g1', label: '🛍 Takeaway',
+      className: 'pos-topbar__btn--g1', icon: '🛍', label: 'Takeaway',
       onClick: () => navigate('/pos/entry', { state: { orderType: ORDER_TYPE.TAKEAWAY } }),
     },
 
 
     draft: {
-      className: 'pos-topbar__btn--g2', label: '📝Draft Order',
+      className: 'pos-topbar__btn--g2', icon: '📝', label: 'Draft Order',
       onClick: () => navigate('/pos/entry', { state: { orderType: ORDER_TYPE.TAKEAWAY, draftMode: true } }),
       title: 'Draft order — processed manually later',
       badge: () => schedOrders.filter(r => r.kind === 'DRAFT').length,
     },
 
     schedule: {
-      className: 'pos-topbar__btn--g2', label: '⏰Sched. Order',
+      className: 'pos-topbar__btn--g2', icon: '⏰', label: 'Sched. Order',
       onClick: () => setShowSchedule(true),
       title: 'Schedule a delivery — auto-fires to KOT before its time',
       badge: () => schedOrders.filter(r => r.kind === 'SCHEDULED').length,
     },
     weborders: {
-      className: 'pos-topbar__btn--g2', label: '🌐Web Orders',
+      className: 'pos-topbar__btn--g2', icon: '🌐', label: 'Web Orders',
       onClick: () => setShowWebOrders(true), badge: () => webOrderCount,
       title: 'Website orders waiting for approval',
     },
     tablemerge: {
-      className: 'pos-topbar__btn--g3', label: '🔄Table Merge',
+      className: 'pos-topbar__btn--g3', icon: '🔄', label: 'Table Merge',
       onClick: () => setShowTableMerge(true), title: 'Merge orders between tables',
     },
     shift: {
-      className: 'pos-topbar__btn--g3', label: '↔ Shift Order',
+      className: 'pos-topbar__btn--g3', icon: '↔', label: 'Shift Order',
       onClick: () => setShowShift(true), title: 'Shift order to a different table',
     },
     drawer: {
-      className: 'pos-topbar__btn--g3', label: '💰 Drawer',
+      className: 'pos-topbar__btn--g3', icon: '💰', label: 'Drawer',
       onClick: () => setShowDrawer(true), title: 'Cash in / cash out for the open business day',
     },
     closeday: {
-      className: 'pos-topbar__btn--g3', label: '🔒 Close Day',
+      className: 'pos-topbar__btn--g3', icon: '🔒', label: 'Close Day',
       onClick: () => navigate('/pos/cash-closing'),
       title: 'Daily cash closing — open/close the business day (F2)',
-    },
-    fonepay: {
-      className: 'pos-topbar__btn--g3', label: '💳 Check Fonepay',
-      onClick: () => setShowFonepay(true),
-      title: 'Read the latest 3 Fonepay payments (read-only)',
     },
   };
 
@@ -527,7 +535,8 @@ export default function POSDashboard() {
       <div className="pos-topbar">
         <span className="pos-topbar__brand">Munch Time Cafe</span>
         <button className="pos-topbar__btn" onClick={() => navigate('/')}>
-          ← Dashboard
+          <span className="pos-topbar__icon">←</span>
+          <span className="pos-topbar__label">Dashboard</span>
         </button>
 
         <div
@@ -548,7 +557,8 @@ export default function POSDashboard() {
                 onDragOver={reorderMode ? onBtnDragOver(id) : undefined}
                 onDragEnd={reorderMode ? onBtnDragEnd : undefined}
               >
-                {def.label}
+                <span className="pos-topbar__icon">{def.icon}</span>
+                <span className="pos-topbar__label">{def.label}</span>
                 {def.badge != null && def.badge() > 0 && (
                   <span className="pos-topbar__badge">{def.badge()}</span>
                 )}
@@ -562,7 +572,8 @@ export default function POSDashboard() {
           onClick={toggleReorderMode}
           title="Reorder toolbar buttons"
         >
-          {reorderMode ? '✓ Done' : '🔀 Reorder'}
+          <span className="pos-topbar__icon">{reorderMode ? '✓' : '🔀'}</span>
+          <span className="pos-topbar__label">{reorderMode ? 'Done' : 'Reorder'}</span>
         </button>
 
         <span className="pos-topbar__spacer" />
@@ -591,7 +602,13 @@ export default function POSDashboard() {
 
         {/* TABLES WINDOW */}
         <DesktopWindow
-          title={`🍽  Dine In · Tables`} count={tableCountLabel}>
+          title="Dine In Tables" count={tableCountLabel}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              <NotificationCenter />
+              <NepaliDateChip variant="chrome" />
+            </div>
+          }>
           <div className="table-card-grid"> {sortedTables.map((t) => (<TableCard key={t.id} table={t} onClick={onTableClick} onDirectCheckout={openCheckoutForOrder} frozenOrderIds={frozenTableOrderIds} />))}
             {tables.length === 0 && (<div className="pos-empty-state">No tables configured.</div>)}
           </div>
@@ -680,12 +697,11 @@ export default function POSDashboard() {
       {showDrawer && (
         <CashDrawerModal onClose={() => setShowDrawer(false)} />
       )}
-      {showFonepay && (
-        <FonepayPanel onClose={() => setShowFonepay(false)} />
-      )}
       {showSalesReport && (
         <SalesReportModal
           onClose={() => setShowSalesReport(false)}
+          toCollect={toCollect}
+          toCollectCount={openOnBoard.length}
           isAdmin={user?.role === 'ADMIN'}
           revertOrderTransaction={revertOrderTransaction}
           revertCakeTransaction={revertCakeTransaction}

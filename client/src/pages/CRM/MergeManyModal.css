@@ -1,0 +1,45 @@
+.mrg-modal { width: 640px; max-width: 95vw; }
+.mrg-body { max-height: 72vh; }
+
+.mrg-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.mrg-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 2px solid var(--t-border); background: var(--t-surface-2);
+  border-radius: var(--t-radius-md); padding: 10px 16px; cursor: pointer; min-width: 120px;
+  transition: border-color .12s;
+}
+.mrg-card:hover { border-color: var(--t-accent); }
+.mrg-card.sel { border-color: var(--t-accent); background: var(--t-accent-soft); }
+.mrg-avatar {
+  width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--t-accent); color: #fff; font-weight: 800; font-size: 13px;
+}
+.mrg-card-name { font-weight: 700; font-size: 13px; color: var(--t-text); }
+.mrg-card-phone { font-size: 11px; color: var(--t-text-muted); }
+.mrg-card-tag { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--t-accent); }
+
+.mrg-hint { font-size: 11px; color: var(--t-text-muted); margin-bottom: 12px; font-style: italic; }
+
+.mrg-fields { display: flex; flex-direction: column; gap: 8px; }
+.mrg-field-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--t-border); }
+.mrg-field-label { width: 90px; flex-shrink: 0; font-size: 11px; font-weight: 800; color: var(--t-text-muted); text-transform: uppercase; letter-spacing: .03em; padding-top: 5px; }
+.mrg-field-opts { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+
+.mrg-opt {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--t-border); background: var(--t-surface); border-radius: 20px;
+  padding: 5px 10px; font-size: 12px; color: var(--t-text); cursor: pointer;
+}
+.mrg-opt input { margin: 0; }
+.mrg-opt.on { border-color: var(--t-accent); background: var(--t-accent-soft); color: var(--t-accent); font-weight: 700; }
+.mrg-opt-badge { font-size: 9px; opacity: .7; font-weight: 800; text-transform: uppercase; }
+
+.mrg-tags { margin-top: 12px; }
+.mrg-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.mrg-tagchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--t-border); border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 700;
+  color: var(--t-text-muted); cursor: pointer; opacity: .55;
+}
+.mrg-tagchip.on { color: var(--chip, var(--t-accent)); border-color: var(--chip, var(--t-accent)); background: color-mix(in srgb, var(--chip, var(--t-accent)) 14%, transparent); opacity: 1; }
+.mrg-tagchip input { margin: 0; }

@@ -255,12 +255,12 @@ router.post('/:id/approve', async (req, res) => {
       );
 
       for (const it of foodItems) {
-        const prod = await tx.dbGet(`SELECT prep_time_minutes, pos_station_id FROM products WHERE id=?`, [it.product_id]);
+        const prod = await tx.dbGet(`SELECT p.prep_time_minutes, p.pos_station_id, (SELECT COALESCE(MAX(v.auto_kds),0) FROM product_variants v WHERE IF(? IS NULL, v.product_id = p.id, v.id = ?)) AS auto_kds FROM products p WHERE p.id=?`, [it.variant_id ?? null, it.variant_id ?? null, it.product_id]);
         maxPrepMin = Math.max(maxPrepMin, prod?.prep_time_minutes ?? 10);
         const mods = (() => { try { return JSON.parse(it.modifiers_json || '[]'); } catch { return []; } })();
         const notes = [mods.length ? `➕ ${mods.join(', ')}` : '', it.special_note || ''].filter(Boolean).join(' · ') || null;
-        // Stationless (water, delivery charge...) = auto-SERVED — KDS skips, web n/N intact
-        const stationId = prod?.pos_station_id ?? null;
+        // Stationless (water, delivery charge...) or Auto KDS = auto-SERVED — KDS skips, web n/N intact
+        const stationId = prod?.auto_kds ? null : prod?.pos_station_id ?? null;
         savedItems.push(await tx.dbGet(
           `INSERT INTO pos_kot_items
              (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, prep_time_minutes, station_id, status, served_at)

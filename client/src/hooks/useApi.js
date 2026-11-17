@@ -1,27 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-
-export function useApi(apiFn, deps = []) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFn();
-      setData(res.data);
-    } catch (e) {
-      setError(e.response?.data?.error || e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, deps);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { data, loading, error, reload: load };
-}
+import { useState, useCallback } from 'react';
 
 export function useMsg() {
   const [msg, setMsg] = useState(null);

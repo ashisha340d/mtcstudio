@@ -14,7 +14,7 @@ function loadSize() {
   }
 }
 
-export default function SalesReportModal({ onClose, isAdmin, revertOrderTransaction, revertCakeTransaction, notify }) {
+export default function SalesReportModal({ onClose, isAdmin, revertOrderTransaction, revertCakeTransaction, notify, toCollect, toCollectCount }) {
   const [size, setSize] = useState(loadSize);
   const modalRef = useRef(null);
 
@@ -75,6 +75,8 @@ export default function SalesReportModal({ onClose, isAdmin, revertOrderTransact
               revertOrderTransaction={revertOrderTransaction}
               revertCakeTransaction={revertCakeTransaction}
               notify={notify}
+              toCollect={toCollect}
+              toCollectCount={toCollectCount}
             />
           </Suspense>
         </div>

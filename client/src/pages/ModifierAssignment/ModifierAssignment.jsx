@@ -1,5 +1,5 @@
 ﻿'use client';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import './ModifierAssignment.css';
 
@@ -361,7 +361,7 @@ export default function ModifierAssignment({ embedded = false }) {
       {embedded && (
         <div className="ma-topbar" style={{ paddingTop: 20, paddingLeft: 28, paddingRight: 28 }}>
           <div className="ma-topbar-left">
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#374151' }}>Assign Modifiers to Products</h2>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--t-text)' }}>Assign Modifiers to Products</h2>
           </div>
           <div className="ma-topbar-right">
             <button className="ma-btn-secondary" onClick={handleClear}>Clear</button>

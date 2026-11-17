@@ -26,16 +26,16 @@ const DEFAULTS = {
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#222' }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{hint}</div>}
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-text)' }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: 'var(--t-text-muted)', marginTop: 2 }}>{hint}</div>}
       </div>
       <button
         onClick={() => onChange(checked ? '0' : '1')}
         style={{
           width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-          background: checked ? '#c1440e' : '#ddd', transition: 'background .2s',
+          background: checked ? 'var(--t-accent)' : 'var(--t-border-strong)', transition: 'background .2s',
           position: 'relative', flexShrink: 0,
         }}
       >
@@ -52,22 +52,22 @@ function Toggle({ label, hint, checked, onChange }) {
 function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
         {label}
       </label>
       {children}
-      {hint && <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 3 }}>{hint}</div>}
     </div>
   );
 }
 
 const inp = {
-  width: '100%', padding: '8px 10px', border: '1px solid #ddd',
+  width: '100%', padding: '8px 10px', border: '1px solid var(--t-border)',
   borderRadius: 6, fontSize: 13, boxSizing: 'border-box', outline: 'none',
 };
 
 const sectionHead = {
-  fontSize: 11, fontWeight: 800, color: '#888', textTransform: 'uppercase',
+  fontSize: 11, fontWeight: 800, color: 'var(--t-text-muted)', textTransform: 'uppercase',
   letterSpacing: '0.08em', marginBottom: 6, marginTop: 4,
 };
 
@@ -189,15 +189,15 @@ export default function CakeSlipTab() {
         {/* Global paper width notice */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12,
-          background: '#f0f9ff', border: '1px solid #bae6fd',
+          background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.3)',
           borderRadius: 8, padding: '10px 16px', marginBottom: 20,
         }}>
           <span style={{ fontSize: 18 }}>🖨</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>
               Paper Width: {paperWidth}mm — {paperWidth >= 80 ? '80mm (48 chars/line)' : '58mm (32 chars/line)'}
             </div>
-            <div style={{ fontSize: 11, color: '#0284c7', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2 }}>
               This is the global setting from <strong>Receipt &amp; Printer</strong> tab. Change it there to affect all ESC/POS printing.
             </div>
           </div>
@@ -259,7 +259,7 @@ export default function CakeSlipTab() {
         {/* Save */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center' }}>
           {toast && (
-            <span style={{ fontSize: 12, color: toast.err ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+            <span style={{ fontSize: 12, color: toast.err ? 'var(--t-danger)' : 'var(--t-success)', fontWeight: 600 }}>
               {toast.msg}
             </span>
           )}
@@ -268,7 +268,7 @@ export default function CakeSlipTab() {
             disabled={saving}
             style={{
               padding: '9px 24px', borderRadius: 7, border: 'none',
-              background: '#c1440e', color: '#fff', fontWeight: 700,
+              background: 'var(--t-accent)', color: '#fff', fontWeight: 700,
               fontSize: 13, cursor: 'pointer', opacity: saving ? 0.65 : 1,
             }}
           >{saving ? 'Saving…' : 'Save Cake Slip Settings'}</button>
@@ -277,11 +277,11 @@ export default function CakeSlipTab() {
 
       {/* ── Right: Live preview ─────────────────────────────────── */}
       <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
           Live Preview
         </div>
         <div style={{
-          border: '1px solid #ddd', borderRadius: 8, overflow: 'hidden',
+          border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}>
           <iframe
@@ -290,7 +290,7 @@ export default function CakeSlipTab() {
             style={{ width: '100%', height: 560, border: 'none', display: 'block', background: '#fff' }}
           />
         </div>
-        <div style={{ fontSize: 10, color: '#bbb', textAlign: 'center', marginTop: 6 }}>
+        <div style={{ fontSize: 10, color: 'var(--t-text-soft)', textAlign: 'center', marginTop: 6 }}>
           {paperWidth}mm paper preview · {paperWidth >= 80 ? '48' : '32'} chars/line
         </div>
       </div>

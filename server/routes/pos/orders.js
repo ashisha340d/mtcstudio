@@ -294,6 +294,97 @@ router.post('/:id/merge', async (req, res) => {
   res.json({ ok: true, targetOrderId: targetId, sourceOrderId: sourceId, kotsMoved: srcKots.length });
 });
 
+// POST /api/pos/orders/:id/transfer-item — "Advance": move qty of ONE kot item into
+// target order :id. Unlike merge (whole order), this relocates a single line, splitting
+// its quantity when partial. A fresh KOT is created on the target so KDS shows the moved
+// item under the receiving table; its status mirrors the source item, so an already-SERVED
+// item never re-alerts the kitchen. Combos move whole (parent + component lines together).
+router.post('/:id/transfer-item', async (req, res) => {
+  const targetId = Number(req.params.id);
+  const itemId   = Number(req.body.itemId);
+  let   qty      = req.body.quantity == null ? null : Number(req.body.quantity);
+
+  if (!itemId) return res.status(400).json({ error: 'itemId required' });
+
+  const item = await dbGet(`SELECT * FROM pos_kot_items WHERE id=?`, [itemId]);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.status === 'CANCELLED') return res.status(400).json({ error: 'Item is cancelled' });
+  if (item.is_combo_child) return res.status(400).json({ error: 'Cannot transfer a combo component on its own' });
+
+  const srcKot = await dbGet(`SELECT * FROM pos_kots WHERE id=?`, [item.kot_id]);
+  const sourceId = srcKot.order_id;
+  if (sourceId === targetId) return res.status(400).json({ error: 'Item is already on this order' });
+
+  const target = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [targetId]);
+  const source = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [sourceId]);
+  if (!target) return res.status(404).json({ error: 'Target order not found' });
+  if (target.order_type === 'CAKE_ORDER' || source.order_type === 'CAKE_ORDER')
+    return res.status(400).json({ error: 'Cake orders cannot transfer items' });
+  for (const o of [target, source]) {
+    if (o.status !== 'OPEN' && o.status !== 'SAVED')
+      return res.status(400).json({ error: `Order #${o.id} is ${o.status} and cannot transfer items` });
+  }
+
+  const kids = await dbAll(`SELECT * FROM pos_kot_items WHERE combo_parent_id=? AND status!='CANCELLED'`, [item.id]);
+  const isCombo = kids.length > 0;
+
+  if (qty == null || qty >= item.quantity || isCombo) qty = item.quantity; // full move
+  if (qty < 1) return res.status(400).json({ error: 'quantity must be at least 1' });
+
+  let newKotId;
+  await transaction(async (tx) => {
+    // Fresh KOT on the target; status mirrors moved item so served lines skip the kitchen
+    const n = (await tx.dbGet(`SELECT COALESCE(MAX(kot_number),0) AS mx FROM pos_kots WHERE order_id=?`, [targetId])).mx + 1;
+    const kotStatus = item.status === 'SERVED' ? 'SERVED' : 'ORDERSENT';
+    const ins = await tx.dbRun(
+      `INSERT INTO pos_kots (order_id, kot_number, status, punched_by, served_at) VALUES (?,?,?,?,?)`,
+      [targetId, n, kotStatus, req.posUser.id, item.status === 'SERVED' ? item.served_at : null]);
+    newKotId = ins.insertId;
+
+    // Move a line into newKotId: reassign whole, or split the moved quantity into a clone
+    const moveRow = async (row, moveQty, parentNewId) => {
+      if (moveQty >= row.quantity) {
+        await tx.dbRun(`UPDATE pos_kot_items SET kot_id=?, combo_parent_id=? WHERE id=?`, [newKotId, parentNewId, row.id]);
+        return row.id;
+      }
+      await tx.dbRun(`UPDATE pos_kot_items SET quantity=? WHERE id=?`, [row.quantity - moveQty, row.id]);
+      const c = await tx.dbRun(
+        `INSERT INTO pos_kot_items
+          (kot_id, product_id, quantity, unit_price, notes, is_home_pack, status, served_at,
+           product_name, prep_time_minutes, station_id, customer_notes, variant_id,
+           discount_amount, discount_type, combo_parent_id, is_combo_child)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [newKotId, row.product_id, moveQty, row.unit_price, row.notes, row.is_home_pack, row.status, row.served_at,
+         row.product_name, row.prep_time_minutes, row.station_id, row.customer_notes, row.variant_id,
+         row.discount_amount, row.discount_type, parentNewId, row.is_combo_child]);
+      return c.insertId;
+    };
+
+    const newParentId = await moveRow(item, qty, null);
+    if (isCombo) for (const k of kids) await moveRow(k, k.quantity, newParentId);
+
+    for (const oid of [sourceId, targetId]) {
+      await tx.dbRun(
+        `UPDATE pos_orders SET total_amount = (
+           SELECT COALESCE(SUM(ki.quantity * ki.unit_price - ki.discount_amount), 0)
+           FROM   pos_kot_items ki JOIN pos_kots k ON k.id = ki.kot_id
+           WHERE  k.order_id = ? AND ki.status != 'CANCELLED'
+         ) WHERE id = ?`, [oid, oid]);
+    }
+
+    audit({ userId: req.posUser.id, sessionId: req.posSessionId, entityType: 'ORDER', entityId: targetId,
+      action: 'TRANSFER_ITEM', delta: { fromOrderId: sourceId, itemId, quantity: qty, productName: item.product_name } });
+  });
+
+  const updatedTarget = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [targetId]);
+  const updatedSource = await dbGet(`SELECT * FROM pos_orders WHERE id=?`, [sourceId]);
+  kdsEvents.broadcast('new_kot', { orderId: targetId, kotId: newKotId }); // KDS full-reloads → both tables refresh
+  socketServer.emitOrderUpdated(updatedTarget);
+  socketServer.emitOrderUpdated(updatedSource);
+
+  res.json({ ok: true, targetOrderId: targetId, sourceOrderId: sourceId, newKotId, quantity: qty });
+});
+
 // POST /api/pos/orders/:id/checkout
 router.post('/:id/checkout', async (req, res) => {
   const { payments, discount_amount = 0 } = req.body;

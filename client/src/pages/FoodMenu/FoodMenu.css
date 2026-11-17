@@ -807,18 +807,12 @@
   box-sizing: border-box;
 }
 
-.fm-pos-price-input {
-  text-align: right;
-}
-
 .fm-prep-input {
   text-align: center;
 }
 
 .fm-max-input {
   text-align: center;
-  width: 34px !important;
-  flex: 0 0 34px;
 }
 
 .fm-variant-table {

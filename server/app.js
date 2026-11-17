@@ -4,7 +4,9 @@ const path = require('path');
 const cors = require('cors');
 const { hostname, networkInterfaces } = require('os');
 
-require('dotenv').config();
+const _envFile = process.env.APP_ENV && require('fs').existsSync(require('path').join(__dirname, `.env.${process.env.APP_ENV}`))
+  ? `.env.${process.env.APP_ENV}` : '.env';
+require('dotenv').config({ path: require('path').join(__dirname, _envFile) });
 
 function envPort(name, fallback) {
   const port = parseInt(process.env[name], 10);
@@ -29,6 +31,7 @@ const dashboardRouter = require('./routes/dashboard');
 const crmRouter = require('./routes/crm');
 const automationRouter = require('./routes/automation');
 const weatherRecoRouter = require('./routes/weatherReco');
+const campaignsRouter = require('./routes/campaigns');
 const settingsRouter = require('./routes/settings');
 const ocrRouter = require('./routes/ocr');
 
@@ -57,13 +60,18 @@ const importsRouter = require('./routes/pos/imports');
 const webOrderBridge = require('./services/webOrderBridge');
 const smsGateway = require('./services/smsGateway');
 const smsService = require('./services/smsService');
+const campaignQueue = require('./services/campaign/queueProcessor');
+const campaignScheduler = require('./services/campaign/scheduler');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { startAutoSync } = require('./services/liveShelfSync');
+const holidayCalendar = require('./services/holidayCalendar');
 const systemRouter = require('./routes/system');
 const wifiRouter = require('./routes/wifi');
 const customerRouter = require('./routes/customer');
 const googleRouter = require('./routes/google');
+const hrRouter = require('./routes/hr');
+const payrollRouter = require('./routes/payroll');
 
 // ── App ───────────────────────────────────────────────────────
 const app = express();
@@ -96,6 +104,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/automation', automationRouter);
 app.use('/api/weather-reco', weatherRecoRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/auth', posAuthRouter);
@@ -117,6 +126,8 @@ app.use('/api/pos/scheduled', posScheduledRouter);
 app.use('/api/mobile', mobileRouter);
 app.use('/api/companion', companionRouter);
 app.use('/api/companion', importsRouter);
+app.use('/api/hr', hrRouter);
+app.use('/api/payroll', payrollRouter);
 app.use('/', googleRouter);
 
 // ── Wi-Fi captive portal (MikroTik hotspot landing page) ──────
@@ -179,13 +190,16 @@ Promise.all([cmsDb.ready, db.ready]).catch(err => {
     startAutoSync(60_000);
     webOrderBridge.start();
     smsService.start();   // background SMS engine — processes PENDING jobs
+    campaignQueue.start();     // background campaign delivery worker
+    campaignScheduler.start(); // fires scheduled/recurring campaigns + drains events
+    holidayCalendar.sync().catch(() => {}); // Nepal holiday .ics — downloads once, then cached
 
     console.log('');
     console.log('  ╔══════════════════════════════════════════════╗');
     console.log('  ║          MTC Studio Server — Ready           ║');
     console.log('  ╚══════════════════════════════════════════════╝');
     console.log('');
-    console.log('  Env        →  .env');
+    console.log(`  Env        →  ${_envFile}`);
     console.log(`  IP / Port  →  ${ip}:${PORT}`);
     console.log(`  Bind       →  ${HOST}:${PORT}`);
     console.log(`  Hostname   →  ${hostname()}`);

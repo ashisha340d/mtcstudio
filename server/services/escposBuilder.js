@@ -151,13 +151,27 @@ function buildEscPos({ order = {}, items = [], payments = [], isReprint = false 
     if (item.notes) {
       parts.push(Buffer.from('  > ' + String(item.notes).substring(0, W - 4) + '\n', 'latin1'));
     }
+    if (item.discount_amount > 0) {
+      const gross = (item.unit_price ?? 0) * (item.quantity ?? 1);
+      const pct = gross > 0 ? Math.round((item.discount_amount / gross) * 100) : 0;
+      const label = pct >= 100 ? 'FOC' : pct + '%';
+      parts.push(Buffer.from(
+        '  -Rs.' + money(item.discount_amount) + ' ' + (item.discount_type || '') + ' @ ' + label + '\n',
+        'latin1'
+      ));
+    }
   }
 
   ln(EQ);
 
-  // ── Total ─────────────────────────────────────────────────────
+  // ── Discount & Total ─────────────────────────────────────────
+  const orderDiscount = Number(order.discount_amount || 0);
+  const netTotal = (order.total_amount ?? 0) - orderDiscount;
+  if (orderDiscount > 0) {
+    ln(kv('Discount:', '-Rs.' + money(orderDiscount), W));
+  }
   b(CMD.BOLD_ON); b(CMD.SIZE_TALL);
-  ln(kv('TOTAL:', 'Rs.' + money(order.total_amount ?? 0), W));
+  ln(kv('TOTAL:', 'Rs.' + money(netTotal), W));
   b(CMD.SIZE_NORMAL); b(CMD.BOLD_OFF);
 
   // ── Payments ──────────────────────────────────────────────────
@@ -167,7 +181,7 @@ function buildEscPos({ order = {}, items = [], payments = [], isReprint = false 
       ln(kv((p.method || 'CASH') + ':', 'Rs.' + money(p.amount), W));
     }
     const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-    const due = Number(order.total_amount ?? 0);
+    const due = netTotal;
     if (due - paid > 0.005) {
       b(CMD.BOLD_ON);
       ln(kv('BALANCE DUE:', 'Rs.' + money(due - paid), W));

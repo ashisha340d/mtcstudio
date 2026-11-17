@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
     cake_type VARCHAR(32),
     auto_entry TINYINT DEFAULT 0,
     check_on_bill TINYINT DEFAULT 0,
+    auto_kds TINYINT DEFAULT 0,
     FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

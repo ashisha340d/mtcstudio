@@ -435,6 +435,15 @@
   color: var(--t-success-text);
 }
 
+/* Unpaid balance still sitting on the POS dashboard — not part of the day's
+   collected tenders, so it never rolls into the Total chip. */
+.footer-chip--collect {
+  background: linear-gradient(180deg, rgba(245,158,11,.10) 0%, rgba(245,158,11,.26) 100%);
+  color: #b45309;
+  border: 1px dashed rgba(245, 158, 11, 0.55);
+  margin-left: auto;
+}
+
 .footer-chip--total {
   background: linear-gradient(180deg, #334155 0%, #0f172a 100%);
   color: #fff;

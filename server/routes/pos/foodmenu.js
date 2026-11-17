@@ -83,6 +83,19 @@ router.get('/products', async (req, res) => {
     params
   );
 
+  // 30-day units sold — POS search ranks best sellers higher
+  const sold = await dbAll(
+    `SELECT ki.product_id, SUM(ki.quantity) AS qty
+     FROM   pos_kot_items ki
+     JOIN   pos_kots   k ON k.id = ki.kot_id
+     JOIN   pos_orders o ON o.id = k.order_id
+     WHERE  o.status = 'CLOSED' AND ki.status != 'CANCELLED' AND ki.is_combo_child = 0
+       AND  o.created_at >= NOW() - INTERVAL 30 DAY
+     GROUP  BY ki.product_id`
+  );
+  const soldBy = new Map(sold.map(r => [r.product_id, Number(r.qty) || 0]));
+  for (const p of products) p.sold_30d = soldBy.get(p.id) || 0;
+
   res.json(products);
 });
 

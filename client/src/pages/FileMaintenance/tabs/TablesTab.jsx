@@ -6,14 +6,6 @@ const API = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api', head
 
 const BLANK = { name: '', capacity: 4, section: '', sort_order: 0 };
 
-// Treat add-row inputs the same as inline inputs for Enter navigation
-const addEnter = (e, idx, refs, onLast) => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  const next = refs.current[idx + 1];
-  if (next) { next.focus(); next.select?.(); } else onLast();
-};
-
 export default function TablesTab() {
   const [rows,      setRows]    = useState([]);
   const [edits,     setEdits]   = useState({});   // { [id]: partialRow }
@@ -129,8 +121,8 @@ export default function TablesTab() {
       <div className="fm-card__head">
         <span className="fm-card__title">Restaurant Tables</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>{toast}</span>}
-          <span style={{ fontSize: 12, color: '#999' }}>{rows.length} tables</span>
+          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast}</span>}
+          <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{rows.length} tables</span>
           {dirtyCount > 0 && (
             <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAll} disabled={saving}>
               {saving ? 'Saving…' : `Save All (${dirtyCount})`}
@@ -158,7 +150,7 @@ export default function TablesTab() {
               onDrop={onDrop}
               style={{ cursor: 'grab' }}
             >
-              <td style={{ color: '#ccc', fontSize: 16, textAlign: 'center', cursor: 'grab' }}>⋮⋮</td>
+              <td style={{ color: 'var(--t-text-soft)', fontSize: 16, textAlign: 'center', cursor: 'grab' }}>⋮⋮</td>
               <td>
                 <input
                   className="fm-inline-input"

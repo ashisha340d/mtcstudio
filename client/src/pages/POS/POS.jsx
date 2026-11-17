@@ -8,14 +8,13 @@ import {
   Image as ImageIcon, Users, Pencil,
   UtensilsCrossed, CreditCard,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import CheckoutModal from './components/SplitTenderCheckoutContainer';
 import CustomerPickerModal from './components/CustomerPickerModal';
 import SalesReportModal from './components/SalesReportModal';
 import AddProductModal from './components/AddProductModal';
-import { printReceipt } from './components/ThermalReceipt';
 import { API, W, fmt, cleanVariantName } from './posShared';
 import { getMenuSnapshot, subscribeMenu, initMenuStore } from '../../stores/menuStore';
+import { buildSearchIndex, smartSearch, matchText, recordPick } from '../../lib/smartSearch';
 import './pos.css';
 
 const H = { 'Content-Type': 'application/json', 'X-Session-ID': 'dev-session' };
@@ -149,9 +148,26 @@ function productPriceDisplay(product) {
   return fmt(product.price ?? product.pos_price ?? 0);
 }
 
-function ProductCard({ product, cartQty, onClick }) {
+/* Bold + tint the letters a search matched */
+function highlightName(name, hl) {
+  if (!hl?.length) return name;
+  const marks = new Array(name.length).fill(false);
+  for (const [a, b] of hl) for (let i = a; i < b && i < name.length; i++) marks[i] = true;
+  const parts = [];
+  let i = 0;
+  while (i < name.length) {
+    let j = i;
+    while (j < name.length && marks[j] === marks[i]) j++;
+    parts.push(marks[i] ? <span key={i} style={{ color: W.orange, fontWeight: 900 }}>{name.slice(i, j)}</span> : name.slice(i, j));
+    i = j;
+  }
+  return parts;
+}
+
+function ProductCard({ product, cartQty, onClick, hl, selected }) {
   return (
     <button
+      data-search-sel={selected ? '1' : undefined}
       onClick={() => onClick(product)}
       style={{
         position: 'relative',
@@ -163,6 +179,7 @@ function ProductCard({ product, cartQty, onClick }) {
         overflow: 'hidden',
         cursor: 'pointer',
         boxShadow: cartQty > 0 ? `0 3px 12px rgba(193,68,14,0.18)` : '0 1px 4px rgba(80,50,20,0.09)',
+        outline: selected ? `3px solid ${W.orange}` : 'none', outlineOffset: 2,
         transition: 'all 0.15s',
       }}
       className="active:scale-95"
@@ -202,7 +219,7 @@ function ProductCard({ product, cartQty, onClick }) {
       </div>
       <div style={{ padding: '8px 9px 10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <p style={{ fontSize: 13, fontWeight: 800, color: W.orange, marginTop: 0, marginBottom: 3 }}>{productPriceDisplay(product)}</p>
-        <p style={{ fontSize: 12, fontWeight: 600, color: W.text1, lineHeight: 1.25, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{product.name}</p>
+        <p style={{ fontSize: 12, fontWeight: 600, color: W.text1, lineHeight: 1.25, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{highlightName(product.name, hl)}</p>
         {getProductBadges(product).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {getProductBadges(product).map((badge) => (
@@ -833,11 +850,15 @@ export default function POS() {
   const [customerPhone, setCustomerPhone] = useState(
     initState.customerPhone ?? scheduleMeta?.customerPhone ?? scheduledRow?.customer_phone ?? ''
   );
-  const [customerAddress, setCustomerAddress] = useState(initState.customerAddress ?? '');
-  const [orderNotes, setOrderNotes] = useState(
+  const [customerAddress] = useState(initState.customerAddress ?? '');
+  const [orderNotes] = useState(
     initState.orderNotes ?? scheduleMeta?.orderNotes ?? scheduledRow?.order_notes ?? ''
   );
   const [cart, setCart] = useState(_initCart);
+
+  // No-station lines (combo parents, Auto Entry, retail) auto-serve on send —
+  // they were never actually kitchen-served, so qty stays editable after SERVED.
+  const isNoStationItem = (item) => item?.station_id == null;
 
   // New table order → pre-fill cart with variants tagged "Auto Entry" in Food Menu.
   // Fresh DINE_IN only — never on existing orders, drafts or scheduled edits.
@@ -955,7 +976,7 @@ export default function POS() {
     const socket = createSocket({ role: 'pos', token });
     socketRef.current = socket;
 
-    socket.on('item-served', ({ kotId, itemId, status, served_at }) => {
+    socket.on('item-served', ({ itemId, status, served_at }) => {
       setEditableItems(prev => prev.map(i =>
         i.id === itemId ? { ...i, status, served_at: served_at ?? i.served_at } : i
       ));
@@ -989,6 +1010,7 @@ export default function POS() {
         if (custModal) { setCustModal(false); return; }
         if (checkoutModal) { setCheckoutModal(false); return; }
         if (ctxMenu) { setCtxMenu(null); return; }
+        if (searchRef.current?.value) { setSearch(''); searchRef.current.focus(); return; }
         navigate('/pos');
         return;
       }
@@ -1002,11 +1024,24 @@ export default function POS() {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         e.preventDefault();
         searchRef.current?.focus();
+        return;
       }
+      // Type anywhere → goes into search
+      const t = e.target;
+      if (productModal || custModal || checkoutModal || ctxMenu || showSalesReport || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable || (e.key === ' ' && t.tagName === 'BUTTON')) return;
+      // Any popup (incl. ones owned by child components / portals) covering the search box blocks this
+      const sr = searchRef.current?.getBoundingClientRect();
+      if (!sr?.width) return;
+      const top = document.elementFromPoint(sr.left + sr.width / 2, sr.top + sr.height / 2);
+      if (!searchRef.current.parentElement.contains(top)) return;
+      e.preventDefault();
+      setSearch(s => s + e.key);
+      searchRef.current?.focus();
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [navigate, productModal, custModal, checkoutModal, ctxMenu]);
+  }, [navigate, productModal, custModal, checkoutModal, ctxMenu, showSalesReport]);
 
   /* ── Auto-focus search on load ──────────────────────────────── */
   useEffect(() => {
@@ -1063,13 +1098,8 @@ export default function POS() {
 
   const cakeFiltered = useMemo(() => {
     const base = pendingCakes.filter(c => !cakeIdsInCart.has(c.id) || cakeLeaving[c.id]);
-    if (!search) return base;
-    const q = search.toLowerCase();
-    return base.filter(c =>
-      (c.order_number || '').toLowerCase().includes(q) ||
-      (c.customer_name || '').toLowerCase().includes(q) ||
-      (c.phone || '').includes(q)
-    );
+    if (!search.trim()) return base;
+    return base.filter(c => matchText(`${c.order_number || ''} ${c.customer_name || ''} ${c.phone || ''}`, search));
   }, [pendingCakes, cart, cakeLeaving, search]); // eslint-disable-line
 
   // Category disappears with its last pending order — fall back to All
@@ -1101,17 +1131,27 @@ export default function POS() {
   }, []);
 
   /* ── Category filter + deep search (all client-side, instant) ── */
+  const searchIndex = useMemo(() => buildSearchIndex(products), [products]);
+  const searchResults = useMemo(() => smartSearch(searchIndex, search), [searchIndex, search]);
+  const searchHl = useMemo(() => new Map((searchResults ?? []).map(r => [r.product.id, r.hl])), [searchResults]);
   const filtered = useMemo(() => {
-    if (search) {
-      const q = search.toLowerCase();
-      return products.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        (p.variant_names || '').toLowerCase().includes(q)
-      );
-    }
+    if (searchResults) return searchResults.map(r => r.product);
     if (activeCat === ALL_CAT) return products;
     return products.filter(p => String(p.category_id) === String(activeCat));
-  }, [products, search, activeCat]);
+  }, [products, searchResults, activeCat]);
+
+  /* Keyboard pick inside search results — top hit pre-selected */
+  const [searchSel, setSearchSel] = useState(0);
+  const gridRef = useRef(null);
+  useEffect(() => { setSearchSel(0); }, [search]);
+  useEffect(() => {
+    if (searchResults) gridRef.current?.querySelector('[data-search-sel="1"]')?.scrollIntoView({ block: 'nearest' });
+  }, [searchSel, searchResults]);
+  const moveSearchSel = (key) => {
+    const cols = gridRef.current ? Math.max(1, getComputedStyle(gridRef.current).gridTemplateColumns.split(' ').filter(Boolean).length) : 1;
+    const step = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : key === 'ArrowUp' ? -cols : cols;
+    setSearchSel(i => Math.max(0, Math.min(filtered.length - 1, i + step)));
+  };
 
   const qtyByProduct = [...editableItems, ...cart].reduce((acc, i) => {
     if (i.status === 'CANCELLED' || i.is_combo_child) return acc; // implicit combo parts don't badge the grid
@@ -1178,7 +1218,7 @@ export default function POS() {
   }, []);
 
   const changeExistingQty = useCallback((item, delta) => {
-    if (!canEdit(item.status)) return;
+    if (!canEdit(item.status) || (item.status === 'SERVED' && !isNoStationItem(item))) return;
     const next = item.quantity + delta;
     if (next <= 0) { cancelExistingItem(item); return; }
     setExistingDirty(true);
@@ -1217,6 +1257,7 @@ export default function POS() {
 
   /* ── Product click ──────────────────────────────────────── */
   async function handleProductClick(product) {
+    if (search.trim()) recordPick(search, product.id);
     if ((product.variant_count ?? 1) > 1) { setProductModal({ product }); return; }
     const [variants, mods] = await Promise.all([
       fetch(`${API}/food-menu/products/${product.id}/variants`).then(r => r.json()),
@@ -1269,6 +1310,8 @@ export default function POS() {
         is_home_pack: item.is_home_pack ?? 0,
         discount_amount: item.discount_amount ?? 0,
         discount_type: item.discount_type ?? null,
+        status: item.status,
+        no_station: isNoStationItem(item),
         _id: null,
       },
       existingKotItem: item,
@@ -1383,15 +1426,22 @@ export default function POS() {
     }
     setSaving(true);
     try {
-      await Promise.all(
-        pendingCancels.current.map(({ kot_id, id, kind, reason }) =>
-          fetch(`${API}/pos/kots/${kot_id}/items/${id}/status`, {
+      const cancelResults = await Promise.all(
+        pendingCancels.current.map(pc =>
+          fetch(`${API}/pos/kots/${pc.kot_id}/items/${pc.id}/status`, {
             method: 'PATCH', headers: H,
-            body: JSON.stringify({ status: 'CANCELLED', cancel_kind: kind ?? 'CANCEL', cancel_reason: reason ?? null }),
-          })
+            body: JSON.stringify({ status: 'CANCELLED', cancel_kind: pc.kind ?? 'CANCEL', cancel_reason: pc.reason ?? null }),
+          }).then(r => ({ pc, ok: r.ok })).catch(() => ({ pc, ok: false }))
         )
       );
-      pendingCancels.current = [];
+      // Failed cancels stay queued for the next Save — they were already stripped
+      // from editableItems optimistically, so silently dropping them here would
+      // permanently lose the removal instead of retrying it.
+      const failedCancels = cancelResults.filter(r => !r.ok).map(r => r.pc);
+      pendingCancels.current = failedCancels;
+      if (failedCancels.length) {
+        alert(`${failedCancels.length} item(s) could not be removed — will retry on next Save.`);
+      }
 
       await Promise.all(
         editableItems.map(item => {
@@ -1400,13 +1450,16 @@ export default function POS() {
           const qtyChanged = orig.quantity !== item.quantity;
           const notesChanged = (orig.notes ?? '') !== (item.notes ?? '');
           const packChanged = (orig.is_home_pack ?? 0) !== (item.is_home_pack ?? 0);
-          if (!qtyChanged && !notesChanged && !packChanged) return Promise.resolve();
+          const discChanged = (orig.discount_amount ?? 0) !== (item.discount_amount ?? 0)
+            || (orig.discount_type ?? null) !== (item.discount_type ?? null);
+          if (!qtyChanged && !notesChanged && !packChanged && !discChanged) return Promise.resolve();
           return fetch(`${API}/pos/kots/${item.kot_id}/items/${item.id}`, {
             method: 'PATCH', headers: H,
             body: JSON.stringify({
-              ...(qtyChanged ? { quantity: item.quantity } : {}),
+              ...(qtyChanged && (item.status !== 'SERVED' || isNoStationItem(item)) ? { quantity: item.quantity } : {}),
               ...(notesChanged ? { notes: item.notes } : {}),
               ...(packChanged ? { is_home_pack: item.is_home_pack ? 1 : 0 } : {}),
+              ...(discChanged ? { discount_amount: item.discount_amount || 0, discount_type: item.discount_type ?? null } : {}),
             }),
           });
         })
@@ -1431,7 +1484,7 @@ export default function POS() {
           body: JSON.stringify({ draft_items: draft.length ? draft : null }),
         }).catch(() => { });
       }
-      setExistingDirty(false);
+      setExistingDirty(failedCancels.length > 0);
       if (sentOrderId) await refreshOrderItems(sentOrderId);
       setSaving(false);
     } catch (e) { console.error(e); setSaving(false); }
@@ -1476,33 +1529,6 @@ export default function POS() {
 
   function handleCheckout() { isCheckingOutRef.current = true; setCheckoutModal(true); }
 
-  function handlePrint() {
-    const allItems = [
-      ...editableItems.filter(i => i.status !== 'CANCELLED'),
-      ...cart.map(i => ({
-        product_name: i.product_name + (i.variant_name ? ` (${i.variant_name})` : ''),
-        quantity: i.quantity,
-        unit_price: i.unit_price,
-        notes: i.notes,
-      })),
-    ];
-    if (!allItems.length) return;
-    printReceipt({
-      order: {
-        id: liveOrderId ?? '—',
-        order_type: orderType,
-        table_name: tableName,
-        customer_name: customerName || null,
-        customer_phone: customerPhone || null,
-        total_amount: grandTotal,
-        paid_amount: 0,
-        created_at: new Date().toISOString(),
-      },
-      items: allItems,
-      payments: [],
-    });
-  }
-
   function handleCustomerSave(n, p) {
     setCustomerName(n);
     setCustomerPhone(p);
@@ -1529,10 +1555,8 @@ export default function POS() {
             <button
               onClick={() => navigate('/pos')}
               title="Back (Esc)"
-              style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)', cursor: 'pointer', padding: 0 }}
-            />
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
-            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
+              style={{ height: 17, padding: '0 7px', borderRadius: 20, background: 'transparent', border: '1px solid rgba(0,0,0,0.18)', color: W.text2, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+            >← Back</button>
           </div>
           <span style={{ fontSize: 10, fontWeight: 800, color: W.blue, letterSpacing: '0.02em', flexShrink: 0 }}>{todayStr}</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: W.text1, letterSpacing: '0.06em', textTransform: 'uppercase', textShadow: W.emboss, flex: 1, textAlign: 'right' }}>
@@ -1831,14 +1855,11 @@ export default function POS() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: `1px solid rgba(0,0,0,0.1)` }}>
             <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', border: '1px solid rgba(0,0,0,0.18)' }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', border: '1px solid rgba(0,0,0,0.18)' }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', border: '1px solid rgba(0,0,0,0.18)' }} />
               <button
                 onClick={toggleQuick}
                 title={quickOn ? 'Hide Quick Access rail' : 'Show Quick Access rail'}
                 style={{
-                  marginLeft: 6, height: 17, padding: '0 7px',
+                  height: 17, padding: '0 7px',
                   borderRadius: 20, cursor: 'pointer',
                   fontSize: 9, fontWeight: 800, lineHeight: 1,
                   display: 'flex', alignItems: 'center', gap: 3,
@@ -1862,9 +1883,13 @@ export default function POS() {
                 <Search style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', height: 18, width: 18, color: W.text3 }} />
                 <input
                   ref={searchRef}
-                  placeholder="Search dishes… (F2)"
+                  placeholder="Search name, size, category, tag · commas = OR (F2)"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && searchResults && activeCat !== CAKE_CAT && filtered.length) { e.preventDefault(); handleProductClick(filtered[Math.min(searchSel, filtered.length - 1)]); return; }
+                    if (searchResults && activeCat !== CAKE_CAT && ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) { e.preventDefault(); moveSearchSel(e.key); }
+                  }}
                   style={{
                     paddingLeft: 40, paddingRight: 14, height: 44, width: '100%',
                     fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em',
@@ -1903,9 +1928,10 @@ export default function POS() {
                   </div>)
                 : filtered.length === 0
                   ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: W.text3, fontSize: 13 }}>No items found</div>
-                  : <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
-                    {filtered.map(p => (
-                      <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick} />
+                  : <div ref={gridRef} style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))' }}>
+                    {filtered.map((p, i) => (
+                      <ProductCard key={p.id} product={p} cartQty={qtyByProduct[p.id] ?? 0} onClick={handleProductClick}
+                        hl={searchHl.get(p.id)} selected={!!searchResults && i === Math.min(searchSel, filtered.length - 1)} />
                     ))}
                   </div>
             }
@@ -1987,12 +2013,24 @@ export default function POS() {
           onClose={() => setProductModal(null)}
           onConfirm={(data) => {
             if (productModal.existingKotItem) {
+              const kotItem = productModal.existingKotItem;
               if (data) {
-                // Edit = replace: silent CANCEL, no return/waste prompt
-                doCancelExisting(productModal.existingKotItem, 'CANCEL', 'Item edited — replaced');
-                addToCart(data);
+                if (kotItem.status === 'SERVED') {
+                  // Served items already reached the kitchen — patch fields in place,
+                  // never cancel+recreate (that would resend the line to KDS as unserved)
+                  setExistingDirty(true);
+                  setEditableItems(prev => prev.map(i => i.id === kotItem.id ? {
+                    ...i, notes: data.notes ?? null, is_home_pack: data.is_homepack ? 1 : 0,
+                    discount_amount: data.discount_amount || 0, discount_type: data.discount_type ?? null,
+                    ...(isNoStationItem(kotItem) ? { quantity: data.quantity } : {}),
+                  } : i));
+                } else {
+                  // Edit = replace: silent CANCEL, no return/waste prompt
+                  doCancelExisting(kotItem, 'CANCEL', 'Item edited — replaced');
+                  addToCart(data);
+                }
               } else {
-                cancelExistingItem(productModal.existingKotItem);
+                cancelExistingItem(kotItem);
               }
             } else if (productModal.existingItem?._id) {
               updateCartItem(productModal.existingItem._id, data);
@@ -2017,7 +2055,9 @@ export default function POS() {
       {custModal && (
         <CustomerPickerModal
           title={customerName ? '✎ Change Customer' : '＋ Add Customer'}
+          showClear={!!customerName}
           onSelect={(c) => handleCustomerSave(c.name, c.phone)}
+          onClear={() => handleCustomerSave(null, null)}
           onClose={() => setCustModal(false)}
         />
       )}

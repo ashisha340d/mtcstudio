@@ -15,6 +15,7 @@ router.use(require('./sales'));
 router.use(require('./cakePayments'));
 router.use(require('./analytics'));
 router.use(require('./paymentRegister'));
+router.use(require('./calendar'));
 router.use(require('./dayEnd'));
 
 module.exports = router;

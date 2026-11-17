@@ -12,16 +12,16 @@ const DEFAULTS = {
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#222' }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{hint}</div>}
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-text)' }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: 'var(--t-text-muted)', marginTop: 2 }}>{hint}</div>}
       </div>
       <button
         onClick={() => onChange(checked ? '0' : '1')}
         style={{
           width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-          background: checked ? '#c1440e' : '#ddd', transition: 'background .2s',
+          background: checked ? 'var(--t-accent)' : 'var(--t-border-strong)', transition: 'background .2s',
           position: 'relative', flexShrink: 0,
         }}
       >
@@ -36,7 +36,7 @@ function Toggle({ label, hint, checked, onChange }) {
 }
 
 const inp = {
-  width: '100%', padding: '8px 10px', border: '1px solid #ddd',
+  width: '100%', padding: '8px 10px', border: '1px solid var(--t-border)',
   borderRadius: 6, fontSize: 13, boxSizing: 'border-box', outline: 'none',
 };
 
@@ -75,7 +75,7 @@ export default function MeroKinmelTab() {
 
   return (
     <div style={{ maxWidth: 620 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--t-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
         Mero Kinmel Order — Send To
       </div>
 
@@ -87,31 +87,31 @@ export default function MeroKinmelTab() {
             style={{
               flex: 1, padding: '16px 10px', borderRadius: 8, cursor: 'pointer',
               fontSize: 14, fontWeight: 700, letterSpacing: '0.04em',
-              border: cfg.mk_import_mode === m ? '2px solid #c1440e' : '2px solid #e2e2e2',
-              background: cfg.mk_import_mode === m ? '#fdf1ec' : '#fff',
-              color: cfg.mk_import_mode === m ? '#c1440e' : '#666',
+              border: cfg.mk_import_mode === m ? '2px solid var(--t-accent)' : '2px solid var(--t-border)',
+              background: cfg.mk_import_mode === m ? 'var(--t-accent-soft)' : 'var(--t-surface)',
+              color: cfg.mk_import_mode === m ? 'var(--t-accent)' : 'var(--t-text-muted)',
             }}
           >
             {m === 'DRAFT' ? '📝 DRAFT' : '🍳 ORDER'}
-            <div style={{ fontSize: 11, fontWeight: 500, marginTop: 4, color: '#999' }}>
+            <div style={{ fontSize: 11, fontWeight: 500, marginTop: 4, color: 'var(--t-text-muted)' }}>
               {m === 'DRAFT' ? 'Cashier confirms on POS' : 'Straight to kitchen (KOT)'}
             </div>
           </button>
         ))}
       </div>
 
-      <div style={{ fontSize: 12, color: isOrder ? '#b3261e' : '#888', marginBottom: 18 }}>
+      <div style={{ fontSize: 12, color: isOrder ? 'var(--t-danger)' : 'var(--t-text-muted)', marginBottom: 18 }}>
         {isOrder
           ? '⚠ Only trustworthy imports become orders. Anything failing the checks below still lands as an MK-REVIEW draft.'
           : 'Every import lands as a draft card on the POS dashboard.'}
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 800, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--t-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         Trust Checks
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--t-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
           Minimum Confidence
         </label>
         <input
@@ -119,7 +119,7 @@ export default function MeroKinmelTab() {
           value={cfg.mk_min_confidence}
           onChange={e => set('mk_min_confidence', e.target.value)}
         />
-        <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: 'var(--t-text-soft)', marginTop: 3 }}>
           0 – 1. Combined OCR parse + product match score.
         </div>
       </div>
@@ -142,12 +142,12 @@ export default function MeroKinmelTab() {
           onClick={save} disabled={saving}
           style={{
             padding: '9px 22px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: '#c1440e', color: '#fff', fontSize: 13, fontWeight: 700,
+            background: 'var(--t-accent)', color: '#fff', fontSize: 13, fontWeight: 700,
             opacity: saving ? 0.6 : 1,
           }}
         >{saving ? 'Saving…' : 'Save'}</button>
         {toast && (
-          <span style={{ fontSize: 13, color: toast.err ? '#b3261e' : '#1a7f37' }}>{toast.msg}</span>
+          <span style={{ fontSize: 13, color: toast.err ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast.msg}</span>
         )}
       </div>
     </div>

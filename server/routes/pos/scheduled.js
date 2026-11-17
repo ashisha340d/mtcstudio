@@ -77,8 +77,8 @@ async function convertRow(row, userId) {
 
     // Insert one KOT line; combo children pass comboParentId + isComboChild.
     const insertItem = async (item, comboParentId, isComboChild) => {
-      const prod = await tx.dbGet(`SELECT prep_time_minutes, pos_station_id FROM products WHERE id=?`, [item.product_id]);
-      const stationId = prod?.pos_station_id ?? null;
+      const prod = await tx.dbGet(`SELECT p.prep_time_minutes, p.pos_station_id, (SELECT COALESCE(MAX(v.auto_kds),0) FROM product_variants v WHERE IF(? IS NULL, v.product_id = p.id, v.id = ?)) AS auto_kds FROM products p WHERE p.id=?`, [item.variant_id ?? null, item.variant_id ?? null, item.product_id]);
+      const stationId = prod?.auto_kds ? null : prod?.pos_station_id ?? null;
       const line = await tx.dbGet(
         `INSERT INTO pos_kot_items
            (kot_id, product_id, variant_id, product_name, quantity, unit_price, notes, is_home_pack, prep_time_minutes, station_id, discount_amount, discount_type, combo_parent_id, is_combo_child, status, served_at)

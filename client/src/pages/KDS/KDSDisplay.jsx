@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { useKDS } from '../../context/KDSContext';
 import KOTCard from './components/KOTCard';
 import KDSSummary from './components/KDSSummary';
@@ -23,12 +24,15 @@ function Clock() {
 }
 
 export default function KDSDisplay() {
+  const fromAdmin = useLocation().state?.fromAdmin || sessionStorage.getItem('kds_from_admin') === '1';
+  if (fromAdmin) sessionStorage.setItem('kds_from_admin', '1');
+  const navigate = useNavigate();
   const {
     visibleKOTs, servedSearched, settings,
     activeTab, totalPages, safePage,
     filterStatus, loading, servedLoading,
-    activeCount, delayedCount, servedCount,
-    activeStationName, kdsUser, socket,
+    activeCount, servedCount,
+    activeStationName, socket,
     settingsOpen, reportOpen, error,
     loadKOTs, loadServedKOTs,
     setTab, setPage, setFilter,
@@ -116,6 +120,7 @@ export default function KDSDisplay() {
               <button className="kds-page-btn" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>›</button>
             </div>
           )}
+          {fromAdmin && <button className="kds-header-btn" onClick={() => { sessionStorage.removeItem('kds_from_admin'); navigate(-1); }} title="Back to Studio">✕ Close</button>}
           <SocketStatus socket={socket} />
           <button className="kds-header-btn kds-header-btn--report" onClick={openReport}>Report</button>
           <button className="kds-icon-btn" onClick={openSettings} style={{ fontSize: 18, alignItems: 'center' }} >⚙</button>

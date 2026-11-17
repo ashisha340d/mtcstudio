@@ -53,41 +53,6 @@ function productLabel(p, showVariant = false) {
   return hasVariant ? `${p.variant_name} - ${p.product_name}` : p.product_name;
 }
 
-// ── Collapsible section (state persisted to localStorage) ────
-function useSection(key, defaultOpen) {
-  const [open, setOpen] = useState(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem('cake_sections') || '{}');
-      return s[key] !== undefined ? s[key] : defaultOpen;
-    } catch { return defaultOpen; }
-  });
-  function toggle() {
-    setOpen(v => {
-      const next = !v;
-      try {
-        const s = JSON.parse(localStorage.getItem('cake_sections') || '{}');
-        localStorage.setItem('cake_sections', JSON.stringify({ ...s, [key]: next }));
-      } catch { }
-      return next;
-    });
-  }
-  return [open, toggle];
-}
-
-function CollapsibleSection({ icon, title, sectionKey, defaultOpen = true, badge, className, children }) {
-  const [open, toggle] = useSection(sectionKey, defaultOpen);
-  return (
-    <div className={`cake-section${className ? ` ${className}` : ''}`}>
-      <div className="cake-section-title ck-collapsible-title" onClick={toggle}>
-        <span>{icon}</span> {title}
-        {badge ? <span className="ck-sec-badge">{badge}</span> : null}
-        <span className="ck-toggle-arrow">{open ? '▾' : '▸'}</span>
-      </div>
-      {open && children}
-    </div>
-  );
-}
-
 // ── Modifier chip selector — multi-select per group ────────────
 function ModifierGroup({ label, lookups, value, onChange }) {
   const selected = value || [];

@@ -58,15 +58,15 @@ export default function KDSSoundSettingsTab() {
             <div className="fm-card">
                 <div className="fm-card__head"><span className="fm-card__title">🔔 Alert Sounds</span></div>
                 <div style={{ padding: '16px 20px' }}>
-                    <div style={{ fontSize: 12, color: '#999', marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, color: 'var(--t-text-muted)', marginBottom: 16 }}>
                         Configured once here — applies to every KDS station, the Waiter App and POS. No per-device upload.
                     </div>
                     {SOUND_TYPES.map(({ key, label }) => {
                         const inputId = `kds-snd-${key}`;
                         const src = cfg[key];
                         return (
-                            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-                                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#222' }}>{label}</span>
+                            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
+                                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--t-text)' }}>{label}</span>
                                 <label htmlFor={inputId} className="btn-secondary" style={{ cursor: 'pointer' }}>
                                     {uploading === key ? 'Uploading…' : src ? '⬆ Change' : '⬆ Upload'}
                                 </label>
@@ -81,12 +81,12 @@ export default function KDSSoundSettingsTab() {
                                         <button className="btn-secondary" onClick={() => clear(key)}>✕</button>
                                     </>
                                 )}
-                                {!src && <span style={{ fontSize: 11, color: '#aaa' }}>Default beep</span>}
+                                {!src && <span style={{ fontSize: 11, color: 'var(--t-text-soft)' }}>Default beep</span>}
                             </div>
                         );
                     })}
                     {toast && (
-                        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: toast.err ? '#dc2626' : '#16a34a' }}>
+                        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: toast.err ? 'var(--t-danger)' : 'var(--t-success)' }}>
                             {toast.err ? '✗' : '✓'} {toast.msg}
                         </div>
                     )}

@@ -17,7 +17,6 @@ const ORDER_TYPES = [
   { menuType: 'SCHEDULED', orderType: 'DELIVERY', kind: 'SCHEDULED', icon: 'schedule', label: 'Scheduled order', hint: 'Auto-fires to the kitchen at a set time' },
 ];
 
-const PHONE_RE = /^\+?[1-9]\d{6,14}$/;
 const DEBOUNCE_MS = 400;
 
 /* Name + phone with a debounced customer search dropdown — same

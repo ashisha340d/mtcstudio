@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 
 /**
  * Draggable, resizable, minimizable, maximizable floating window.
@@ -138,7 +138,8 @@ export default function DesktopWindow({
       </div>
 
       {/* ── Content ─────────────────────────────────────── */}
-      <div className="desktop-window-body" style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+      <div className="desktop-window-body" style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+        onContextMenu={e => e.stopPropagation()}>
         {children}
       </div>
 

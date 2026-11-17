@@ -11,6 +11,8 @@ import TableTagsTab        from './tabs/TableTagsTab';
 import KDSSoundSettingsTab from './tabs/KDSSoundSettingsTab';
 import WeatherRecommendsTab from './tabs/WeatherRecommendsTab';
 import MeroKinmelTab       from './tabs/MeroKinmelTab';
+const AUTO_LOCK_KEY = 'mtc_auto_lock_seconds';
+const HOVER_BILL_KEY = 'mtc_show_hover_bill';
 import './fm.css';
 
 const TABS = [
@@ -26,16 +28,21 @@ const TABS = [
   { key: 'kds-sound',    label: '🔔 Alert Sounds'       },
   { key: 'weather',      label: '🌤️ Weather Recommends' },
   { key: 'mero-kinmel',  label: '🛵 Mero Kinmel'        },
+  { key: 'settings',     label: '⚙️ Settings'           },
 ];
 
 export default function FileMaintenance() {
   const [active, setActive] = useState('tables');
+  const [autoLockSeconds, setAutoLockSeconds] = useState(() => localStorage.getItem(AUTO_LOCK_KEY) ?? 120);
+  const setAutoLock = (s) => { localStorage.setItem(AUTO_LOCK_KEY, String(s)); setAutoLockSeconds(s); };
+  const [hoverBill, setHoverBillState] = useState(() => localStorage.getItem(HOVER_BILL_KEY) !== '0');
+  const setHoverBill = (v) => { localStorage.setItem(HOVER_BILL_KEY, v ? '1' : '0'); setHoverBillState(v); };
 
   return (
-    <div className="fm-root" style={{ maxWidth: ['assignment','receipt','cake-slip','cake-products','table-tags'].includes(active) ? '100%' : undefined }}>
+    <div className="fm-root">
       <div className="fm-header">
         <h1>File Maintenance</h1>
-        <span style={{ fontSize: 13, color: '#aaa' }}>
+        <span style={{ fontSize: 13, color: 'var(--t-text-soft)' }}>
           Manage tables, stations, modifiers &amp; users
         </span>
       </div>
@@ -66,6 +73,38 @@ export default function FileMaintenance() {
       {active === 'kds-sound'     && <KDSSoundSettingsTab />}
       {active === 'weather'       && <WeatherRecommendsTab />}
       {active === 'mero-kinmel'   && <MeroKinmelTab />}
+      {active === 'settings'      && (
+        <div className="fm-card" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div className="fm-card__title">Auto Lock</div>
+          <div style={{ fontSize: 12, color: 'var(--t-text-soft)', marginTop: 4 }}>
+            Lock after inactivity. Set to 0 to disable.
+          </div>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--t-text-muted)' }}>
+          Seconds
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={autoLockSeconds}
+            onChange={e => setAutoLock(Math.max(0, Number(e.target.value)))}
+            style={{ width: 90, padding: '8px 10px', border: '1px solid var(--t-border)', borderRadius: 6, boxSizing: 'border-box' }}
+          />
+        </label>
+        </div>
+      )}
+      {active === 'settings'      && (
+        <div className="fm-card" style={{ marginTop: 16, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div className="fm-card__title">Show Hover Bill</div>
+            <div style={{ fontSize: 12, color: 'var(--t-text-soft)', marginTop: 4 }}>
+              Show bill preview when hovering a table on the POS Dashboard.
+            </div>
+          </div>
+          <input type="checkbox" checked={hoverBill} onChange={e => setHoverBill(e.target.checked)} style={{ width: 18, height: 18 }} />
+        </div>
+      )}
     </div>
   );
 }

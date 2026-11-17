@@ -98,8 +98,8 @@ export default function UsersTab() {
       <div className="fm-card__head">
         <span className="fm-card__title">POS Users</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? '#dc2626' : '#16a34a' }}>{toast}</span>}
-          <span style={{ fontSize: 12, color: '#999' }}>{rows.length} users</span>
+          {toast && <span style={{ fontSize: 12, color: toast.startsWith('❌') ? 'var(--t-danger)' : 'var(--t-success)' }}>{toast}</span>}
+          <span style={{ fontSize: 12, color: 'var(--t-text-muted)' }}>{rows.length} users</span>
           {dirtyCount > 0 && (
             <button className="btn-primary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={saveAll} disabled={saving}>
               {saving ? 'Saving…' : `Save All (${dirtyCount})`}
@@ -158,8 +158,8 @@ export default function UsersTab() {
               <td>
                 <span style={{
                   padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                  background: r.is_active ? ROLE_BG[r.role] : '#f3f4f6',
-                  color: r.is_active ? ROLE_COLOR[r.role] : '#9ca3af'
+                  background: r.is_active ? ROLE_BG[r.role] : 'var(--t-surface-3)',
+                  color: r.is_active ? ROLE_COLOR[r.role] : 'var(--t-text-muted)'
                 }}>
                   {r.is_active ? r.role : 'Inactive'}
                 </span>
@@ -172,7 +172,7 @@ export default function UsersTab() {
                   {r.is_active ? (
                     <button className="btn-icon btn-icon--danger" title="Deactivate" onClick={() => deleteRow(r.id)}>🗑</button>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#ccc' }}>Off</span>
+                    <span style={{ fontSize: 11, color: 'var(--t-text-soft)' }}>Off</span>
                   )}
                 </div>
               </td>

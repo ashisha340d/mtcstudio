@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { dashboardApi } from '../../services/api';
 import './Dashboard.css';
 
@@ -22,7 +22,6 @@ const MODULES = [
 
 export default function Dashboard() {
   const [stats, setStats] = useState({});
-  const navigate = useNavigate();
 
   useEffect(() => {
     dashboardApi.stats().then(r => setStats(r.data)).catch(() => {});
