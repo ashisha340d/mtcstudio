@@ -2,7 +2,7 @@
 const mysql = require('mysql2/promise');
 const MYSQL_CONFIG = {
   host: process.env.SQLPOOL_HOST,
-  port: Number(process.env.SQLPOOL_PORT) || 3306,
+  port: Number(process.env.SQLPOOL_PORT) || 9900,
   user: process.env.SQLPOOL_USER,
   password: process.env.SQLPOOL_PASSWORD,
   database: process.env.SQLPOOL_DATABASE,
